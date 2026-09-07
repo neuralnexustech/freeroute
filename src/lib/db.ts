@@ -11,13 +11,18 @@ export function getDatabasePath(): string {
   return path.join(freerouteDir, "freeroute.db");
 }
 
-function getDatabaseUrl(): string {
+export function getDatabaseUrl(): string {
   const envUrl = process.env.DATABASE_URL;
-  if (envUrl && !envUrl.includes("./dev.db")) {
+  if (envUrl && !envUrl.includes("./dev.db") && !envUrl.includes("~")) {
     return envUrl;
   }
-  return `file:${getDatabasePath().replace(/\\/g, "/")}`;
+  const defaultUrl = `file:${getDatabasePath().replace(/\\/g, "/")}`;
+  process.env.DATABASE_URL = defaultUrl;
+  return defaultUrl;
 }
+
+const activeDbUrl = getDatabaseUrl();
+process.env.DATABASE_URL = activeDbUrl;
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
