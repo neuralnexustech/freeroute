@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Provider {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  icon      String   @default("⏣")
+  logoUrl   String   @default("")
+  baseUrl   String   @default("")
+  connected Boolean  @default(false)
+  // NOTE: API keys are stored encrypted in production; plain here for MVP seed flow
+  apiKey    String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  models    Model[]
+  logs      RequestLog[]
+}
+
+model Model {
+  id           String   @id @default(cuid())
+  providerId   String
+  provider     Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  slug         String
+  displayName  String
+  contextWindow String  @default("128K")
+  inputPrice   Float    @default(0) // $ per 1M tokens
+  outputPrice  Float    @default(0)
+  modalities   String   @default("T") // comma list: T,IMG,DOC,VID,AUD
+  enabled      Boolean  @default(true)
+  status       String   @default("pending") // pending|ok|fail|disabled
+  lastError    String   @default("")
+  latencyMs    Int?
+  httpStatus   Int?
+  ttftMs       Int?
+  toksPerSec   Int?
+  badge        String   @default("") // promo|rec|""
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  logs         RequestLog[]
+
+  @@unique([providerId, slug])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  keyHash    String    @unique
+  prefix     String
+  secretEnc  String    @default("") // AES-GCM vault for dashboard reveal; hash stays auth source
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+  revoked    Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  logs       RequestLog[]
+}
+
+model Combo {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  strategy  String   @default("failover") // round-robin|weighted|failover|latency-based|cost-optimized
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  targets   ComboTarget[]
+}
+
+model ComboTarget {
+  id       String @id @default(cuid())
+  comboId  String
+  combo    Combo  @relation(fields: [comboId], references: [id], onDelete: Cascade)
+  modelId  String
+  weight   Int    @default(1)
+  priority Int    @default(0)
+}
+
+model RequestLog {
+  id             String    @id @default(cuid())
+  apiKeyId       String?
+  apiKey         ApiKey?   @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  modelId        String?
+  model          Model?    @relation(fields: [modelId], references: [id], onDelete: SetNull)
+  providerId     String?
+  provider       Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  modelSlug      String    @default("")
+  route          String    @default("openai-compatible")
+  status         Int       @default(200)
+  promptTokens   Int       @default(0)
+  completionTokens Int     @default(0)
+  cost           Float     @default(0)
+  latencyMs      Int       @default(0)
+  createdAt      DateTime  @default(now())
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

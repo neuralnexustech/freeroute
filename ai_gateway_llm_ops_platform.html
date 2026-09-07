@@ -1,0 +1,2435 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Experiential Labs · AI Gateway &amp; LLMOps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Dark Theme Palette (Default) */
+  --bg-app: #090a0f;
+  --bg-surface: #11131a;
+  --bg-surface-elevated: #161922;
+  --bg-surface-hover: #1c202c;
+  --bg-subtle: #12151e;
+  --bg-accent-soft: rgba(16, 185, 129, 0.12);
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-focus: #10b981;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-inverse: #090a0f;
+
+  --primary: #10b981;
+  --primary-hover: #059669;
+  --primary-glow: rgba(16, 185, 129, 0.25);
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.12);
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.12);
+  --info: #3b82f6;
+  --info-bg: rgba(59, 130, 246, 0.12);
+  --purple: #8b5cf6;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 14px -2px rgba(0, 0, 0, 0.5), 0 2px 6px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 20px 30px -10px rgba(0, 0, 0, 0.7);
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --transition-speed: 0.18s;
+  --sidebar-w: 240px;
+  --sidebar-w-collapsed: 70px;
+}
+
+[data-theme="light"] {
+  --bg-app: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #f1f5f9;
+  --bg-surface-hover: #e2e8f0;
+  --bg-subtle: #f8fafc;
+  --bg-accent-soft: rgba(16, 185, 129, 0.14);
+  --border-subtle: rgba(15, 23, 42, 0.08);
+  --border-default: rgba(15, 23, 42, 0.14);
+  --border-focus: #059669;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --text-inverse: #ffffff;
+
+  --primary: #059669;
+  --primary-hover: #047857;
+  --primary-glow: rgba(5, 150, 105, 0.2);
+  --danger: #dc2626;
+  --danger-bg: #fee2e2;
+  --warning: #d97706;
+  --warning-bg: #fef3c7;
+  --info: #2563eb;
+  --info-bg: #dbeafe;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 4px -1px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 20px 25px -5px rgba(15, 23, 42, 0.12);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background-color: var(--bg-app);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-color: var(--bg-app);
+  transition: background-color var(--transition-speed) ease, color var(--transition-speed) ease;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button, input, select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  border: none;
+  outline: none;
+}
+button {
+  cursor: pointer;
+  user-select: none;
+}
+
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+}
+
+.sidebar {
+  width: var(--sidebar-w);
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 40;
+  transition: width var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1), transform var(--transition-speed) ease;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar.collapsed {
+  width: var(--sidebar-w-collapsed);
+}
+
+.sidebar-header {
+  padding: 16px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.org-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.org-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #10b981, #0284c7);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+}
+.org-name {
+  transition: opacity var(--transition-speed);
+}
+.sidebar.collapsed .org-name {
+  display: none;
+}
+
+.collapse-btn {
+  background: transparent;
+  color: var(--text-tertiary);
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-speed);
+}
+.collapse-btn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.sidebar-nav {
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all var(--transition-speed) ease;
+  position: relative;
+  white-space: nowrap;
+}
+.nav-item svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  opacity: 0.8;
+  transition: transform var(--transition-speed) ease, opacity var(--transition-speed);
+}
+.nav-item:hover {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+.nav-item:hover svg {
+  opacity: 1;
+  transform: translateX(1px);
+}
+.nav-item.active {
+  background-color: var(--bg-surface-elevated);
+  color: var(--text-primary);
+  font-weight: 600;
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-sm);
+}
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background-color: var(--primary);
+}
+.nav-item.active svg {
+  opacity: 1;
+  color: var(--primary);
+}
+
+.sidebar.collapsed .nav-text {
+  display: none;
+}
+.sidebar.collapsed .badge {
+  display: none;
+}
+
+.sidebar-footer {
+  padding: 12px 10px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  margin-left: auto;
+  border: 1px solid var(--border-subtle);
+}
+.badge.star {
+  color: #eab308;
+  background: rgba(234, 179, 8, 0.1);
+  border-color: rgba(234, 179, 8, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.user-profile-widget {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-speed);
+}
+.user-profile-widget:hover {
+  background-color: var(--bg-surface-hover);
+}
+.user-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.user-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.user-meta .user-id {
+  color: var(--text-primary);
+  font-weight: 500;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.user-meta .user-status {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.sidebar.collapsed .user-meta {
+  display: none;
+}
+
+.main-wrapper {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  height: 56px;
+  position: sticky;
+  top: 0;
+  background: rgba(17, 19, 26, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  z-index: 30;
+  transition: background-color var(--transition-speed);
+}
+[data-theme="light"] .topbar {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.mobile-menu-btn {
+  display: none;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 6px;
+  border-radius: var(--radius-sm);
+}
+
+.workspace-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+}
+.workspace-badge b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.live-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow);
+  display: inline-block;
+  animation: pulse-live 2.2s infinite;
+}
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.9); }
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stats-ticker {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border-subtle);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.ticker-item span {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-left: 4px;
+}
+
+.theme-toggle-btn, .icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-speed) ease;
+}
+.theme-toggle-btn:hover, .icon-btn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.page-container {
+  padding: 24px 32px 56px;
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.page {
+  display: none;
+  animation: fadeInPage 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.page.active {
+  display: block;
+}
+@keyframes fadeInPage {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-header {
+  margin-bottom: 22px;
+}
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+.page-sub {
+  color: var(--text-secondary);
+  font-size: 13px;
+  max-width: 680px;
+  line-height: 1.55;
+}
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.tab-group, .segmented, .range-picker {
+  display: inline-flex;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  gap: 2px;
+}
+.tab-group button, .segmented button, .range-picker button {
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 4px;
+  transition: all var(--transition-speed) ease;
+  white-space: nowrap;
+}
+.tab-group button:hover, .segmented button:hover, .range-picker button:hover {
+  color: var(--text-primary);
+}
+.tab-group button.active, .segmented button.active, .range-picker button.active {
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-default);
+}
+[data-theme="light"] .tab-group button.active,
+[data-theme="light"] .segmented button.active,
+[data-theme="light"] .range-picker button.active {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-speed), transform var(--transition-speed);
+  position: relative;
+  overflow: hidden;
+}
+.card:hover {
+  border-color: var(--border-default);
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+}
+.card-link {
+  font-size: 12px;
+  color: var(--primary);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity var(--transition-speed);
+}
+.card-link:hover {
+  text-decoration: underline;
+  opacity: 0.9;
+}
+
+.kpi-value {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.kpi-sub {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.card.flag {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: linear-gradient(180deg, var(--bg-surface) 0%, var(--danger-bg) 100%);
+}
+.card.flag .kpi-value {
+  color: var(--danger);
+}
+
+.chart-container {
+  height: 160px;
+  border-bottom: 1px solid var(--border-subtle);
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  margin-top: 14px;
+}
+.chart-baseline {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border-default);
+}
+.chart-y-max {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+}
+.chart-y-mid {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+}
+.chart-axis-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 8px;
+  font-family: var(--font-mono);
+}
+
+.chart-bar-stack {
+  margin-left: auto;
+  width: 38px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  animation: growBar 0.4s ease-out forwards;
+}
+@keyframes growBar {
+  from { transform: scaleY(0); transform-origin: bottom; }
+  to { transform: scaleY(1); transform-origin: bottom; }
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-bullet {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.table-wrapper {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 20px;
+}
+.table-scroll {
+  overflow-x: auto;
+  max-height: 520px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  text-align: left;
+}
+thead th {
+  background: var(--bg-subtle);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-default);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  white-space: nowrap;
+}
+tbody tr {
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background-color var(--transition-speed);
+}
+tbody tr:last-child {
+  border-bottom: none;
+}
+tbody tr:hover {
+  background-color: var(--bg-surface-hover);
+}
+tbody td {
+  padding: 11px 14px;
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.pill.promo {
+  background: rgba(245, 158, 11, 0.14);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+}
+.pill.rec {
+  background: rgba(59, 130, 246, 0.14);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+}
+.pill.active {
+  background: rgba(16, 185, 129, 0.14);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+.pill.danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.pill.subtle {
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+.status-dot.ok { background-color: var(--primary); box-shadow: 0 0 6px var(--primary); }
+.status-dot.fail { background-color: var(--danger); box-shadow: 0 0 6px var(--danger); }
+.status-dot.pending { background-color: var(--text-tertiary); }
+.status-dot.disabled { background-color: var(--border-default); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  padding: 7px 13px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: all var(--transition-speed) ease;
+  white-space: nowrap;
+}
+.btn:hover {
+  background: var(--bg-surface-hover);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+[data-theme="light"] .btn:hover {
+  border-color: rgba(0, 0, 0, 0.25);
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.btn.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px var(--primary-glow);
+}
+.btn.primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+.btn.sm {
+  padding: 4px 9px;
+  font-size: 11.5px;
+}
+.btn.danger {
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+.btn.danger:hover {
+  background: var(--danger-bg);
+}
+
+.input-field {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+}
+.input-field:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+.search-bar-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 440px;
+}
+.search-bar-wrap svg {
+  position: absolute;
+  left: 10px;
+  width: 14px;
+  height: 14px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+.search-bar-wrap input {
+  width: 100%;
+  padding-left: 32px;
+}
+
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.provider-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 115px;
+  cursor: pointer;
+  transition: all var(--transition-speed) ease;
+  position: relative;
+}
+.provider-card:hover {
+  border-color: var(--border-default);
+  background: var(--bg-surface-elevated);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.provider-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.provider-icon-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-hover);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.provider-connect-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.provider-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 14px;
+}
+.provider-status-text {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  margin-top: 3px;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 34px;
+  height: 19px;
+  border-radius: 9999px;
+  background: var(--border-default);
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color var(--transition-speed) ease;
+}
+.toggle-switch::after {
+  content: "";
+  position: absolute;
+  top: 2.5px;
+  left: 2.5px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+}
+.toggle-switch.on {
+  background-color: var(--primary);
+}
+.toggle-switch.on::after {
+  transform: translateX(15px);
+}
+
+.codeblock-container {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  position: relative;
+  overflow-x: auto;
+}
+.code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.empty-state-box {
+  padding: 36px 20px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+}
+.empty-state-box svg {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  z-index: 100;
+  transform: translateY(30px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.toast.show {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+.toast.success {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.toast.success svg {
+  color: var(--primary);
+}
+
+.skeleton-row {
+  height: 38px;
+  background: linear-gradient(90deg, var(--bg-surface-hover) 25%, var(--bg-surface-elevated) 50%, var(--bg-surface-hover) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite linear;
+  border-radius: var(--radius-xs);
+  margin-bottom: 8px;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (max-width: 1024px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .stats-ticker { display: none; }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-lg);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .mobile-menu-btn {
+    display: inline-flex;
+  }
+  .page-container {
+    padding: 16px;
+  }
+  .topbar {
+    padding: 0 16px;
+  }
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+  .provider-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="app-layout">
+
+  <aside class="sidebar" id="app-sidebar" aria-label="Main Navigation">
+    <div class="sidebar-header">
+      <div class="org-brand">
+        <span class="org-mark">b</span>
+        <span class="org-name">bidreshivaprasad</span>
+      </div>
+      <button class="collapse-btn" id="sidebar-toggle-btn" title="Toggle Sidebar [Ctrl+B]" aria-label="Toggle sidebar width">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#overview" class="nav-item active" data-page="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9"/></svg>
+        <span class="nav-text">Overview</span>
+      </a>
+      <a href="#providers" class="nav-item" data-page="providers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.2 4.2l2.9 2.9M16.9 16.9l2.9 2.9M2 12h4M18 12h4M4.2 19.8l2.9-2.9M16.9 7.1l2.9-2.9"/></svg>
+        <span class="nav-text">Providers</span>
+      </a>
+      <a href="#models" class="nav-item" data-page="models">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 4v16M15 4v16M4 9h16M4 15h16"/></svg>
+        <span class="nav-text">Models</span>
+      </a>
+      <a href="#logs" class="nav-item" data-page="logs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l2 6 4-14 2 6h6"/></svg>
+        <span class="nav-text">Logs</span>
+      </a>
+      <a href="#insights" class="nav-item" data-page="insights">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+        <span class="nav-text">Insights</span>
+      </a>
+      <a href="#access" class="nav-item" data-page="access">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg>
+        <span class="nav-text">Access Control</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="https://github.com" target="_blank" rel="noreferrer" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5A11.5 11.5 0 000 12.2c0 5.2 3.3 9.6 8 11.1.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.4-1.3-5.4-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.9 1.2 3.1 0 4.5-2.8 5.5-5.4 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.7-1.5 8-6 8-11.1A11.5 11.5 0 0012 .5z"/></svg>
+        <span class="nav-text">Star on GitHub</span>
+        <span class="badge star">★ 1.0k</span>
+      </a>
+      <a href="#apikeys" class="nav-item" data-page="apikeys">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="4"/><path d="M10.5 10.5L21 21M17 17l3 3M14 14l2.5 2.5"/></svg>
+        <span class="nav-text">API Keys</span>
+      </a>
+      <a href="#docs" class="nav-item" onclick="triggerToast('Documentation portal loading...');return false;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+        <span class="nav-text">Documentation</span>
+      </a>
+      <a href="#credits" class="nav-item" onclick="triggerToast('500 platform credits available');return false;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>
+        <span class="nav-text">Credits</span>
+        <span class="badge">500</span>
+      </a>
+      <a href="#settings" class="nav-item" data-page="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.9 2.9l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.9-2.9l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.9-2.9l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.9 2.9l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1h.1a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+        <span class="nav-text">Settings</span>
+      </a>
+
+      <div class="user-profile-widget" onclick="showPage('access')">
+        <span class="user-avatar">B</span>
+        <div class="user-meta">
+          <span class="user-id">bidreshivaprasad</span>
+          <span class="user-status">Workspace Admin</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main-wrapper">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" id="mobile-menu-trigger" aria-label="Open mobile menu">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="workspace-badge">
+          <span class="live-indicator"></span>
+          <span><b>bidreshivaprasad</b> / production-gateway</span>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <div class="stats-ticker">
+          <div class="ticker-item">Spend (30d): <span id="ticker-spend">$0.00</span></div>
+          <div class="ticker-item">Tokens: <span id="ticker-tokens">415</span></div>
+          <div class="ticker-item">Health: <span style="color:var(--primary);">99.98%</span></div>
+        </div>
+
+        <button class="theme-toggle-btn" id="theme-toggle" title="Toggle Light/Dark Theme" aria-label="Toggle dark/light theme">
+          <svg id="theme-icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <svg id="theme-icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+
+        <button class="btn sm" onclick="triggerToast('Quick Command menu opened [⌘K]')">
+          <span class="mono" style="opacity:0.7;">⌘K</span> Search
+        </button>
+      </div>
+    </header>
+
+    <main class="page-container">
+
+      <section class="page active" id="page-overview">
+        <div class="toolbar-row">
+          <div class="tab-group" id="ov-scope">
+            <button class="active" data-scope="workspace">Workspace</button>
+            <button data-scope="personal">Personal</button>
+          </div>
+          <div class="segmented" id="ov-metric">
+            <button data-metric="spend" class="active">Spend</button>
+            <button data-metric="tokens">Tokens</button>
+            <button data-metric="requests">Requests</button>
+          </div>
+          <div class="range-picker" id="ov-range">
+            <button>Today</button>
+            <button>7d</button>
+            <button class="active">30d</button>
+            <button>1y</button>
+            <button>All time</button>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <span class="card-label">Workspace Usage Telemetry</span>
+              <a class="card-link" href="#logs" onclick="showPage('logs');return false;">
+                Full logs
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </a>
+            </div>
+            <div class="kpi-value" id="ov-big-number">$0.00</div>
+            <div class="kpi-sub" id="ov-kpi-subtitle">Platform credits &amp; pass-through</div>
+
+            <div class="chart-container" id="ov-chart">
+              <div class="chart-y-max" id="ov-chart-max">$0</div>
+              <div class="chart-baseline"></div>
+            </div>
+            <div class="chart-axis-labels">
+              <span>Aug 7</span>
+              <span>Sep 5, 2026</span>
+            </div>
+
+            <div class="chart-legend">
+              <div class="legend-item"><i class="legend-bullet" style="background:#10b981;"></i>gemma-4-26b</div>
+              <div class="legend-item"><i class="legend-bullet" style="background:#3b82f6;"></i>inkling-free</div>
+              <div class="legend-item"><i class="legend-bullet" style="background:#8b5cf6;"></i>laguna-s</div>
+              <div class="legend-item"><i class="legend-bullet" style="background:#ec4899;"></i>minimax-m2.7</div>
+              <div class="legend-item"><i class="legend-bullet" style="background:#64748b;"></i>Other routes</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span class="card-label" id="ov-top-title">Top models by spend</span>
+              <a class="card-link" id="ov-top-viewall" href="#logs" style="display:none;" onclick="showPage('logs');return false;">View all (15)</a>
+            </div>
+            <div id="ov-top-models">
+              <div class="empty-state-box">No requests recorded in this period.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-head">
+            <span class="card-label">Workspace Members Activity</span>
+            <div style="display:flex;gap:16px;align-items:center;">
+              <span style="color:var(--text-tertiary);font-size:12px;" id="ov-active-members">0 active members this period</span>
+              <a class="card-link" href="#access" onclick="showPage('access');return false;">Manage users &amp; caps</a>
+            </div>
+          </div>
+          <div id="ov-members-body">
+            <div class="empty-state-box">No member requests recorded in selected window.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <span class="card-label">Active API Keys</span>
+            <div style="display:flex;gap:16px;align-items:center;">
+              <span style="color:var(--text-tertiary);font-size:12px;">1 active key · newest Sep 5, 2026</span>
+              <a class="card-link" href="#apikeys" onclick="showPage('apikeys');return false;">Manage keys</a>
+            </div>
+          </div>
+          <div class="table-wrapper" style="margin-bottom:0;border:none;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Key Name</th>
+                  <th>Key Secret</th>
+                  <th style="text-align:right;">Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span style="display:inline-flex;align-items:center;gap:6px;">🔑 test</span></td>
+                  <td class="mono" style="color:var(--text-secondary);">xpl_ff9f9ba2…ce9e</td>
+                  <td class="num" style="color:var(--text-tertiary);">Sep 5, 2026</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-providers">
+        <div class="page-header">
+          <h1 class="page-title">Provider Connections</h1>
+          <p class="page-sub">Connect your custom provider keys to route model calls directly. You are billed straight through your provider contracts with zero markup.</p>
+        </div>
+        <div class="provider-grid" id="providers-page-grid"></div>
+      </section>
+
+      <section class="page" id="page-models">
+        <div class="toolbar-row">
+          <div class="tab-group">
+            <button class="active">Models</button>
+            <button onclick="triggerToast('Provider routes loaded')">Provider routes</button>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" onclick="triggerToast('Comparing 2 selected models')">☰ Compare</button>
+            <button class="btn primary" onclick="triggerToast('Add custom model endpoint')">+ Add Model</button>
+          </div>
+        </div>
+
+        <div class="toolbar-row" style="margin-bottom:12px;">
+          <div class="search-bar-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" class="input-field" id="models-search-input" placeholder="Search 763 models, modalities, providers…">
+          </div>
+          <span style="color:var(--text-tertiary);font-size:12px;" id="models-count-label">763 of 763 models available</span>
+        </div>
+
+        <div class="toolbar-row" style="gap:6px;margin-bottom:16px;">
+          <button class="btn sm" onclick="triggerToast('Filter: Provider')">Provider ▾</button>
+          <button class="btn sm" onclick="triggerToast('Filter: Modality')">Modality ▾</button>
+          <button class="btn sm" onclick="triggerToast('Filter: Params')">Params ▾</button>
+          <button class="btn sm" onclick="triggerToast('Filter: Context')">Context ▾</button>
+          <button class="btn sm" onclick="triggerToast('Filter: Price')">Price ▾</button>
+          <button class="btn sm" onclick="triggerToast('Filter: Cache discount')">Cache discount</button>
+          <button class="btn sm" onclick="triggerToast('Filter: No BYOK')">No BYOK</button>
+        </div>
+
+        <div class="table-wrapper">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Providers</th>
+                  <th class="num">Context</th>
+                  <th class="num">Input $/M</th>
+                  <th class="num">Output $/M</th>
+                  <th>Modalities</th>
+                  <th>Capabilities</th>
+                  <th class="num">Tok/s</th>
+                  <th class="num">TTFT</th>
+                </tr>
+              </thead>
+              <tbody id="models-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <p style="color:var(--text-tertiary);font-size:11.5px;">
+          Prices reflect per million tokens on the cheapest verified route. Throughput (tok/s) and Time to First Token (TTFT) are updated continuously via real-time trace telemetry.
+        </p>
+      </section>
+
+      <section class="page" id="page-logs">
+        <div class="toolbar-row">
+          <div class="range-picker">
+            <button>24 hours</button>
+            <button class="active">7 days</button>
+            <button>30 days</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn sm" onclick="triggerToast('Filter by Model')">All models ▾</button>
+            <button class="btn sm" onclick="triggerToast('Filter by Agent')">All agents ▾</button>
+            <button class="btn sm" onclick="triggerToast('Filter by Lane')">All lanes ▾</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
+            <label style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" checked style="accent-color:var(--primary);"> Auto-refresh
+            </label>
+            <button class="btn sm" onclick="triggerToast('Logs refreshed')">⟳ Refresh</button>
+          </div>
+        </div>
+
+        <div class="grid-4">
+          <div class="card">
+            <div class="card-label">Total Spend</div>
+            <div class="kpi-value" style="font-size:22px;margin-top:6px;">$0.00</div>
+            <div class="kpi-sub">platform credits</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Tokens In / Out</div>
+            <div class="kpi-value mono" style="font-size:22px;margin-top:6px;">280 · 135</div>
+            <div class="kpi-sub">total token volume: 415</div>
+          </div>
+          <div class="card flag">
+            <div class="card-label" style="color:var(--danger);">Requests &amp; Errors</div>
+            <div class="kpi-value" style="font-size:22px;margin-top:6px;">15</div>
+            <div class="kpi-sub" style="color:var(--danger);font-weight:600;">14 errors · 93.3% failure rate</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Latency P50 / P95</div>
+            <div class="kpi-value mono" style="font-size:22px;margin-top:6px;">25ms / 1.9s</div>
+            <div class="kpi-sub">last 15 dispatched calls</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <span class="card-label">Spend Trajectory</span>
+              <div class="segmented" style="scale:0.9;transform-origin:right;">
+                <button class="active">By lane</button>
+                <button>By model</button>
+              </div>
+            </div>
+            <div class="kpi-value" style="font-size:18px;">$0.00</div>
+            <div class="chart-container" style="height:120px;">
+              <div class="chart-y-max">$0.00</div>
+              <div class="chart-baseline"></div>
+              <div style="position:absolute;left:0;right:0;bottom:35%;height:2px;background:var(--primary);opacity:0.85;"></div>
+            </div>
+            <div class="chart-axis-labels">
+              <span>Aug 29</span>
+              <span>Sep 5</span>
+            </div>
+
+            <div class="tab-group" style="margin-top:20px;margin-bottom:12px;">
+              <button class="active">By model</button>
+              <button>By agent</button>
+              <button>By label</button>
+            </div>
+            <div class="table-wrapper" style="margin-bottom:0;border:none;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th class="num">Requests</th>
+                    <th class="num">Error Rate</th>
+                    <th class="num">Tokens</th>
+                    <th class="num">Spend</th>
+                  </tr>
+                </thead>
+                <tbody id="logs-usage-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span class="card-label">Recent Request Traces</span>
+              <label style="font-size:11.5px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" id="logs-error-filter" style="accent-color:var(--danger);"> Errors only
+              </label>
+            </div>
+            <div id="req-history" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-insights">
+        <div class="toolbar-row">
+          <div class="tab-group">
+            <button class="active">Overview</button>
+            <button onclick="triggerToast('Intelligence metrics loaded')">Intelligence</button>
+          </div>
+          <div class="range-picker">
+            <button>Past 24h</button>
+            <button class="active">Past 7 days</button>
+            <button>Past 30 days</button>
+          </div>
+        </div>
+
+        <div class="grid-4">
+          <div class="card">
+            <div class="card-label">Total Spend</div>
+            <div class="kpi-value" style="font-size:22px;margin-top:6px;">$0.00</div>
+            <div class="kpi-sub">Credits &amp; direct provider est.</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Total Requests</div>
+            <div class="kpi-value" style="font-size:22px;margin-top:6px;">15</div>
+            <div class="kpi-sub">All gateway pipelines</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Token Volume</div>
+            <div class="kpi-value mono" style="font-size:22px;margin-top:6px;">415</div>
+            <div class="kpi-sub">280 in / 135 out</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Blended $/1M</div>
+            <div class="kpi-value mono" style="font-size:22px;margin-top:6px;">$0.00</div>
+            <div class="kpi-sub">Cost efficiency metric</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <span class="card-label">Spend By Model</span>
+            </div>
+            <div class="chart-container" style="height:120px;">
+              <div class="chart-y-max">$0.00</div>
+              <div class="chart-baseline"></div>
+            </div>
+            <div class="chart-axis-labels"><span>Aug 29</span><span>Sep 5</span></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span class="card-label">Request Volume By Model</span>
+            </div>
+            <div class="chart-container" style="height:120px;">
+              <span style="position:absolute;top:0;left:0;font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);">15</span>
+              <span style="position:absolute;top:50%;left:0;font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);">8</span>
+              <div class="chart-baseline"></div>
+              <div class="chart-bar-stack">
+                <div style="height:58%;background:#c9c9cf;"></div>
+                <div style="height:7%;background:#1fa3c9;"></div>
+                <div style="height:7%;background:#ef4444;"></div>
+                <div style="height:7%;background:#f59e0b;"></div>
+                <div style="height:7%;background:#10b981;"></div>
+                <div style="height:14%;background:#6366f1;"></div>
+              </div>
+            </div>
+            <div class="chart-axis-labels"><span>Aug 29</span><span>Sep 5</span></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span class="card-label">Top Models By Spend</span>
+            </div>
+            <div class="empty-state-box">No billable spend in this window.</div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <span class="card-label">Top API Keys Driving Usage</span>
+            </div>
+            <div style="margin-top:10px;">
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px;">
+                <span class="mono">test</span>
+                <span style="color:var(--text-tertiary);font-size:12px;">$0.00 · 15 reqs</span>
+              </div>
+              <div style="height:6px;background:var(--bg-surface-elevated);border-radius:9999px;overflow:hidden;">
+                <div style="width:100%;height:100%;background:var(--primary);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-access">
+        <div class="page-header">
+          <h1 class="page-title">Access Control &amp; Budgets</h1>
+          <p class="page-sub">Configure member limits, RBAC identity mappings, and spend guardrails that prevent unexpected billing runaway.</p>
+        </div>
+
+        <div class="tab-group" style="margin-bottom:20px;">
+          <button class="active">Identities</button>
+          <button onclick="triggerToast('Aliases configured')">Aliases</button>
+          <button onclick="triggerToast('Budgets & spend caps')">Budgets</button>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-head">
+            <span class="card-label">Member Daily Spend Limits</span>
+            <span style="color:var(--primary);font-weight:600;font-size:12px;">Workspace credits balance: $5.00</span>
+          </div>
+          <p style="color:var(--text-tertiary);font-size:12px;margin-bottom:14px;">
+            Credits are pooled automatically across the organization. Caps govern individual bearer tokens.
+          </p>
+          <div class="table-wrapper" style="margin-bottom:0;border:none;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Member Email</th>
+                  <th>Active Keys</th>
+                  <th>Daily Spend Cap</th>
+                  <th>Spent Today</th>
+                  <th class="num">Remaining Today</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>bidreshivaprasad@gmail.com</td>
+                  <td>1</td>
+                  <td><span class="pill subtle">Tier Default</span></td>
+                  <td class="mono">$0.00</td>
+                  <td class="num mono">–</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-label" style="margin-bottom:12px;">Configured Identities</div>
+            <div style="background:var(--bg-surface-elevated);border:1px solid var(--border-default);border-radius:var(--radius-sm);padding:14px;margin-bottom:14px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <b>Default Identity</b>
+                <span class="pill active">DEFAULT</span>
+              </div>
+              <div style="color:var(--text-tertiary);font-size:12px;margin-top:4px;">1 assigned member</div>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+              <input type="text" class="input-field" placeholder="New identity name" id="new-identity-input" style="flex:1;">
+              <button class="btn primary" onclick="addIdentity()">+ Add</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <b>Default Identity Policy</b>
+              <span class="pill subtle">org-0cde3617-080a-4dfc-b812-8fba0e2e1bef</span>
+            </div>
+            <p style="color:var(--text-tertiary);font-size:12px;margin-bottom:16px;">Assigned workspace members inherit full fallback routing policies.</p>
+            <div class="card-label" style="margin-bottom:8px;">Bound Members</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border-subtle);background:var(--bg-surface-elevated);border-radius:var(--radius-sm);padding:10px 14px;">
+              <span>bidreshivaprasad@gmail.com</span>
+              <button class="btn sm" onclick="triggerToast('Identity role permissions updated')">Default (default) ▾</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-apikeys">
+        <div class="page-header">
+          <h1 class="page-title">API Keys</h1>
+          <p class="page-sub">Bearer tokens authorize calls through the AI Gateway from code, SDKs, or local developer CLI terminals.</p>
+        </div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+            <div style="flex:1;min-width:240px;">
+              <div class="card-label" style="margin-bottom:6px;">Key Identifier Name</div>
+              <input type="text" class="input-field" id="new-key-name" placeholder="e.g. production-backend" style="width:100%;">
+            </div>
+            <div>
+              <div class="card-label" style="margin-bottom:6px;">Key Expiration</div>
+              <select class="input-field" id="new-key-expire" style="cursor:pointer;">
+                <option>Never</option>
+                <option>30 days</option>
+                <option>90 days</option>
+                <option>1 year</option>
+              </select>
+            </div>
+            <button class="btn primary" onclick="createApiKey()">Create Key</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <span class="card-label" id="api-keys-count">1 Active Key</span>
+            <button class="btn sm" onclick="triggerToast('Displaying active keys')">Show revoked</button>
+          </div>
+          <div class="table-wrapper" style="margin-bottom:0;border:none;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Key Secret</th>
+                  <th>Created</th>
+                  <th>Last Used</th>
+                  <th>Expires</th>
+                  <th>Status</th>
+                  <th class="num">Spend (30d)</th>
+                  <th style="text-align:right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="api-keys-table-body">
+                <tr>
+                  <td><b>test</b></td>
+                  <td class="mono" style="color:var(--primary);">xpl_ff9f9ba2…ce9e</td>
+                  <td style="color:var(--text-secondary);">Sep 5, 2026, 9:47 AM</td>
+                  <td style="color:var(--text-secondary);">Sep 5, 2026, 4:48 PM</td>
+                  <td><span class="pill subtle">Never</span></td>
+                  <td><span class="pill active">Active</span></td>
+                  <td class="num mono">$0.00</td>
+                  <td style="text-align:right;white-space:nowrap;">
+                    <button class="btn sm" onclick="triggerToast('Editing limits for key: test')">Limits</button>
+                    <button class="btn sm" onclick="triggerToast('Token rotated successfully')">Rotate</button>
+                    <button class="btn sm danger" onclick="triggerToast('Revoke action requested')">Revoke</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+          <div class="card-label" style="margin-bottom:12px;">Gateway Endpoint Integration</div>
+          <div style="margin-bottom:14px;">
+            <div class="card-label" style="margin-bottom:4px;">Base URL</div>
+            <div class="codeblock-container">
+              <code>https://api.experientiallabs.ai</code>
+              <button class="btn sm code-copy-btn" onclick="copySnippet('https://api.experientiallabs.ai')">Copy</button>
+            </div>
+          </div>
+          <div>
+            <div class="card-label" style="margin-bottom:4px;">Health &amp; Authentication Check</div>
+            <div class="codeblock-container">
+              <code>curl https://api.experientiallabs.ai/api/whoami \<br>&nbsp;&nbsp;-H "Authorization: Bearer $EXPLABS_API_KEY"</code>
+              <button class="btn sm code-copy-btn" onclick="copySnippet('curl https://api.experientiallabs.ai/api/whoami -H &quot;Authorization: Bearer $EXPLABS_API_KEY&quot;')">Copy</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-settings">
+        <div class="toolbar-row">
+          <h1 class="page-title" style="margin:0;">Organization Settings</h1>
+          <div class="segmented">
+            <button class="active">Connections</button>
+            <button onclick="triggerToast('Rate limits loaded')">Rate limits</button>
+            <button onclick="triggerToast('Member settings')">Members</button>
+            <button onclick="triggerToast('Organization profile')">Organization</button>
+          </div>
+        </div>
+
+        <div class="card-label" style="margin:18px 0 6px;">Provider Balance Management</div>
+        <p style="color:var(--text-tertiary);font-size:12px;margin-bottom:14px;">Direct provider routing keys for direct external billing without middleman fees.</p>
+        <div class="provider-grid" id="settings-provider-grid"></div>
+
+        <div class="card-label" style="margin:28px 0 6px;">Telemetry &amp; Trace Sources</div>
+        <div class="provider-grid" id="trace-grid" style="grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));"></div>
+      </section>
+
+      <section class="page" id="page-provider-detail">
+        <div style="margin-bottom:18px;">
+          <button class="btn sm" onclick="showPage('providers')">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            Back to Providers
+          </button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px;">
+          <div class="provider-icon-badge" id="pd-icon" style="width:44px;height:44px;font-size:18px;">⏣</div>
+          <div>
+            <div style="font-size:20px;font-weight:700;" id="pd-name">OpenAI</div>
+            <div style="font-size:12px;color:var(--text-tertiary);" id="pd-status">Not connected</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:20px;max-width:680px;">
+          <div class="card-label" style="margin-bottom:8px;">Provider API Key</div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <input type="password" class="input-field mono" id="pd-key-input" placeholder="sk-••••••••••••••••••••••••••••" style="flex:1;">
+            <button class="btn primary" onclick="saveProviderKey()">Save Key</button>
+          </div>
+          <div id="pd-saved-alert" style="display:none;align-items:center;gap:6px;color:var(--primary);font-size:12px;font-weight:600;margin-top:8px;">
+            ✓ API Key saved securely to memory
+          </div>
+        </div>
+
+        <div class="toolbar-row" style="margin-bottom:14px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn sm primary" onclick="pullModels()">⇩ Pull Models</button>
+            <button class="btn sm" onclick="testModels()">▷ Test Models</button>
+            <button class="btn sm danger" onclick="disableFailingModels()">⦸ Disable Non-working Models</button>
+            <button class="btn sm" id="pd-filter-btn" onclick="cycleFilter()">All Models ▾</button>
+          </div>
+          <div class="search-bar-wrap" style="max-width:260px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" class="input-field" id="pd-search" placeholder="Filter models…" oninput="renderModelTable()">
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Model Identifier</th>
+                  <th>Diagnostic Status</th>
+                  <th class="num">Ping Latency</th>
+                  <th class="num">Tok/s</th>
+                  <th style="text-align:right;">Routing Enabled</th>
+                </tr>
+              </thead>
+              <tbody id="pd-model-body"></tbody>
+            </table>
+          </div>
+          <div id="pd-skeleton" style="display:none;padding:16px;">
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+          </div>
+          <div class="empty-state-box" id="pd-empty" style="display:none;">
+            Click "Pull models" to fetch the live model registry for this provider.
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<div class="toast" id="toast-notify" role="status" aria-live="polite">
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toast-message">Action successful</span>
+</div>
+
+<script>
+let currentProviderIdx = null;
+let currentFilter = "all"; // all | enabled | disabled
+let currentMetric = "spend";
+const providerState = {};
+
+function triggerToast(msg) {
+  const toast = document.getElementById('toast-notify');
+  const txt = document.getElementById('toast-message');
+  txt.textContent = msg;
+  toast.classList.add('show', 'success');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => toast.classList.remove('show'), 2800);
+}
+
+function copySnippet(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    triggerToast('Copied to clipboard');
+  } catch (err) {
+    triggerToast('Failed to copy');
+  }
+  document.body.removeChild(ta);
+}
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('page-' + id);
+  if (target) target.classList.add('active');
+
+  document.querySelectorAll('.sidebar-nav .nav-item').forEach(a => {
+    a.classList.toggle('active', a.dataset.page === id);
+  });
+
+  // Auto close mobile drawer if open
+  document.getElementById('app-sidebar').classList.remove('open');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.querySelectorAll('.nav-item[data-page]').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    showPage(a.dataset.page);
+  });
+});
+
+const sidebar = document.getElementById('app-sidebar');
+const sidebarToggle = document.getElementById('sidebar-toggle-btn');
+const mobileToggle = document.getElementById('mobile-menu-trigger');
+
+sidebarToggle.addEventListener('click', () => {
+  sidebar.classList.toggle('collapsed');
+});
+
+mobileToggle.addEventListener('click', () => {
+  sidebar.classList.toggle('open');
+});
+
+// Keyboard shortcut Ctrl+B or Cmd+B for sidebar toggle
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+    e.preventDefault();
+    sidebar.classList.toggle('collapsed');
+  }
+});
+
+const themeBtn = document.getElementById('theme-toggle');
+const sunIcon = document.getElementById('theme-icon-sun');
+const moonIcon = document.getElementById('theme-icon-moon');
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  if (theme === 'light') {
+    sunIcon.style.display = 'block';
+    moonIcon.style.display = 'none';
+  } else {
+    sunIcon.style.display = 'none';
+    moonIcon.style.display = 'block';
+  }
+}
+
+themeBtn.addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  triggerToast(`Switched to ${next} theme`);
+});
+
+const overviewData = {
+  spend: {
+    big: "$0.00",
+    kpiSub: "Platform credits & pass-through",
+    chartMax: "$0.00",
+    chartMid: null,
+    barSegments: null,
+    topTitle: "Top models by spend",
+    viewAll: false,
+    top: [],
+    topEmpty: "No billable requests recorded in this period.",
+    activeMembers: "0 active members this period",
+    memberRow: null,
+    memberEmpty: "No member activity recorded in this period."
+  },
+  tokens: {
+    big: "415",
+    kpiSub: "280 prompt · 135 completion tokens",
+    chartMax: "415",
+    chartMid: "208",
+    barSegments: [
+      { h: 88, color: "#3b82f6" },
+      { h: 12, color: "#ec4899" }
+    ],
+    topTitle: "Top models by tokens",
+    viewAll: false,
+    top: [
+      ["◐", "minimax-m3-free", 178, 178, "#3b82f6"],
+      ["◭", "qwen3.8-27b", 124, 178, "#10b981"],
+      ["◐", "minimax-m2.7-free", 113, 178, "#ec4899"]
+    ],
+    activeMembers: "1 active member this period",
+    memberRow: { name: "bidreshivaprasad@gmail.com", requests: 15, tokens: 415, spend: "$0.00" }
+  },
+  requests: {
+    big: "15",
+    kpiSub: "Total gateway invocations",
+    chartMax: "15",
+    chartMid: "8",
+    barSegments: [
+      { h: 50, color: "#3b82f6" },
+      { h: 7, color: "#ec4899" },
+      { h: 7, color: "#ef4444" },
+      { h: 7, color: "#f59e0b" },
+      { h: 7, color: "#10b981" },
+      { h: 7, color: "#8b5cf6" },
+      { h: 7, color: "#6366f1" },
+      { h: 8, color: "#14b8a6" }
+    ],
+    topTitle: "Top models by requests",
+    viewAll: true,
+    top: [
+      ["G", "gemma-4-26b-a4b-it-free", 1, 1, "#10b981"],
+      ["■", "inkling-free", 1, 1, "#3b82f6"],
+      ["■", "inkling-small-free", 1, 1, "#8b5cf6"],
+      ["L", "laguna-s-2.1-free", 1, 1, "#f59e0b"],
+      ["L", "laguna-xs-2.1-free", 1, 1, "#06b6d4"],
+      ["L", "lfm-2.5-2.6b-free", 1, 1, "#ef4444"]
+    ],
+    activeMembers: "1 active member this period",
+    memberRow: { name: "bidreshivaprasad@gmail.com", requests: 15, tokens: 415, spend: "$0.00" }
+  }
+};
+
+function renderOverview(metric) {
+  currentMetric = metric;
+  const d = overviewData[metric];
+  document.getElementById('ov-big-number').textContent = d.big;
+  document.getElementById('ov-kpi-subtitle').textContent = d.kpiSub;
+  document.getElementById('ov-chart-max').textContent = d.chartMax;
+
+  const chart = document.getElementById('ov-chart');
+  chart.querySelectorAll('.chart-y-mid, .chart-bar-stack').forEach(el => el.remove());
+
+  if (d.chartMid) {
+    const mid = document.createElement('div');
+    mid.className = 'chart-y-mid';
+    mid.textContent = d.chartMid;
+    chart.appendChild(mid);
+  }
+
+  if (d.barSegments) {
+    const stack = document.createElement('div');
+    stack.className = 'chart-bar-stack';
+    d.barSegments.forEach(seg => {
+      const bar = document.createElement('div');
+      bar.style.height = `${seg.h}%`;
+      bar.style.backgroundColor = seg.color;
+      stack.appendChild(bar);
+    });
+    chart.appendChild(stack);
+  }
+
+  document.getElementById('ov-top-title').textContent = d.topTitle;
+  document.getElementById('ov-top-viewall').style.display = d.viewAll ? 'inline-flex' : 'none';
+
+  const topEl = document.getElementById('ov-top-models');
+  if (!d.top || d.top.length === 0) {
+    topEl.innerHTML = `<div class="empty-state-box">${d.topEmpty}</div>`;
+  } else {
+    const maxVal = Math.max(...d.top.map(t => t[3]));
+    topEl.innerHTML = d.top.map(t => {
+      const [icon, name, val, max, color] = t;
+      const pct = Math.max(6, (val / maxVal) * 100);
+      return `
+        <div style="margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px;">
+            <span style="font-weight:500;">${icon} ${name}</span>
+            <span class="mono" style="color:var(--text-tertiary);">${val}</span>
+          </div>
+          <div style="height:4px;background:var(--bg-surface-elevated);border-radius:9999px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${color};border-radius:9999px;"></div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  document.getElementById('ov-active-members').textContent = d.activeMembers;
+  const memEl = document.getElementById('ov-members-body');
+  if (!d.memberRow) {
+    memEl.innerHTML = `<div class="empty-state-box">${d.memberEmpty}</div>`;
+  } else {
+    const m = d.memberRow;
+    memEl.innerHTML = `
+      <div class="table-wrapper" style="margin-bottom:0;border:none;">
+        <table>
+          <thead>
+            <tr>
+              <th>Member</th>
+              <th class="num">Requests</th>
+              <th class="num">Tokens</th>
+              <th class="num">Spend</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>${m.name}</b></td>
+              <td class="num mono">${m.requests}</td>
+              <td class="num mono">${m.tokens}</td>
+              <td class="num mono">${m.spend}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`;
+  }
+}
+
+document.querySelectorAll('#ov-metric button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#ov-metric button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderOverview(btn.dataset.metric);
+  });
+});
+renderOverview('spend');
+
+const rawModels = [
+  ["Qwen3.8 27B", "qwen3.8-27b", ["EXPERIENTIAL CLOUD", "FIREWORKS"], "1M", "$0.32→$0", "$1.49→$0", "T,IMG,DOC", "promo"],
+  ["DeepSeek V4 Flash", "deepseek-v4-flash", ["EXPERIENTIAL CLOUD", "FIREWORKS", "AZURE"], "1.05M", "$0.042→$0", "$0.005→$0", "T", "promo"],
+  ["GPT-5.6 Luna", "gpt-5.6-luna", ["EXPERIENTIAL CLOUD", "AZURE"], "1.05M", "$0.20→$0", "$1.20→$0", "T,DOC,IMG", "promo"],
+  ["Claude Fable 5.1", "claude-fable-5.1", ["EXPERIENTIAL CLOUD", "AZURE"], "1M", "$10→$0", "$50→$0", "T,IMG", "promo"],
+  ["GPT-6 Astra", "gpt-6-astra", ["EXPERIENTIAL CLOUD"], "1.05M", "$10→$0", "$50→$0", "T,IMG", "promo"],
+  ["Claude Fable 5.1", "claude-fable-5.1", ["EXPERIENTIAL CLOUD", "AZURE"], "1M", "$10→$0", "$50→$0", "T,IMG", "rec"],
+  ["Claude Fable 5", "claude-fable-5", ["EXPERIENTIAL CLOUD", "AZURE"], "1M", "$10", "$50", "T,IMG,DOC", "rec"],
+  ["Claude Opus 5", "claude-opus-5", ["EXPERIENTIAL CLOUD", "AZURE"], "1M", "$5", "$25", "T,IMG,DOC", "rec"],
+  ["Claude Sonnet 5", "claude-sonnet-5", ["EXPERIENTIAL CLOUD", "AZURE"], "1M", "$2", "$10", "T,IMG,DOC", "rec"],
+  ["GPT-5.6 Sol", "gpt-5.6-sol", ["EXPERIENTIAL CLOUD", "AZURE"], "1.05M", "$2", "$10", "T,DOC,IMG", "rec"],
+  ["GPT-5.6 Luna", "gpt-5.6-luna", ["EXPERIENTIAL CLOUD", "AZURE"], "1.05M", "$0.20→$0", "$1.20→$0", "T,DOC,IMG", "rec"],
+  ["Gemini 3.7 Flash", "gemini-3.7-flash", ["EXPERIENTIAL CLOUD"], "1.05M", "$0.75", "$3.75", "T,IMG,VID,DOC,AUD", "rec"],
+  ["Kimi K3", "kimi-k3", ["EXPERIENTIAL CLOUD", "AZURE"], "1.05M", "$3", "$12.75", "T,IMG,VID", "rec"],
+  ["GLM 5.3", "glm-5.3", ["EXPERIENTIAL CLOUD", "AZURE"], "1.05M", "$1.19", "$4.40", "T", "rec"],
+  ["GLM-5.3 Flash", "glm-5.3-flash", ["EXPERIENTIAL CLOUD"], "1.31M", "$0.075", "$0.25", "T,IMG,VID", "rec"],
+  ["DeepSeek V4 Flash", "deepseek-v4-flash", ["EXPERIENTIAL CLOUD", "FIREWORKS", "AZURE"], "1.05M", "$0.042→$0", "$0.005→$0", "T", "rec"]
+];
+
+function renderModalityIcons(modsStr) {
+  const iconMap = {
+    'T': { label: 'Text', svg: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>' },
+    'IMG': { label: 'Vision / Image', svg: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' },
+    'DOC': { label: 'Document / PDF', svg: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>' },
+    'VID': { label: 'Video', svg: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="15" height="16" rx="2"/><polygon points="23 7 17 11 17 13 23 17 23 7" fill="currentColor"/></svg>' },
+    'AUD': { label: 'Audio / Voice', svg: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>' }
+  };
+  return `<div style="display:flex;align-items:center;gap:4px;">` + modsStr.split(',').map(m => {
+    const key = m.trim();
+    const item = iconMap[key] || { label: key, svg: `<span style="font-size:10px;">${key}</span>` };
+    return `<span title="${item.label}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;background:var(--bg-surface-elevated);border:1px solid var(--border-subtle);color:var(--text-secondary);cursor:default;">${item.svg}</span>`;
+  }).join('') + `</div>`;
+}
+
+function renderModelsTable(filterText = "") {
+  const tbody = document.getElementById('models-body');
+  const q = filterText.toLowerCase();
+  const filtered = rawModels.filter(m => m[0].toLowerCase().includes(q) || m[1].toLowerCase().includes(q));
+
+  document.getElementById('models-count-label').textContent = `${filtered.length} of 763 models available`;
+
+  tbody.innerHTML = filtered.map(m => {
+    const [name, slug, provs, ctx, inp, out, mods, badgeType] = m;
+    const badgeHtml = badgeType === 'promo' ? '<span class="pill promo">★ FREE</span>' : '<span class="pill rec">★ RECOMMENDED</span>';
+    return `
+      <tr>
+        <td>
+          <div style="font-weight:600;display:flex;align-items:center;gap:6px;">
+            ${badgeHtml}
+            <span>${name}</span>
+          </div>
+          <div class="mono" style="color:var(--text-tertiary);font-size:11.5px;margin-top:2px;">${slug}</div>
+        </td>
+        <td>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            ${provs.map(p => `<span class="pill subtle">${p}</span>`).join('')}
+          </div>
+        </td>
+        <td class="num mono">${ctx}</td>
+        <td class="num mono" style="color:var(--primary);">${inp}</td>
+        <td class="num mono">${out}</td>
+        <td>${renderModalityIcons(mods)}</td>
+        <td><span class="pill subtle">tools reasoning +7</span></td>
+        <td class="num mono">120</td>
+        <td class="num mono">1.2s</td>
+      </tr>`;
+  }).join('');
+}
+
+document.getElementById('models-search-input').addEventListener('input', e => {
+  renderModelsTable(e.target.value);
+});
+renderModelsTable();
+
+const usageLogs = [
+  ["gemma-4-26b-a4b-it-free", "#10b981", 1, "100.0%", "0 / 0", "$0.00"],
+  ["inkling-free", "#3b82f6", 1, "100.0%", "0 / 0", "$0.00"],
+  ["inkling-small-free", "#8b5cf6", 1, "100.0%", "0 / 0", "$0.00"],
+  ["laguna-s-2.1-free", "#f59e0b", 1, "100.0%", "0 / 0", "$0.00"],
+  ["laguna-xs-2.1-free", "#06b6d4", 1, "100.0%", "0 / 0", "$0.00"],
+  ["lfm-2.5-2.6b-free", "#ef4444", 1, "100.0%", "0 / 0", "$0.00"],
+  ["ling-3.0-flash-fin-free", "#a855f7", 1, "100.0%", "0 / 0", "$0.00"],
+  ["minimax-m2.7-free", "#ec4899", 1, "100.0%", "49 / 64", "$0.00"],
+  ["minimax-m3-free", "#64748b", 1, "0.0%", "171 / 7", "$0.00"]
+];
+
+document.getElementById('logs-usage-body').innerHTML = usageLogs.map(u => `
+  <tr>
+    <td>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="width:7px;height:7px;border-radius:2px;background:${u[1]};display:inline-block;"></span>
+        <span class="mono">${u[0]}</span>
+      </div>
+    </td>
+    <td class="num mono">${u[2]}</td>
+    <td class="num mono" style="color:${u[3] === '0.0%' ? 'var(--primary)' : 'var(--danger)'};font-weight:600;">${u[3]}</td>
+    <td class="num mono">${u[4]}</td>
+    <td class="num mono">${u[5]}</td>
+  </tr>
+`).join('');
+
+const reqTraces = [
+  { time: "Sep 5, 9:53 AM", model: "qwen3.8-27b", route: "openai-compatible", status: "Platform", tokens: "60 in / 64 out", isError: false },
+  { time: "Sep 5, 9:48 AM", model: "openrouter-free", route: "—", status: "(undispatched)", tokens: "0 in / 0 out", isError: true },
+  { time: "Sep 5, 9:48 AM", model: "north-mini-code-free", route: "OpenRouter", status: "Platform", tokens: "0 in / 0 out", isError: true },
+  { time: "Sep 5, 9:48 AM", model: "nemotron-3.5-content-safety", route: "OpenRouter", status: "Platform", tokens: "0 in / 0 out", isError: true }
+];
+
+function renderReqHistory(errorsOnly = false) {
+  const container = document.getElementById('req-history');
+  const items = errorsOnly ? reqTraces.filter(r => r.isError) : reqTraces;
+  container.innerHTML = items.map(r => `
+    <div style="border:1px solid var(--border-subtle);background:var(--bg-surface-elevated);border-radius:var(--radius-sm);padding:12px;transition:background var(--transition-speed);">
+      <div style="display:flex;justify-content:space-between;color:var(--text-tertiary);font-size:11px;margin-bottom:4px;">
+        <span>${r.time} · ${r.route}</span>
+        <span class="pill ${r.isError ? 'danger' : 'active'}">${r.isError ? 'Error 429' : 'OK 200'}</span>
+      </div>
+      <div style="font-weight:600;font-size:13px;" class="mono">${r.model}</div>
+      <div style="color:var(--text-secondary);font-size:11.5px;margin-top:4px;">${r.status} · ${r.tokens}</div>
+    </div>
+  `).join('');
+}
+document.getElementById('logs-error-filter').addEventListener('change', e => {
+  renderReqHistory(e.target.checked);
+});
+renderReqHistory();
+
+const providers = [
+  ["⏣", "OpenAI"], ["Ａ", "Anthropic"], ["✦", "Google Gemini"], ["▦", "Azure Foundry"],
+  ["⇄", "OpenRouter"], ["Ⓑ", "Amazon Bedrock"], ["◭", "Fireworks AI"], ["◍", "Modal"],
+  ["▤", "Google Vertex AI"], ["☀", "Z.ai"], ["◐", "Qwen Cloud"], ["T", "Tencent Cloud"],
+  ["∞", "Meta"], ["C", "Cerebras"], ["W", "Wafer"]
+];
+
+function renderProviderGridHtml() {
+  return providers.map((p, i) => `
+    <div class="provider-card" data-idx="${i}" onclick="openProviderDetail(${i})">
+      <div class="provider-card-head">
+        <div class="provider-icon-badge">${p[0]}</div>
+        <span class="provider-connect-link">Connect ›</span>
+      </div>
+      <div>
+        <div class="provider-name">${p[1]}</div>
+        <div class="provider-status-text pcard-status">Not connected</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('providers-page-grid').innerHTML = renderProviderGridHtml();
+document.getElementById('settings-provider-grid').innerHTML = renderProviderGridHtml();
+
+const traceSources = [
+  ["🔥", "Arize Phoenix"], ["📊", "Langfuse"], ["🔗", "LangSmith"], ["🌐", "Braintrust"],
+  ["📶", "PostHog"], ["⛭", "Mastra"], ["🗄", "Postgres database"]
+];
+document.getElementById('trace-grid').innerHTML = traceSources.map(t => `
+  <div class="provider-card" style="min-height:auto;flex-direction:row;align-items:center;gap:12px;padding:12px 14px;" onclick="triggerToast('${t[1]} trace integration clicked')">
+    <div class="provider-icon-badge">${t[0]}</div>
+    <div style="flex:1;">
+      <div style="font-weight:600;font-size:13px;">${t[1]}</div>
+      <div class="provider-status-text">Not connected</div>
+    </div>
+    <span style="color:var(--text-tertiary);">›</span>
+  </div>
+`).join('');
+
+const providerModelPool = [
+  "gpt-5.6-luna", "gpt-5.6-sol", "gpt-6-astra", "claude-sonnet-5", "claude-opus-5",
+  "claude-fable-5.1", "gemini-3.7-flash", "kimi-k3", "glm-5.3", "glm-5.3-flash",
+  "deepseek-v4-flash", "qwen3.8-27b", "minimax-m3-free", "minimax-m2.7-free", "lfm-2.5-2.6b-free"
+];
+
+function getState(i) {
+  if (!providerState[i]) {
+    providerState[i] = { connected: false, apiKey: "", models: [] };
+  }
+  return providerState[i];
+}
+
+function openProviderDetail(i) {
+  currentProviderIdx = i;
+  currentFilter = "all";
+  const p = providers[i];
+  const st = getState(i);
+
+  document.getElementById('pd-icon').textContent = p[0];
+  document.getElementById('pd-name').textContent = p[1];
+  document.getElementById('pd-status').textContent = st.connected ? "Connected" : "Not connected";
+  document.getElementById('pd-key-input').value = st.apiKey;
+  document.getElementById('pd-saved-alert').style.display = 'none';
+  document.getElementById('pd-search').value = "";
+  document.getElementById('pd-filter-btn').textContent = "All Models ▾";
+
+  renderModelTable();
+  showPage('provider-detail');
+}
+
+function setCardStatus(i, connected) {
+  document.querySelectorAll(`.provider-card[data-idx="${i}"] .pcard-status`).forEach(el => {
+    el.textContent = connected ? "Connected" : "Not connected";
+    el.style.color = connected ? "var(--primary)" : "var(--text-tertiary)";
+  });
+}
+
+function saveProviderKey() {
+  if (currentProviderIdx === null) return;
+  const st = getState(currentProviderIdx);
+  const val = document.getElementById('pd-key-input').value.trim();
+  st.apiKey = val;
+  st.connected = val.length > 0;
+  document.getElementById('pd-status').textContent = st.connected ? "Connected" : "Not connected";
+  setCardStatus(currentProviderIdx, st.connected);
+
+  const alert = document.getElementById('pd-saved-alert');
+  alert.style.display = 'flex';
+  setTimeout(() => alert.style.display = 'none', 2800);
+  triggerToast('Provider credentials encrypted and saved');
+}
+
+function pullModels() {
+  if (currentProviderIdx === null) return;
+  const skeleton = document.getElementById('pd-skeleton');
+  const body = document.getElementById('pd-model-body');
+  const empty = document.getElementById('pd-empty');
+
+  empty.style.display = 'none';
+  body.innerHTML = '';
+  skeleton.style.display = 'block';
+
+  setTimeout(() => {
+    skeleton.style.display = 'none';
+    const st = getState(currentProviderIdx);
+    const count = 5 + (currentProviderIdx % 6);
+    const picked = providerModelPool.slice(0, count);
+    st.models = picked.map((name, idx) => ({
+      name,
+      enabled: true,
+      status: "pending",
+      latency: null,
+      toks: 65 + ((idx * 29) % 115)
+    }));
+    renderModelTable();
+    triggerToast(`Discovered ${st.models.length} model routes`);
+  }, 450);
+}
+
+function testModels() {
+  if (currentProviderIdx === null) return;
+  const st = getState(currentProviderIdx);
+  if (!st.models || st.models.length === 0) {
+    triggerToast('Please pull models before running diagnostics');
+    return;
+  }
+  st.models.forEach(m => {
+    if (!m.enabled) {
+      m.status = "disabled";
+      return;
+    }
+    const fail = Math.random() < 0.25;
+    m.status = fail ? "fail" : "ok";
+    m.latency = fail ? null : `${300 + Math.floor(Math.random() * 1100)}ms`;
+    m.toks = fail ? null : Math.floor(75 + Math.random() * 125);
+  });
+  renderModelTable();
+  triggerToast('Health checks complete across all active endpoints');
+}
+
+function disableFailingModels() {
+  if (currentProviderIdx === null) return;
+  const st = getState(currentProviderIdx);
+  let disabledCount = 0;
+  st.models.forEach(m => {
+    if (m.status === "fail") {
+      m.enabled = false;
+      m.status = "disabled";
+      disabledCount++;
+    }
+  });
+  renderModelTable();
+  triggerToast(`Disabled ${disabledCount} failing endpoints`);
+}
+
+function toggleModel(name) {
+  const st = getState(currentProviderIdx);
+  const m = st.models.find(x => x.name === name);
+  if (m) {
+    m.enabled = !m.enabled;
+    if (!m.enabled) m.status = "disabled";
+  }
+  renderModelTable();
+}
+
+function cycleFilter() {
+  currentFilter = currentFilter === "all" ? "enabled" : currentFilter === "enabled" ? "disabled" : "all";
+  const label = currentFilter === "all" ? "All Models" : currentFilter === "enabled" ? "Enabled Only" : "Disabled Only";
+  document.getElementById('pd-filter-btn').textContent = `${label} ▾`;
+  renderModelTable();
+}
+
+function renderModelTable() {
+  const body = document.getElementById('pd-model-body');
+  const empty = document.getElementById('pd-empty');
+  if (currentProviderIdx === null) return;
+  const st = getState(currentProviderIdx);
+  const q = (document.getElementById('pd-search').value || "").toLowerCase();
+
+  let rows = st.models.filter(m => m.name.toLowerCase().includes(q));
+  if (currentFilter === "enabled") rows = rows.filter(m => m.enabled);
+  if (currentFilter === "disabled") rows = rows.filter(m => !m.enabled);
+
+  if (st.models.length === 0) {
+    body.innerHTML = "";
+    empty.style.display = "block";
+    empty.textContent = 'Click "Pull models" to fetch this provider\'s model list.';
+    return;
+  }
+  if (rows.length === 0) {
+    body.innerHTML = "";
+    empty.style.display = "block";
+    empty.textContent = "No models match your filter criteria.";
+    return;
+  }
+  empty.style.display = "none";
+
+  body.innerHTML = rows.map(m => {
+    const dot = m.status === "ok" ? '<span class="status-dot ok"></span>Working'
+              : m.status === "fail" ? '<span class="status-dot fail"></span>Failing'
+              : m.status === "disabled" ? '<span class="status-dot disabled"></span>Disabled'
+              : '<span class="status-dot pending"></span>Not tested';
+    const toksDisplay = m.status === "fail" ? "–" : (m.toks ? `${m.toks} tok/s` : "–");
+    return `
+      <tr style="${m.enabled ? '' : 'opacity:0.45;'}">
+        <td class="mono"><b>${m.name}</b></td>
+        <td>${dot}</td>
+        <td class="num mono">${m.latency || "–"}</td>
+        <td class="num mono" style="color:var(--text-secondary);">${toksDisplay}</td>
+        <td style="text-align:right;">
+          <button class="toggle-switch ${m.enabled ? 'on' : ''}" onclick="toggleModel('${m.name}')" aria-label="Toggle model ${m.name}"></button>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+function createApiKey() {
+  const nameInput = document.getElementById('new-key-name');
+  const expireSelect = document.getElementById('new-key-expire');
+  const name = nameInput.value.trim();
+  if (!name) {
+    triggerToast('Please provide a descriptive key name');
+    return;
+  }
+
+  const hex = Math.random().toString(16).substring(2, 8);
+  const keySecret = `xpl_${hex}…${Math.random().toString(16).substring(2, 6)}`;
+  const tableBody = document.getElementById('api-keys-table-body');
+
+  const newRow = document.createElement('tr');
+  newRow.innerHTML = `
+    <td><b>${name}</b></td>
+    <td class="mono" style="color:var(--primary);">${keySecret}</td>
+    <td style="color:var(--text-secondary);">Just now</td>
+    <td style="color:var(--text-secondary);">Never</td>
+    <td><span class="pill subtle">${expireSelect.value}</span></td>
+    <td><span class="pill active">Active</span></td>
+    <td class="num mono">$0.00</td>
+    <td style="text-align:right;white-space:nowrap;">
+      <button class="btn sm" onclick="triggerToast('Editing limits for key: ${name}')">Limits</button>
+      <button class="btn sm" onclick="triggerToast('Token rotated')">Rotate</button>
+      <button class="btn sm danger" onclick="this.closest('tr').remove();triggerToast('Key revoked');">Revoke</button>
+    </td>
+  `;
+  tableBody.prepend(newRow);
+  nameInput.value = '';
+  triggerToast(`API key "${name}" created`);
+}
+
+function addIdentity() {
+  const input = document.getElementById('new-identity-input');
+  const val = input.value.trim();
+  if (!val) {
+    triggerToast('Enter an identity name');
+    return;
+  }
+  triggerToast(`Identity "${val}" created`);
+  input.value = '';
+}
+</script>
+</body>
+</html>
