@@ -155,14 +155,11 @@ Inspect active SQLite storage (`~/.freeroute/freeroute.db`), monitor entity coun
    npm install
    ```
 
-3. **Configure Environment:**
-   Create a `.env` file in the project root:
-   ```env
-   # The database path automatically resolves to your user home directory:
-   # Linux/macOS: file:~/.freeroute/freeroute.db
-   # Windows: file:C:/Users/<Username>/.freeroute/freeroute.db
-   DATABASE_URL="file:~/.freeroute/freeroute.db"
-   PORT=20128
+3. **Zero-Config Database (No `.env` required):**
+   Freeroute automatically creates and connects to your local database in `~/.freeroute/freeroute.db` without needing any `.env` file!
+   *(Optional)* If you wish to customize the port or settings:
+   ```bash
+   cp .env.example .env
    ```
 
 4. **Initialize the Database:**
