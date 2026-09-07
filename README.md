@@ -4,11 +4,11 @@
 
 # Freeroute
 
-**Get ~5M–10M Free AI Tokens Daily · Universal AI Gateway & LLMOps Control Plane**
+**Get Up to 50M+ or Virtually Unlimited Free AI Tokens Daily · Universal AI Gateway & LLMOps Control Plane**
 
-Pool free-tier quotas across Groq, Gemini, OpenRouter & KiosAPI with seamless failover combos, live model catalogs, 14+ CLI developer tools auto-configurators, and zero-config local storage.
+Pool generous free-tier quotas across Groq, Gemini, OpenRouter, Experiential Labs & KiosAPI with infinite failover combos, live model catalogs, 14+ CLI developer tools auto-configurators, and zero-config local storage.
 
-[![Free Tokens](https://img.shields.io/badge/Free%20Tokens-5M%2B%20%2F%20Day-brightgreen.svg)](#)
+[![Free Tokens](https://img.shields.io/badge/Free%20Tokens-Up%20to%2050M%2B%20%2F%20Virtually%20Unlimited-brightgreen.svg)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
