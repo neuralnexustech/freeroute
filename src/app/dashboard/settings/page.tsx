@@ -179,7 +179,7 @@ export default function SettingsPage() {
       <div className="toolbar-row" style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
         <h1 className="page-title" style={{ margin: 0 }}>Gateway &amp; Model Settings</h1>
         <div className="segmented">
-          {["Model Info Discovery", "Database & Backup", "Connections", "Organization"].map((t) => (
+          {["Model Info Discovery", "Database & Backup", "About"].map((t) => (
             <button
               key={t}
               className={activeTab === t ? "active" : ""}
@@ -521,12 +521,87 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {activeTab !== "Model Info Discovery" && activeTab !== "Database & Backup" && (
-        <div className="card" style={{ maxWidth: 680 }}>
-          <div className="card-label">{activeTab}</div>
-          <p style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 8 }}>
-            Organization and rate limit configurations are managed per workspace.
-          </p>
+      {activeTab === "About" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 960 }}>
+          <div className="card" style={{ padding: 28, background: "linear-gradient(135deg, var(--bg-surface-elevated) 0%, rgba(16, 185, 129, 0.05) 100%)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
+              <img src="/logo.png" alt="Freeroute" width={56} height={56} style={{ borderRadius: 14, boxShadow: "0 4px 14px rgba(0,0,0,0.3)" }} />
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>Freeroute</h2>
+                  <span className="badge" style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10b981", border: "1px solid rgba(16, 185, 129, 0.3)", fontWeight: 700, padding: "2px 8px", borderRadius: 6, fontSize: 11 }}>v0.1.0 · Official</span>
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
+                  Universal AI Gateway &amp; LLMOps Control Plane
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 14, color: "var(--text-primary)", lineHeight: 1.6, marginBottom: 20, maxWidth: 780 }}>
+              Freeroute is a developer-first AI gateway providing a drop-in OpenAI-compatible endpoint with automatic multi-tier failovers, live provider catalogs, 14+ CLI developer tools auto-configuration, and zero-config local persistent storage.
+            </p>
+
+            <div style={{ padding: 20, borderRadius: 12, border: "1px solid var(--border-subtle)", background: "var(--bg-app)", marginBottom: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
+                <div>
+                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--primary)", fontWeight: 700, marginBottom: 4 }}>
+                    Developed &amp; Powered By
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>
+                    Neural Nexus Tech
+                  </div>
+                  <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>
+                    Next-generation AI infrastructure, gateway solutions, and developer tooling.
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <a
+                    href="https://www.neuralnexustech.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn primary"
+                    style={{ gap: 8, padding: "8px 16px", textDecoration: "none" }}
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" /></svg>
+                    Visit Website
+                  </a>
+
+                  <a
+                    href="https://github.com/neuralnexustech"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn"
+                    style={{ gap: 8, padding: "8px 16px", textDecoration: "none" }}
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+                    GitHub
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+              <div style={{ padding: 12, borderRadius: 8, border: "1px solid var(--border-subtle)", background: "var(--bg-surface)" }}>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Official Website</div>
+                <a href="https://www.neuralnexustech.com/" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, fontWeight: 600, color: "var(--primary)", marginTop: 4, display: "inline-block" }}>
+                  neuralnexustech.com ↗
+                </a>
+              </div>
+              <div style={{ padding: 12, borderRadius: 8, border: "1px solid var(--border-subtle)", background: "var(--bg-surface)" }}>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Repository</div>
+                <a href="https://github.com/neuralnexustech/freeroute" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, fontWeight: 600, color: "var(--primary)", marginTop: 4, display: "inline-block" }}>
+                  neuralnexustech/freeroute ↗
+                </a>
+              </div>
+              <div style={{ padding: 12, borderRadius: 8, border: "1px solid var(--border-subtle)", background: "var(--bg-surface)" }}>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>License</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginTop: 4 }}>
+                  MIT with Attribution
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </>

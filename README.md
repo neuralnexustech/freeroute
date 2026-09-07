@@ -267,6 +267,15 @@ Freeroute stores your configuration in an independent user directory:
 
 ---
 
+## 🏢 About Neural Nexus Tech
+
+[Neural Nexus Tech](https://www.neuralnexustech.com/) is an engineering and AI research laboratory building next-generation developer tooling, high-availability AI gateways, LLMOps orchestration frameworks, and intelligent autonomous workflows.
+
+- **Website**: [https://www.neuralnexustech.com/](https://www.neuralnexustech.com/)
+- **GitHub**: [https://github.com/neuralnexustech](https://github.com/neuralnexustech)
+
+---
+
 ## 🛡️ License
 
 This project is distributed under the **MIT License with Attribution Requirement**. You are free to use, modify, and distribute this software, provided you retain attribution to the original author.
@@ -277,6 +286,6 @@ See [LICENSE](LICENSE) for full terms.
 
 <div align="center">
 
-### Powered by [(neuralnexustech)](https://github.com/neuralnexustech)
+### Powered by [(neuralnexustech)](https://github.com/neuralnexustech) · [neuralnexustech.com](https://www.neuralnexustech.com/)
 
 </div>
