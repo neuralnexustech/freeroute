@@ -208,6 +208,7 @@ export default function PlaygroundPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
   const [showReasoning, setShowReasoning] = useState<Record<string, boolean>>({});
+  const [collapsedCards, setCollapsedCards] = useState<Record<string, boolean>>({});
 
   // Active Tool Drilldown Configuration State
   const [activeToolConfig, setActiveToolConfig] = useState<string | null>(null);
@@ -308,6 +309,28 @@ export default function PlaygroundPage() {
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   }, []);
+
+  // Global Keyboard Shortcuts (⌘ / or Ctrl+/ for New Chat, ⌘ J or Ctrl+J for Model Selector, Esc to close modals)
+  useEffect(() => {
+    const handleGlobalKey = (e: KeyboardEvent) => {
+      const isMeta = e.metaKey || e.ctrlKey;
+      if (isMeta && e.key === "/") {
+        e.preventDefault();
+        createRoom();
+      } else if (isMeta && (e.key === "j" || e.key === "J")) {
+        e.preventDefault();
+        setModelDropdownOpen((v) => !v);
+      } else if (e.key === "Escape") {
+        setModelDropdownOpen(false);
+        setToolsPopoverOpen(false);
+        setMemoryPopoverOpen(false);
+        setViewDropdownOpen(false);
+        setActiveToolConfig(null);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKey);
+    return () => window.removeEventListener("keydown", handleGlobalKey);
+  }, [createRoom]);
 
   // Delete active room
   const deleteRoom = (id: string, e?: React.MouseEvent) => {
@@ -1096,6 +1119,7 @@ export default function PlaygroundPage() {
               // Assistant message card
               const hasReasoning = !!msg.reasoning;
               const isReasoningExpanded = showReasoning[msg.id];
+              const isCardCollapsed = !!collapsedCards[msg.id];
 
               return (
                 <div key={msg.id} className="pg-assistant-card">
@@ -1111,26 +1135,33 @@ export default function PlaygroundPage() {
                       <button
                         className="pg-restore-link"
                         onClick={() => {
-                          const prevUserMsg = currentMsgs
-                            .slice(0, idx)
-                            .reverse()
-                            .find((m) => m.role === "user");
-                          if (prevUserMsg) sendMessage(prevUserMsg.content);
+                          if (msg.model) {
+                            const found = catalog.find(
+                              (m) => m.displayName === msg.model || m.id === msg.model
+                            );
+                            if (found) setSelectedModel(found.id);
+                          }
+                          showToast(`Restored model ${msg.model || activeModelObj.displayName}`);
                         }}
+                        title="Restore this model as active"
                       >
                         Restore
                       </button>
                     </div>
                     <button
                       className="pg-icon-btn"
-                      title="Collapse"
+                      title={isCardCollapsed ? "Expand message" : "Collapse message"}
+                      onClick={() => setCollapsedCards((prev) => ({ ...prev, [msg.id]: !prev[msg.id] }))}
                       style={{ width: 24, height: 24 }}
                     >
                       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M6 9l6 6 6-6" />
+                        <path d={isCardCollapsed ? "M18 15l-6-6-6 6" : "M6 9l6 6 6-6"} />
                       </svg>
                     </button>
                   </div>
+
+                  {!isCardCollapsed && (
+                    <>
 
                   {/* Reasoning pill badge if model returns reasoning */}
                   {hasReasoning && (
@@ -1249,6 +1280,8 @@ export default function PlaygroundPage() {
                       {msg.latencyMs ? ` · ${msg.latencyMs}ms` : ""}
                     </div>
                   </div>
+                  </>
+                )}
                 </div>
               );
             })
