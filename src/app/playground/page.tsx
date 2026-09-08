@@ -486,12 +486,376 @@ function sanitizeTableMarkdown(rawContent: string): string {
   return outLines.join("\n");
 }
 
+// ── Claude-style Code Artifact & Viewer System ─────────────────────────────
+interface ActiveArtifact {
+  id: string;
+  title: string;
+  language: string;
+  code: string;
+  isHtml: boolean;
+  activeTab: "code" | "preview";
+}
+
+function checkIsHtml(lang: string, code: string): boolean {
+  const l = (lang || "").toLowerCase().trim();
+  if (l === "html" || l === "htm" || l === "svg") return true;
+  const trimmed = code.trim().toLowerCase();
+  if (
+    trimmed.startsWith("<!doctype html") ||
+    trimmed.startsWith("<html") ||
+    trimmed.startsWith("<svg") ||
+    (trimmed.includes("<body") && trimmed.includes("</"))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function inferFilename(lang: string, isHtml: boolean, index: number): string {
+  const l = (lang || "").toLowerCase().trim();
+  if (l === "html" || l === "htm") return "index.html";
+  if (l === "svg") return "graphic.svg";
+  if (l === "python" || l === "py") return "script.py";
+  if (l === "javascript" || l === "js") return "index.js";
+  if (l === "typescript" || l === "ts") return "index.ts";
+  if (l === "tsx") return "Component.tsx";
+  if (l === "jsx") return "Component.jsx";
+  if (l === "css") return "styles.css";
+  if (l === "json") return "data.json";
+  if (l === "sql") return "query.sql";
+  if (l === "bash" || l === "sh" || l === "shell") return "script.sh";
+  if (l === "rust" || l === "rs") return "main.rs";
+  if (l === "go") return "main.go";
+  if (l === "cpp" || l === "c++") return "main.cpp";
+  if (l === "c") return "main.c";
+  if (isHtml) return "index.html";
+  return `snippet_${index + 1}.${l || "txt"}`;
+}
+
+// ── In-Chat Code Card Component (Claude-style) ─────────────────────────────
+function CodeViewerCard({
+  language,
+  filename,
+  code,
+  isHtml,
+  onOpen,
+}: {
+  language: string;
+  filename: string;
+  code: string;
+  isHtml: boolean;
+  onOpen?: (tab: "code" | "preview") => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const lineCount = useMemo(() => code.split(/\r?\n/).length, [code]);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const displayLang = (language || (isHtml ? "html" : "code")).toUpperCase();
+
+  return (
+    <div className="pg-code-card">
+      {/* Code Card Header */}
+      <div
+        className="pg-code-card-header"
+        onClick={() => onOpen?.(isHtml ? "preview" : "code")}
+        title="Click to open in right side slider"
+      >
+        <div className="pg-code-card-header-left">
+          <div className="pg-code-card-icon">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <polyline points="16 18 22 12 16 6" />
+              <polyline points="8 6 2 12 8 18" />
+            </svg>
+          </div>
+          <span className="pg-code-card-filename">{filename}</span>
+          <span className="pg-code-card-lang-badge">{displayLang}</span>
+          <span className="pg-code-card-meta">{lineCount} lines</span>
+        </div>
+
+        <div className="pg-code-card-header-right" onClick={(e) => e.stopPropagation()}>
+          {isHtml && (
+            <button
+              className="pg-code-card-btn preview-btn"
+              onClick={() => onOpen?.("preview")}
+              title="Open live preview in right slider"
+            >
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <span>Preview</span>
+            </button>
+          )}
+
+          <button
+            className="pg-code-card-btn"
+            onClick={handleCopy}
+            title="Copy code to clipboard"
+          >
+            {copied ? (
+              <>
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#10b981" strokeWidth="2.4">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span style={{ color: "#10b981", fontWeight: 600 }}>Copied!</span>
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span>Copy</span>
+              </>
+            )}
+          </button>
+
+          <button
+            className="pg-code-card-btn open-btn"
+            onClick={() => onOpen?.(isHtml ? "preview" : "code")}
+            title="Open right slider"
+          >
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+            <span>Open</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Code Snippet Body */}
+      <div className="pg-code-card-body" onClick={() => onOpen?.(isHtml ? "preview" : "code")}>
+        <pre className="pg-code-pre">
+          <code>
+            {code
+              .split(/\r?\n/)
+              .slice(0, 14)
+              .map((line, idx) => (
+                <div key={idx} className="pg-code-line">
+                  <span className="pg-code-line-num">{idx + 1}</span>
+                  <span className="pg-code-line-text">{line || " "}</span>
+                </div>
+              ))}
+          </code>
+        </pre>
+        {lineCount > 14 && (
+          <div className="pg-code-card-fade">
+            <span>+{lineCount - 14} more lines · Click to open in right slider ↗</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Right Artifact & Code Slider Component (Claude-style) ───────────────────
+function CodeArtifactSlider({
+  artifact,
+  onClose,
+}: {
+  artifact: ActiveArtifact;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<"code" | "preview">(artifact.activeTab);
+  const [copied, setCopied] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
+
+  // Sync tab whenever artifact updates
+  useEffect(() => {
+    setTab(artifact.activeTab);
+  }, [artifact.id, artifact.activeTab]);
+
+  const lineCount = useMemo(() => artifact.code.split(/\r?\n/).length, [artifact.code]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(artifact.code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownload = () => {
+    const blob = new Blob([artifact.code], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = artifact.title;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <aside className="pg-code-slider">
+      {/* Slider Topbar */}
+      <div className="pg-slider-header">
+        <div className="pg-slider-header-left">
+          <div className="pg-slider-icon">
+            {artifact.isHtml ? "🌐" : "📄"}
+          </div>
+          <div className="pg-slider-title-col">
+            <span className="pg-slider-filename">{artifact.title}</span>
+            <span className="pg-slider-meta">
+              {artifact.language.toUpperCase()} · {lineCount} lines · {(new Blob([artifact.code]).size / 1024).toFixed(1)} KB
+            </span>
+          </div>
+        </div>
+
+        {/* Two Small Icon Buttons: Code vs Preview (if HTML) */}
+        {artifact.isHtml && (
+          <div className="pg-slider-tab-group">
+            <button
+              className={`pg-slider-tab-btn ${tab === "code" ? "active" : ""}`}
+              onClick={() => setTab("code")}
+              title="View source code"
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+              <span>Code</span>
+            </button>
+            <button
+              className={`pg-slider-tab-btn ${tab === "preview" ? "active" : ""}`}
+              onClick={() => setTab("preview")}
+              title="View interactive live preview"
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <span>Preview</span>
+            </button>
+          </div>
+        )}
+
+        {/* Right action icons: Copy, Download, Close */}
+        <div className="pg-slider-header-right">
+          <button
+            className="pg-slider-action-btn"
+            onClick={handleCopy}
+            title="Copy code"
+          >
+            {copied ? (
+              <>
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" strokeWidth="2.4">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span style={{ color: "#10b981", fontWeight: 600 }}>Copied!</span>
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span>Copy</span>
+              </>
+            )}
+          </button>
+
+          <button
+            className="pg-slider-action-btn"
+            onClick={handleDownload}
+            title="Download file"
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>Download</span>
+          </button>
+
+          <button
+            className="pg-slider-close-btn"
+            onClick={onClose}
+            title="Close side slider (Esc)"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {/* Slider Main Viewport */}
+      <div className="pg-slider-body">
+        {artifact.isHtml && tab === "preview" ? (
+          <div className="pg-slider-preview-wrap">
+            <div className="pg-slider-preview-bar">
+              <div className="pg-slider-preview-dots">
+                <span style={{ background: "#ef4444" }} />
+                <span style={{ background: "#eab308" }} />
+                <span style={{ background: "#10b981" }} />
+              </div>
+              <div className="pg-slider-preview-address">
+                <span>https://preview.sandbox/{artifact.title}</span>
+              </div>
+              <button
+                className="pg-slider-preview-reload-btn"
+                onClick={() => setPreviewKey((k) => k + 1)}
+                title="Reload preview"
+              >
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M23 4v6h-6M1 20v-6h6" />
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+              </button>
+            </div>
+            <iframe
+              key={previewKey}
+              srcDoc={artifact.code}
+              sandbox="allow-scripts allow-modals allow-same-origin"
+              className="pg-slider-iframe"
+              title="Artifact Live Preview"
+            />
+          </div>
+        ) : (
+          <div className="pg-slider-code-wrap">
+            <pre className="pg-slider-pre">
+              <code>
+                {artifact.code.split(/\r?\n/).map((line, idx) => (
+                  <div key={idx} className="pg-slider-code-line">
+                    <span className="pg-slider-line-num">{idx + 1}</span>
+                    <span className="pg-slider-line-code">{line || " "}</span>
+                  </div>
+                ))}
+              </code>
+            </pre>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+// ── Markdown & Table & Code & Image Renderer ────────────────────────────────
+type RenderSegment =
+  | { type: "text"; content: string }
+  | { type: "table"; headers: string[]; rows: string[][]; raw: string }
+  | {
+      type: "code";
+      language: string;
+      filename: string;
+      code: string;
+      isHtml: boolean;
+    };
+
 function RenderMessage({
   content,
   userPrompt,
+  onOpenArtifact,
 }: {
   content: string;
   userPrompt?: string;
+  onOpenArtifact?: (artifact: Omit<ActiveArtifact, "id">) => void;
 }) {
   // Check if user specifically requested Excel / Spreadsheet / CSV / Sheets
   const userWantsExcel = /(?:excel|\.xlsx|spreadsheet|csv|\bsheet\b)/i.test(
@@ -501,25 +865,54 @@ function RenderMessage({
   // Sanitize content to unwrap code-blocked tables and ensure consistent pipe boundaries
   const sanitizedContent = sanitizeTableMarkdown(content);
 
-  // Parse markdown tables and text blocks
+  // 1. Find all code blocks: ```(lang)?(?::([^\n]+))?\r?\n([\s\S]*?)\r?\n```
+  const codeRegex = /```(\w+)?(?::([^\n]+))?\r?\n([\s\S]*?)\r?\n```/g;
+  const codeMatches: Array<{
+    start: number;
+    end: number;
+    language: string;
+    filename: string;
+    code: string;
+    isHtml: boolean;
+  }> = [];
+
+  let m: RegExpExecArray | null;
+  let codeIdx = 0;
+  while ((m = codeRegex.exec(sanitizedContent)) !== null) {
+    const rawLang = (m[1] || "").toLowerCase();
+    const rawFile = m[2]?.trim();
+    const codeBody = m[3] || "";
+    const isHtml = checkIsHtml(rawLang, codeBody);
+    const filename = rawFile || inferFilename(rawLang, isHtml, codeIdx++);
+    codeMatches.push({
+      start: m.index,
+      end: m.index + m[0].length,
+      language: rawLang || (isHtml ? "html" : "code"),
+      filename,
+      code: codeBody,
+      isHtml,
+    });
+  }
+
+  // 2. Find all table blocks (outside code blocks)
   const tableRegex = /((?:^[ \t]*\|[^\n]+\|[ \t]*(?:\r?\n|$)){2,})/gm;
-  const segments: Array<
-    | { type: "text"; content: string }
-    | { type: "table"; headers: string[]; rows: string[][]; raw: string }
-  > = [];
+  const tableMatches: Array<{
+    start: number;
+    end: number;
+    headers: string[];
+    rows: string[][];
+    raw: string;
+  }> = [];
 
-  let lastIdx = 0;
-  let match;
-
-  while ((match = tableRegex.exec(sanitizedContent)) !== null) {
-    if (match.index > lastIdx) {
-      segments.push({
-        type: "text",
-        content: sanitizedContent.slice(lastIdx, match.index),
-      });
+  while ((m = tableRegex.exec(sanitizedContent)) !== null) {
+    const tStart = m.index;
+    const tEnd = m.index + m[0].length;
+    // Discard if inside a code block
+    if (codeMatches.some((cm) => tStart >= cm.start && tEnd <= cm.end)) {
+      continue;
     }
 
-    const rawTable = match[0].trim();
+    const rawTable = m[0].trim();
     const lines = rawTable.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length >= 2 && /^\|[\s\-:|]+\|$/.test(lines[1])) {
       const headers = lines[0]
@@ -534,15 +927,58 @@ function RenderMessage({
           .split("|")
           .map((c) => c.trim())
       );
-      segments.push({ type: "table", headers, rows, raw: rawTable });
-    } else {
-      segments.push({ type: "text", content: match[0] });
+      tableMatches.push({
+        start: tStart,
+        end: tEnd,
+        headers,
+        rows,
+        raw: rawTable,
+      });
     }
-    lastIdx = match.index + match[0].length;
   }
 
-  if (lastIdx < sanitizedContent.length) {
-    segments.push({ type: "text", content: sanitizedContent.slice(lastIdx) });
+  // 3. Combine and sort all special blocks
+  const allBlocks: Array<
+    | { type: "code"; start: number; end: number; data: (typeof codeMatches)[0] }
+    | { type: "table"; start: number; end: number; data: (typeof tableMatches)[0] }
+  > = [
+    ...codeMatches.map((c) => ({ type: "code" as const, start: c.start, end: c.end, data: c })),
+    ...tableMatches.map((t) => ({ type: "table" as const, start: t.start, end: t.end, data: t })),
+  ].sort((a, b) => a.start - b.start);
+
+  // 4. Interleave with text segments
+  const segments: RenderSegment[] = [];
+  let cursor = 0;
+  for (const block of allBlocks) {
+    if (block.start > cursor) {
+      segments.push({
+        type: "text",
+        content: sanitizedContent.slice(cursor, block.start),
+      });
+    }
+    if (block.type === "code") {
+      segments.push({
+        type: "code",
+        language: block.data.language,
+        filename: block.data.filename,
+        code: block.data.code,
+        isHtml: block.data.isHtml,
+      });
+    } else {
+      segments.push({
+        type: "table",
+        headers: block.data.headers,
+        rows: block.data.rows,
+        raw: block.data.raw,
+      });
+    }
+    cursor = block.end;
+  }
+  if (cursor < sanitizedContent.length) {
+    segments.push({
+      type: "text",
+      content: sanitizedContent.slice(cursor),
+    });
   }
 
   const renderTextPiece = (txt: string) => {
@@ -566,19 +1002,40 @@ function RenderMessage({
 
   return (
     <>
-      {segments.map((seg, i) =>
-        seg.type === "table" ? (
-          <SmartTableView
-            key={i}
-            headers={seg.headers}
-            rows={seg.rows}
-            raw={seg.raw}
-            defaultToExcel={userWantsExcel}
-          />
-        ) : (
-          <span key={i}>{renderTextPiece(seg.content)}</span>
-        )
-      )}
+      {segments.map((seg, i) => {
+        if (seg.type === "table") {
+          return (
+            <SmartTableView
+              key={i}
+              headers={seg.headers}
+              rows={seg.rows}
+              raw={seg.raw}
+              defaultToExcel={userWantsExcel}
+            />
+          );
+        }
+        if (seg.type === "code") {
+          return (
+            <CodeViewerCard
+              key={i}
+              language={seg.language}
+              filename={seg.filename}
+              code={seg.code}
+              isHtml={seg.isHtml}
+              onOpen={(tab) =>
+                onOpenArtifact?.({
+                  title: seg.filename,
+                  language: seg.language,
+                  code: seg.code,
+                  isHtml: seg.isHtml,
+                  activeTab: tab,
+                })
+              }
+            />
+          );
+        }
+        return <span key={i}>{renderTextPiece(seg.content)}</span>;
+      })}
     </>
   );
 }
@@ -777,6 +1234,19 @@ export default function PlaygroundPage() {
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
   const [showReasoning, setShowReasoning] = useState<Record<string, boolean>>({});
   const [collapsedCards, setCollapsedCards] = useState<Record<string, boolean>>({});
+
+  // Active Code Artifact Drawer / Slider State (Claude-style side panel)
+  const [activeArtifact, setActiveArtifact] = useState<ActiveArtifact | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && activeArtifact) {
+        setActiveArtifact(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeArtifact]);
 
   // Active Tool Drilldown Configuration State
   const [activeToolConfig, setActiveToolConfig] = useState<string | null>(null);
@@ -1793,6 +2263,12 @@ export default function PlaygroundPage() {
                           .reverse()
                           .find((m) => m.role === "user")?.content
                       }
+                      onOpenArtifact={(art) => {
+                        setActiveArtifact({
+                          id: `${msg.id}_${Date.now()}`,
+                          ...art,
+                        });
+                      }}
                     />
                   </div>
 
@@ -2506,6 +2982,14 @@ export default function PlaygroundPage() {
           </div>
         </div>
       </main>
+
+      {/* ── RIGHT CODE ARTIFACT SLIDER (Claude-style Side Panel) ────────── */}
+      {activeArtifact && (
+        <CodeArtifactSlider
+          artifact={activeArtifact}
+          onClose={() => setActiveArtifact(null)}
+        />
+      )}
     </div>
   );
 }
