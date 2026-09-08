@@ -23,240 +23,9 @@ interface ModelOption {
   provider?: { slug: string; name: string };
 }
 
-type ToolCard = {
-  id: string;
-  name: string;
-  subtitle: string;
-  color: string;
-  icon: string;
-  textIcon: string;
-  website: string;
-  category: "auto" | "guide" | "manual";
-  configFile?: string;
-  apiEndpoint?: string;
-  description: string;
-  installCmd?: string;
-  statusKey?: string;
-  guideSteps?: Array<{ step: number; title: string; desc: string }>;
-};
+import { CLI_TOOLS, MITM_TOOLS, ToolCard, MitmToolCard } from "@/lib/cliTools";
+import Link from "next/link";
 
-const TOOLS: ToolCard[] = [
-  {
-    id: "claude",
-    name: "Claude Code",
-    subtitle: "Anthropic Terminal CLI",
-    color: "linear-gradient(135deg, #d97706, #b45309)",
-    icon: "/providers/claude.png",
-    textIcon: "CC",
-    website: "https://claude.ai/download",
-    category: "auto",
-    configFile: "~/.claude/settings.json",
-    description: "Configures ~/.claude/settings.json so all Claude Code agent commands route through your portal without shell exports.",
-    installCmd: "npm install -g @anthropic-ai/claude-code",
-    statusKey: "claude",
-  },
-  {
-    id: "opencode",
-    name: "OpenCode",
-    subtitle: "AI Terminal Coding Agent",
-    color: "linear-gradient(135deg, #ea580c, #c2410c)",
-    icon: "/providers/opencode.png",
-    textIcon: "OC",
-    website: "https://opencode.ai",
-    category: "auto",
-    configFile: "~/.config/opencode/opencode.json",
-    description: "Configures ~/.config/opencode/opencode.json with multiple models, primary model, and explorer subagent.",
-    installCmd: "npm install -g opencode-ai",
-    statusKey: "opencode",
-  },
-  {
-    id: "codex",
-    name: "Codex CLI",
-    subtitle: "OpenAI Codex Agent",
-    color: "#10a37f",
-    icon: "/providers/codex.png",
-    textIcon: "CX",
-    website: "https://chatgpt.com/codex",
-    category: "auto",
-    configFile: "~/.codex/config.toml",
-    description: "Configures ~/.codex/config.toml to set your portal as the OpenAI Responses API provider with primary & subagent models.",
-    installCmd: "npm install -g @openai/codex",
-    statusKey: "codex",
-  },
-  {
-    id: "windsurf",
-    name: "Windsurf",
-    subtitle: "Codeium AI IDE",
-    color: "linear-gradient(135deg, #14B8A6, #0d9488)",
-    icon: "/providers/windsurf.png",
-    textIcon: "WS",
-    website: "https://windsurf.com",
-    category: "guide",
-    configFile: "Windsurf Settings → Models",
-    apiEndpoint: "/v1",
-    description: "Use your portal as OpenAI-compatible base URL in Windsurf IDE settings. Supports all combos & models.",
-    guideSteps: [
-      { step: 1, title: "Open Settings", desc: "Open Windsurf Settings panel (Ctrl+, / Cmd+,)" },
-      { step: 2, title: "Navigate to Models", desc: "Select 'Models' → Enable 'OpenAI Compatible API'" },
-      { step: 3, title: "Paste Endpoint & Key", desc: "Paste your portal Base URL and API Key" },
-      { step: 4, title: "Select Model/Combo", desc: "Set the chosen Model or Combo ID" },
-    ],
-  },
-  {
-    id: "gemini-cli",
-    name: "Gemini CLI",
-    subtitle: "Google Gemini Terminal",
-    color: "linear-gradient(135deg, #4285F4, #1565C0)",
-    icon: "/providers/gemini-cli.png",
-    textIcon: "GC",
-    website: "https://github.com/google-gemini/gemini-cli",
-    category: "guide",
-    configFile: "OPENAI_BASE_URL env var",
-    description: "Route Gemini CLI commands through your portal with automatic failover and token routing.",
-    installCmd: "npm install -g @google/gemini-cli",
-    guideSteps: [
-      { step: 1, title: "Install CLI", desc: "Install via npm install -g @google/gemini-cli" },
-      { step: 2, title: "Set Environment", desc: "Export OPENAI_BASE_URL and OPENAI_API_KEY in your terminal" },
-      { step: 3, title: "Run Command", desc: "Execute gemini with your preferred model or combo" },
-    ],
-  },
-  {
-    id: "kiro",
-    name: "Kiro AI",
-    subtitle: "Amazon Q / AWS IDE",
-    color: "linear-gradient(135deg, #FF6B35, #e55a27)",
-    icon: "/providers/kiro.png",
-    textIcon: "KR",
-    website: "https://kiro.dev",
-    category: "guide",
-    configFile: "Kiro Settings → AI Provider",
-    description: "Configure Kiro IDE to dispatch requests to your gateway endpoint with custom combos or LLMs.",
-    guideSteps: [
-      { step: 1, title: "Open Kiro Preferences", desc: "Go to Settings → AI Provider" },
-      { step: 2, title: "Select OpenAI Compatible", desc: "Choose Custom OpenAI Endpoint" },
-      { step: 3, title: "Save Endpoint & Key", desc: "Set gateway Base URL and target API key" },
-    ],
-  },
-  {
-    id: "grok-cli",
-    name: "Grok CLI",
-    subtitle: "xAI Grok Build",
-    color: "linear-gradient(135deg, #1DA1F2, #0d8ecf)",
-    icon: "/providers/grok-cli.png",
-    textIcon: "GK",
-    website: "https://x.ai",
-    category: "guide",
-    configFile: "XAI_API_KEY + OPENAI_BASE_URL",
-    apiEndpoint: "/v1",
-    description: "Route @xai-official/grok CLI through your portal. Supports OpenAI Responses format and reasoning models.",
-    installCmd: "npm install -g @xai-official/grok",
-    guideSteps: [
-      { step: 1, title: "Install Package", desc: "npm install -g @xai-official/grok" },
-      { step: 2, title: "Export Variables", desc: "Set XAI_API_KEY and OPENAI_BASE_URL" },
-      { step: 3, title: "Launch Grok", desc: "Run grok with your configured model or combo" },
-    ],
-  },
-  {
-    id: "devin-cli",
-    name: "Devin CLI",
-    subtitle: "Cognition Devin Agent",
-    color: "linear-gradient(135deg, #6366F1, #4f46e5)",
-    icon: "/providers/devin-cli.png",
-    textIcon: "DV",
-    website: "https://devin.ai",
-    category: "guide",
-    configFile: "devin config CLI",
-    description: "Devin CLI ACP stdio proxy. Set base_url and api_key to route reasoning tasks through your portal.",
-    installCmd: "irm https://static.devin.ai/cli/setup.ps1 | iex",
-    guideSteps: [
-      { step: 1, title: "Install Devin CLI", desc: "Run the install script from Cognition" },
-      { step: 2, title: "Configure Base URL", desc: "devin config set base_url <gateway-url>" },
-      { step: 3, title: "Configure API Key", desc: "devin config set api_key <api-key>" },
-    ],
-  },
-  {
-    id: "zed",
-    name: "Zed",
-    subtitle: "Next-gen Code Editor",
-    color: "linear-gradient(135deg, #A855F7, #7c3aed)",
-    icon: "/providers/zed.png",
-    textIcon: "ZD",
-    website: "https://zed.dev",
-    category: "guide",
-    configFile: "~/.config/zed/settings.json",
-    apiEndpoint: "cloud.zed.dev/completions",
-    description: "In Zed settings.json, set language_models.openai.api_url to your portal for fast autocomplete and inline assistant.",
-    guideSteps: [
-      { step: 1, title: "Open Zed Settings", desc: "Press Ctrl+, / Cmd+, to open settings.json" },
-      { step: 2, title: "Add language_models", desc: "Configure openai endpoint to your portal URL" },
-      { step: 3, title: "Set Available Models", desc: "Add your favorite models and combos to available_models" },
-    ],
-  },
-  {
-    id: "opencode-go",
-    name: "OpenCode Go",
-    subtitle: "OpenCode Go Subscription",
-    color: "linear-gradient(135deg, #E87040, #c2602a)",
-    icon: "/providers/opencode-go.png",
-    textIcon: "OG",
-    website: "https://opencode.ai/auth",
-    category: "guide",
-    configFile: "~/.config/opencode/opencode.json",
-    apiEndpoint: "/zen/go/v1",
-    description: "Configure OpenCode Go provider settings with your portal base URL and unified token pool.",
-  },
-  {
-    id: "trae",
-    name: "Trae",
-    subtitle: "ByteDance MarsCode IDE",
-    color: "linear-gradient(135deg, #FF6A00, #e55a00)",
-    icon: "/providers/trae.png",
-    textIcon: "TR",
-    website: "https://www.trae.ai",
-    category: "guide",
-    configFile: "Trae Settings → AI Provider",
-    apiEndpoint: "/v1",
-    description: "ByteDance Trae AI code editor supports custom OpenAI-compatible endpoints with live streaming.",
-  },
-  {
-    id: "clinepass",
-    name: "ClinePass",
-    subtitle: "Cline Subscription API",
-    color: "linear-gradient(135deg, #5B9BD5, #2e6da4)",
-    icon: "/providers/clinepass.png",
-    textIcon: "CP",
-    website: "https://cline.bot",
-    category: "guide",
-    configFile: "Cline Extension → API Provider",
-    apiEndpoint: "/v1",
-    description: "ClinePass proxy via your portal endpoint. Route autonomous agent coding loops through custom combos.",
-    installCmd: "Install Cline extension in VS Code",
-  },
-  {
-    id: "cline",
-    name: "Cline / Roo Code",
-    subtitle: "VSCode Autonomous Agent",
-    color: "#00d1b2",
-    icon: "/providers/cline.png",
-    textIcon: "CL",
-    website: "https://cline.bot",
-    category: "manual",
-    configFile: "VSCode Extension Settings",
-    description: "Select OpenAI Compatible in Cline/Roo settings and paste your gateway endpoint. Works with any model or combo.",
-    installCmd: "Install Cline extension in VS Code",
-  },
-  {
-    id: "terminal",
-    name: "Terminal / Shell",
-    subtitle: "Universal Environment Vars",
-    color: "var(--primary)",
-    icon: "",
-    textIcon: ">_",
-    website: "",
-    category: "manual",
-    description: "Export standard environment variables in PowerShell or Bash to route any AI library or CLI through your portal automatically.",
-  },
-];
 
 export default function CLIToolsPage() {
   const toast = useToast();
@@ -266,7 +35,7 @@ export default function CLIToolsPage() {
   const [combos, setCombos] = useState<ComboOption[]>([]);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [busyTool, setBusyTool] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"all" | "auto" | "guide" | "manual">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "cli" | "mitm" | "auto" | "guide">("all");
 
   // Selected tool for Settings Modal
   const [selectedTool, setSelectedTool] = useState<ToolCard | null>(null);
@@ -575,8 +344,6 @@ export default function CLIToolsPage() {
     toast.show(`${label} copied to clipboard!`);
   };
 
-  const filteredTools = activeTab === "all" ? TOOLS : TOOLS.filter((t) => t.category === activeTab);
-
   const catBadge = (cat: ToolCard["category"]) => {
     if (cat === "auto") return { label: "1-Click Auto", color: "#10b981", bg: "rgba(16,185,129,0.12)" };
     if (cat === "guide") return { label: "Setup Guide", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" };
@@ -584,11 +351,22 @@ export default function CLIToolsPage() {
   };
 
   const tabCounts = {
-    all: TOOLS.length,
-    auto: TOOLS.filter((t) => t.category === "auto").length,
-    guide: TOOLS.filter((t) => t.category === "guide").length,
-    manual: TOOLS.filter((t) => t.category === "manual").length,
+    all: CLI_TOOLS.length + MITM_TOOLS.length,
+    cli: CLI_TOOLS.length,
+    mitm: MITM_TOOLS.length,
+    auto: CLI_TOOLS.filter((t) => t.category === "auto").length,
+    guide: CLI_TOOLS.filter((t) => t.category === "guide" || t.category === "manual").length,
   };
+
+  const filteredCliTools = useMemo(() => {
+    if (activeTab === "all" || activeTab === "cli") return CLI_TOOLS;
+    if (activeTab === "auto") return CLI_TOOLS.filter((t) => t.category === "auto");
+    if (activeTab === "guide") return CLI_TOOLS.filter((t) => t.category === "guide" || t.category === "manual");
+    return [];
+  }, [activeTab]);
+
+  const showCliSection = activeTab === "all" || activeTab === "cli" || activeTab === "auto" || activeTab === "guide";
+  const showMitmSection = activeTab === "all" || activeTab === "mitm";
 
   // Render a Model/Combo Selector
   const renderModelSelect = (
@@ -638,283 +416,510 @@ export default function CLIToolsPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-            CLI Tools Integration
+            CLI & MITM Tools Integration
           </h1>
           <p style={{ fontSize: 13.5, color: "var(--text-tertiary)", margin: "6px 0 0 0" }}>
-            Configure your local AI coding tools to route through your portal with custom models, combos, and API keys.
+            Configure standard terminal CLI tools and MITM proxy-intercepted IDEs to route through your portal with custom models and combos.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={fetchStatuses}
-          className="btn-secondary"
-          style={{ fontSize: 12.5, padding: "7px 14px", display: "inline-flex", alignItems: "center", gap: 6 }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>refresh</span>
-          Refresh Status
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Link
+            href="/dashboard/mitm"
+            className="btn-secondary"
+            style={{ fontSize: 12.5, padding: "7px 14px", display: "inline-flex", alignItems: "center", gap: 6, color: "#c084fc", borderColor: "rgba(168,85,247,0.3)" }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>security</span>
+            MITM Dashboard
+          </Link>
+          <button
+            type="button"
+            onClick={fetchStatuses}
+            className="btn-secondary"
+            style={{ fontSize: 12.5, padding: "7px 14px", display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>refresh</span>
+            Refresh Status
+          </button>
+        </div>
       </div>
 
       {/* Filter Tabs */}
-      <div style={{ display: "flex", gap: 6, borderBottom: "1px solid var(--border-subtle)", paddingBottom: 0 }}>
-        {(["all", "auto", "guide", "manual"] as const).map((tab) => (
+      <div style={{ display: "flex", gap: 6, borderBottom: "1px solid var(--border-subtle)", paddingBottom: 0, overflowX: "auto" }}>
+        {[
+          { id: "all", label: "All Tools", icon: "apps", count: tabCounts.all },
+          { id: "cli", label: "CLI Tools", icon: "terminal", count: tabCounts.cli },
+          { id: "mitm", label: "MITM Tools", icon: "security", count: tabCounts.mitm },
+          { id: "auto", label: "1-Click Auto", icon: "bolt", count: tabCounts.auto },
+          { id: "guide", label: "Setup Guides", icon: "menu_book", count: tabCounts.guide },
+        ].map((tab) => (
           <button
-            key={tab}
+            key={tab.id}
             type="button"
-            onClick={() => setActiveTab(tab)}
+            onClick={() => setActiveTab(tab.id as any)}
             style={{
               background: "none",
               border: "none",
               padding: "10px 18px",
               fontSize: 13,
-              fontWeight: activeTab === tab ? 600 : 400,
-              color: activeTab === tab ? "var(--primary)" : "var(--text-secondary)",
+              fontWeight: activeTab === tab.id ? 600 : 400,
+              color: activeTab === tab.id ? (tab.id === "mitm" ? "#c084fc" : "var(--primary)") : "var(--text-secondary)",
               cursor: "pointer",
-              borderBottom: activeTab === tab ? "2px solid var(--primary)" : "2px solid transparent",
+              borderBottom: activeTab === tab.id ? `2px solid ${tab.id === "mitm" ? "#a855f7" : "var(--primary)"}` : "2px solid transparent",
               marginBottom: -1,
               transition: "all 0.15s",
               display: "flex",
               alignItems: "center",
               gap: 8,
+              whiteSpace: "nowrap",
             }}
           >
             <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-              {tab === "all" ? "apps" : tab === "auto" ? "bolt" : tab === "guide" ? "menu_book" : "tune"}
+              {tab.icon}
             </span>
-            {tab === "all" ? "All Tools" : tab === "auto" ? "1-Click Auto" : tab === "guide" ? "Setup Guide" : "Manual Config"}
+            {tab.label}
             <span
               style={{
-                background: activeTab === tab ? "rgba(99,102,241,0.12)" : "var(--bg-surface-elevated)",
-                color: activeTab === tab ? "var(--primary)" : "var(--text-tertiary)",
+                background: activeTab === tab.id ? (tab.id === "mitm" ? "rgba(168,85,247,0.15)" : "rgba(99,102,241,0.12)") : "var(--bg-surface-elevated)",
+                color: activeTab === tab.id ? (tab.id === "mitm" ? "#c084fc" : "var(--primary)") : "var(--text-tertiary)",
                 fontSize: 11,
                 fontWeight: 600,
                 padding: "1px 6px",
                 borderRadius: 10,
               }}
             >
-              {tabCounts[tab]}
+              {tab.count}
             </span>
           </button>
         ))}
       </div>
 
-      {/* Grid of CLI Tools */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 18 }}>
-        {filteredTools.map((tool) => {
-          const status = tool.statusKey ? statuses[tool.statusKey] : undefined;
-          const badge = catBadge(tool.category);
+      {/* SECTION 1: Standard CLI & Terminal Tools */}
+      {showCliSection && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {activeTab === "all" && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 2px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--primary)" }}>
+                  terminal
+                </span>
+                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
+                  Terminal & CLI Tools
+                </h2>
+                <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                  (Configured via local config files, env vars, or app settings)
+                </span>
+              </div>
+            </div>
+          )}
 
-          return (
-            <div
-              key={tool.id}
-              className="card"
-              onClick={() => handleOpenSettings(tool)}
-              style={{
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border-subtle)",
-                borderRadius: 12,
-                padding: "20px 22px",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-between",
-                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
-                minHeight: 220,
-                cursor: "pointer",
-                transition: "transform 0.15s, border-color 0.15s, box-shadow 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "var(--primary)";
-                e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.08)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "var(--border-subtle)";
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.03)";
-              }}
-            >
-              <div>
-                {/* Header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div
+          {/* Grid of CLI Tools */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 18 }}>
+            {filteredCliTools.map((tool) => {
+              const status = tool.statusKey ? statuses[tool.statusKey] : undefined;
+              const badge = catBadge(tool.category);
+
+              return (
+                <div
+                  key={tool.id}
+                  className="card"
+                  onClick={() => handleOpenSettings(tool)}
+                  style={{
+                    background: "var(--bg-surface)",
+                    border: "1px solid var(--border-subtle)",
+                    borderRadius: 12,
+                    padding: "20px 22px",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
+                    minHeight: 220,
+                    cursor: "pointer",
+                    transition: "transform 0.15s, border-color 0.15s, box-shadow 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "var(--primary)";
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.08)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "var(--border-subtle)";
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.03)";
+                  }}
+                >
+                  <div>
+                    {/* Header */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div
+                          style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 10,
+                            background: "var(--bg-surface-elevated, rgba(255,255,255,0.05))",
+                            border: "1px solid var(--border-subtle, rgba(255,255,255,0.08))",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                            overflow: "hidden",
+                            boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08)",
+                            position: "relative",
+                          }}
+                        >
+                          {tool.icon ? (
+                            <img
+                              src={tool.icon}
+                              alt={tool.name}
+                              width={28}
+                              height={28}
+                              style={{
+                                objectFit: "contain",
+                                borderRadius: 4,
+                              }}
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                                const fallback = e.currentTarget.parentElement?.querySelector(".fallback-icon") as HTMLElement | null;
+                                if (fallback) fallback.style.display = "flex";
+                              }}
+                            />
+                          ) : null}
+                          <span
+                            className="fallback-icon"
+                            style={{
+                              display: tool.icon ? "none" : "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: "100%",
+                              height: "100%",
+                              fontWeight: 800,
+                              fontSize: 13,
+                              color: "var(--text-primary)",
+                            }}
+                          >
+                            {tool.textIcon}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
+                            {tool.name}
+                          </h3>
+                          <p style={{ fontSize: 12, color: "var(--text-tertiary)", margin: "2px 0 0 0" }}>
+                            {tool.subtitle}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Status / Category Badge */}
+                      <span
+                        style={{
+                          background: badge.bg,
+                          color: badge.color,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          padding: "2px 8px",
+                          borderRadius: 6,
+                        }}
+                      >
+                        {badge.label}
+                      </span>
+                    </div>
+
+                    {/* Description */}
+                    <p style={{ fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.5, margin: "14px 0" }}>
+                      {tool.description}
+                    </p>
+
+                    {/* Config details summary */}
+                    {(tool.configFile || tool.installCmd) && (
+                      <div
+                        style={{
+                          background: "var(--bg-surface-elevated)",
+                          border: "1px solid var(--border-subtle)",
+                          borderRadius: 8,
+                          padding: "9px 11px",
+                          fontSize: 11.5,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 4,
+                          marginBottom: 14,
+                        }}
+                      >
+                        {tool.configFile && (
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                            <span style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>Config:</span>
+                            <span className="mono" style={{ color: "var(--text-secondary)", fontSize: 10.5, textAlign: "right" }}>
+                              {tool.configFile}
+                            </span>
+                          </div>
+                        )}
+                        {tool.id === "claude" && status?.currentUrl && (
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                            <span style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>Current URL:</span>
+                            <span className="mono" style={{ color: status.hasPortalConfig ? "#10b981" : "var(--text-secondary)", fontSize: 10.5, textAlign: "right" }}>
+                              {status.currentUrl}
+                            </span>
+                          </div>
+                        )}
+                        {tool.id === "opencode" && status?.activeModel && (
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                            <span style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>Active Model:</span>
+                            <span className="mono" style={{ color: "var(--text-secondary)", fontSize: 10.5, textAlign: "right" }}>
+                              {status.activeModel}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Button: Opens Settings Modal */}
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenSettings(tool);
+                      }}
+                      className={tool.category === "auto" ? "btn-primary" : "btn-secondary"}
                       style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 10,
-                        background: "var(--bg-surface-elevated, rgba(255,255,255,0.05))",
-                        border: "1px solid var(--border-subtle, rgba(255,255,255,0.08))",
+                        width: "100%",
+                        fontSize: 12.5,
+                        padding: "9px 14px",
+                        fontWeight: 600,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        flexShrink: 0,
-                        overflow: "hidden",
-                        boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08)",
-                        position: "relative",
+                        gap: 7,
                       }}
                     >
-                      {tool.icon ? (
-                        <img
-                          src={tool.icon}
-                          alt={tool.name}
-                          width={28}
-                          height={28}
-                          style={{
-                            objectFit: "contain",
-                            borderRadius: 4,
-                          }}
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                            const fallback = e.currentTarget.parentElement?.querySelector(".fallback-icon") as HTMLElement | null;
-                            if (fallback) fallback.style.display = "flex";
-                          }}
-                        />
-                      ) : null}
-                      <span
-                        className="fallback-icon"
-                        style={{
-                          display: tool.icon ? "none" : "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "100%",
-                          height: "100%",
-                          background: tool.color,
-                          color: "#ffffff",
-                          fontWeight: 700,
-                          fontSize: 13,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {tool.id === "terminal" ? (
-                          <span className="material-symbols-outlined" style={{ fontSize: 22 }}>terminal</span>
-                        ) : (
-                          tool.textIcon
-                        )}
+                      <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                        {tool.category === "auto" ? "tune" : tool.category === "guide" ? "settings" : "terminal"}
                       </span>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{tool.name}</div>
-                      <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", marginTop: 1 }}>{tool.subtitle}</div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                    <span
-                      style={{
-                        fontSize: 10.5,
-                        background: badge.bg,
-                        color: badge.color,
-                        padding: "2px 7px",
-                        borderRadius: 10,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {badge.label}
-                    </span>
-
-                    {status ? (
-                      status.installed ? (
-                        <span style={{ fontSize: 10.5, background: "rgba(16,185,129,0.12)", color: "#10b981", padding: "2px 7px", borderRadius: 10, fontWeight: 600 }}>
-                          Installed
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: 10.5, background: "rgba(150,150,150,0.12)", color: "var(--text-tertiary)", padding: "2px 7px", borderRadius: 10 }}>
-                          Not Detected
-                        </span>
-                      )
-                    ) : null}
-
-                    {status?.hasPortalConfig && (
-                      <span style={{ fontSize: 10.5, background: "rgba(59,130,246,0.12)", color: "#3b82f6", padding: "2px 7px", borderRadius: 10, fontWeight: 600 }}>
-                        Portal Active
-                      </span>
-                    )}
+                      {tool.category === "auto"
+                        ? "Configure Settings"
+                        : tool.category === "guide"
+                        ? "Setup Guide & Config"
+                        : "Manual Setup"}
+                    </button>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-                {/* Description */}
-                <p style={{ fontSize: 12.5, color: "var(--text-secondary)", margin: "12px 0 10px 0", lineHeight: 1.55 }}>
-                  {tool.description}
-                </p>
+      {/* SECTION 2: MITM Intercepted Tools */}
+      {showMitmSection && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: activeTab === "all" ? 12 : 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, padding: "0 2px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#a855f7" }}>
+                security
+              </span>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
+                MITM Intercepted Tools
+              </h2>
+              <span
+                style={{
+                  background: "rgba(168, 85, 247, 0.15)",
+                  color: "#c084fc",
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  padding: "2px 7px",
+                  borderRadius: 6,
+                }}
+              >
+                HTTPS Interception
+              </span>
+            </div>
 
-                {/* Config details summary */}
-                {(tool.configFile || tool.installCmd) && (
-                  <div
-                    style={{
-                      background: "var(--bg-surface-elevated)",
-                      border: "1px solid var(--border-subtle)",
-                      borderRadius: 8,
-                      padding: "9px 11px",
-                      fontSize: 11.5,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 4,
-                      marginBottom: 14,
-                    }}
-                  >
-                    {tool.configFile && (
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                        <span style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>Config:</span>
-                        <span className="mono" style={{ color: "var(--text-secondary)", fontSize: 10.5, textAlign: "right" }}>
-                          {tool.configFile}
-                        </span>
-                      </div>
-                    )}
-                    {tool.id === "claude" && status?.currentUrl && (
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                        <span style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>Current URL:</span>
-                        <span className="mono" style={{ color: status.hasPortalConfig ? "#10b981" : "var(--text-secondary)", fontSize: 10.5, textAlign: "right" }}>
-                          {status.currentUrl}
-                        </span>
-                      </div>
-                    )}
-                    {tool.id === "opencode" && status?.activeModel && (
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                        <span style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>Active Model:</span>
-                        <span className="mono" style={{ color: "var(--text-secondary)", fontSize: 10.5, textAlign: "right" }}>
-                          {status.activeModel}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+            <Link
+              href="/dashboard/mitm"
+              style={{
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: "#c084fc",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              Open Dedicated MITM Proxy Dashboard
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
+            </Link>
+          </div>
 
-              {/* Action Button: Opens Settings Modal (No direct apply) */}
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleOpenSettings(tool);
-                  }}
-                  className={tool.category === "auto" ? "btn-primary" : "btn-secondary"}
+          <div
+            style={{
+              background: "rgba(168, 85, 247, 0.06)",
+              border: "1px solid rgba(168, 85, 247, 0.2)",
+              borderRadius: 10,
+              padding: "12px 16px",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              fontSize: 12.5,
+              color: "var(--text-secondary)",
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ color: "#a855f7", fontSize: 18 }}>
+              info
+            </span>
+            <span>
+              These tools do not natively support custom base URLs and are routed by intercepting outgoing HTTPS traffic through your gateway.
+            </span>
+          </div>
+
+          {/* Grid of MITM Tools */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 18 }}>
+            {MITM_TOOLS.map((mTool) => (
+              <Link
+                key={mTool.id}
+                href="/dashboard/mitm"
+                style={{ textDecoration: "none", color: "inherit", display: "block" }}
+              >
+                <div
+                  className="card"
                   style={{
-                    width: "100%",
-                    fontSize: 12.5,
-                    padding: "9px 14px",
-                    fontWeight: 600,
+                    background: "var(--bg-surface)",
+                    border: "1px solid var(--border-subtle)",
+                    borderRadius: 12,
+                    padding: "20px 22px",
                     display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 7,
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
+                    minHeight: 220,
+                    cursor: "pointer",
+                    transition: "transform 0.15s, border-color 0.15s, box-shadow 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "#a855f7";
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                    e.currentTarget.style.boxShadow = "0 4px 14px rgba(168, 85, 247, 0.12)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "var(--border-subtle)";
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.03)";
                   }}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                    {tool.category === "auto" ? "tune" : tool.category === "guide" ? "settings" : "terminal"}
-                  </span>
-                  {tool.category === "auto"
-                    ? "Configure Settings"
-                    : tool.category === "guide"
-                    ? "Setup Guide & Config"
-                    : "Manual Setup"}
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div
+                          style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 10,
+                            background: "var(--bg-surface-elevated)",
+                            border: "1px solid var(--border-subtle)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            overflow: "hidden",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <img
+                            src={mTool.icon}
+                            alt={mTool.name}
+                            width={28}
+                            height={28}
+                            style={{ objectFit: "contain", borderRadius: 4 }}
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
+                              {mTool.name}
+                            </h3>
+                            <span
+                              style={{
+                                background: "rgba(168, 85, 247, 0.15)",
+                                color: "#c084fc",
+                                fontSize: 10,
+                                fontWeight: 700,
+                                padding: "1px 6px",
+                                borderRadius: 4,
+                              }}
+                            >
+                              MITM
+                            </span>
+                          </div>
+                          <p style={{ fontSize: 12, color: "var(--text-tertiary)", margin: "2px 0 0 0" }}>
+                            {mTool.subtitle}
+                          </p>
+                        </div>
+                      </div>
+
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: 20, color: "var(--text-tertiary)" }}
+                      >
+                        arrow_forward
+                      </span>
+                    </div>
+
+                    <p style={{ fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.5, margin: "14px 0" }}>
+                      {mTool.description}
+                    </p>
+
+                    <div
+                      style={{
+                        background: "var(--bg-surface-elevated)",
+                        border: "1px solid var(--border-subtle)",
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                        fontSize: 11.5,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 6,
+                      }}
+                    >
+                      <span style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>Target Domain:</span>
+                      <span className="mono" style={{ color: "#c084fc", fontSize: 11 }}>
+                        {mTool.mitmDomain}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 14 }}>
+                    <div
+                      className="btn-secondary"
+                      style={{
+                        width: "100%",
+                        fontSize: 12,
+                        padding: "8px 12px",
+                        fontWeight: 600,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        color: "#c084fc",
+                        borderColor: "rgba(168, 85, 247, 0.3)",
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
+                        tune
+                      </span>
+                      Manage Model Mappings
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* TOOL SETTINGS MODAL */}
       {selectedTool && (
