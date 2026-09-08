@@ -458,6 +458,77 @@ function RenderMessage({ content }: { content: string }) {
   );
 }
 
+// ── Determine which server tools are actually triggered by the user prompt ──
+function determineActiveTools(
+  prompt: string,
+  toolsList: ServerTool[],
+  configs: any
+): string[] {
+  const active: string[] = [];
+  const enabledMap = Object.fromEntries(toolsList.map((t) => [t.id, t.enabled]));
+
+  // 1. Web Search
+  if (enabledMap.web_search) {
+    const isAlways = configs.web_search?.mode === "always";
+    const isSearchNeeded =
+      isAlways ||
+      prompt.trim().endsWith("?") ||
+      /(?:who|what|where|when|why|how|which|whose|news|weather|weqather|wether|price|stock|update|latest|current|search|score|release|today|tomorrow|tomoraw|yesterday|now|reseach|research|look\s*up|find|online|info|tell|explain|check|is|are|can|did|202[4-9])/i.test(
+        prompt
+      );
+    if (isSearchNeeded) active.push("web_search");
+  }
+
+  // 2. Web Fetch (ONLY if prompt contains a URL)
+  if (enabledMap.web_fetch && /https?:\/\/[^\s"'<>\)]+/i.test(prompt)) {
+    active.push("web_fetch");
+  }
+
+  // 3. Image Generation (ONLY if prompt requests creating an image)
+  if (
+    enabledMap.image_gen &&
+    (/(?:generate|create|draw|paint|picture\s+of|image\s+of|photo\s+of|illustration\s+of)\b/i.test(prompt) ||
+      /^\/image\b/i.test(prompt))
+  ) {
+    active.push("image_gen");
+  }
+
+  // 4. Shell (ONLY if prompt contains shell commands or code block)
+  if (
+    enabledMap.shell &&
+    (/```(?:bash|sh|shell|cmd)?\n[\s\S]+?```/i.test(prompt) ||
+      /(?:run|execute|shell|bash|cmd)\s*[:]\s*(.+)/i.test(prompt) ||
+      /^\$\s*[a-zA-Z0-9]/i.test(prompt.trim()))
+  ) {
+    active.push("shell");
+  }
+
+  // 5. Datetime (ONLY if asking for date/time or temporal queries)
+  if (
+    enabledMap.datetime &&
+    /(?:date|time|clock|day|today|tomorrow|tomoraw|yesterday|what\s+time|what\s+day|current\s+year|now|month|hour|year)/i.test(prompt)
+  ) {
+    active.push("datetime");
+  }
+
+  // 6. Fusion (ONLY if explicitly enabled by user)
+  if (enabledMap.fusion) {
+    active.push("fusion");
+  }
+
+  // 7. Advisor (ONLY if explicitly enabled by user)
+  if (enabledMap.advisor) {
+    active.push("advisor");
+  }
+
+  // 8. Subagent (ONLY if explicitly enabled by user)
+  if (enabledMap.subagent) {
+    active.push("subagent");
+  }
+
+  return active;
+}
+
 export default function PlaygroundPage() {
   const { theme, toggle } = useTheme();
 
@@ -597,17 +668,20 @@ export default function PlaygroundPage() {
     shell: { timeoutSec: 30 },
   });
 
-  // Real Server Tools configuration
+  // Real Server Tools configuration (standard tools auto-enabled, specialist tools disabled by default)
   const [serverTools, setServerTools] = useState<ServerTool[]>([
     { id: "web_search", name: "Web Search", desc: "Search the web for current information", sub: "Auto · Medium", icon: "🌐", enabled: true },
     { id: "web_fetch", name: "Web Fetch", desc: "Retrieve content from URLs", sub: "Auto", icon: "🔗", enabled: true },
     { id: "image_gen", name: "Image Generation", desc: "Generate images from text", sub: "Auto", icon: "🖼️", enabled: true },
     { id: "datetime", name: "Datetime", desc: "Current date and time info", sub: "Auto", icon: "🕒", enabled: true },
-    { id: "fusion", name: "Fusion", desc: "Multi-model consensus and analysis", sub: "3 models", icon: "🔀", enabled: true },
-    { id: "advisor", name: "Advisor", desc: "Consult a stronger model for guidance", sub: "1 advisor", icon: "💡", enabled: true },
-    { id: "subagent", name: "Subagent", desc: "Delegate tasks to smaller, faster models", sub: "1 subagent", icon: "🔲", enabled: true },
-    { id: "shell", name: "Shell", desc: "Run shell commands in a sandboxed container", sub: "OpenRouter", icon: "🐚", enabled: true },
+    { id: "fusion", name: "Fusion", desc: "Multi-model consensus and analysis", sub: "3 models", icon: "🔀", enabled: false },
+    { id: "advisor", name: "Advisor", desc: "Consult a stronger model for guidance", sub: "1 advisor", icon: "💡", enabled: false },
+    { id: "subagent", name: "Subagent", desc: "Delegate tasks to smaller, faster models", sub: "1 subagent", icon: "🔲", enabled: false },
+    { id: "shell", name: "Shell", desc: "Run shell commands in a sandboxed container", sub: "OpenRouter", icon: "🐚", enabled: false },
   ]);
+
+  // Track tools actively executing for the current user prompt
+  const [activeRunningTools, setActiveRunningTools] = useState<string[]>([]);
 
   // Compute live subtitle based on tool configuration
   const getToolSubtitle = useCallback(
@@ -791,6 +865,8 @@ export default function PlaygroundPage() {
       }));
 
       setLoading(true);
+      const activeTools = determineActiveTools(text, serverTools, toolConfigs);
+      setActiveRunningTools(activeTools);
 
       // Context window trimming based on Chat Memory slider
       const historySlice =
@@ -898,6 +974,7 @@ export default function PlaygroundPage() {
         }));
       } finally {
         setLoading(false);
+        setActiveRunningTools([]);
       }
     },
     [input, loading, activeRoom, currentMsgs, selectedModel, memoryValue, activeModelObj, serverTools, toolConfigs]
@@ -1678,10 +1755,10 @@ export default function PlaygroundPage() {
                   <span />
                 </div>
               </div>
-              {serverTools.some((t) => t.enabled) && (
+              {activeRunningTools.length > 0 && (
                 <div className="pg-tools-executed-bar" style={{ margin: 0, display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {serverTools
-                    .filter((t) => t.enabled)
+                    .filter((t) => activeRunningTools.includes(t.id))
                     .map((t) => (
                       <div key={t.id} className="pg-tool-chip" style={{ cursor: "default", opacity: 0.9 }}>
                         <span>{t.icon}</span>

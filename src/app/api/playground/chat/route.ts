@@ -2,10 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateApiKey } from "@/lib/auth";
 
-// Safe Web Search via DuckDuckGo (HTML parser + instant answers fallback)
+// Clean conversational prefixes from search queries
+function cleanSearchQuery(query: string): string {
+  let cleaned = query
+    .replace(/^(?:please\s+)?(?:research|reseach|search|look\s*up|find|browse)\s+(?:online|the\s+web|internet)?\s*(?:for|about)?\s*/i, "")
+    .replace(/^(?:can\s+you\s+)?(?:tell\s+me|show\s+me|give\s+me|find\s+me)\s+(?:about|the)?\s*/i, "")
+    .replace(/[?!]+$/g, "")
+    .trim();
+  return cleaned || query;
+}
+
+// Safe Web Search via DuckDuckGo (HTML parser + instant answers API + Wikipedia fallback)
 async function performWebSearch(query: string) {
+  const cleaned = cleanSearchQuery(query);
+
+  // 1. DuckDuckGo HTML Search
   try {
-    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleaned)}`, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -26,9 +39,10 @@ async function performWebSearch(query: string) {
     // fallback
   }
 
+  // 2. DuckDuckGo Instant Answers API
   try {
     const res = await fetch(
-      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(cleaned)}&format=json&no_html=1&skip_disambig=1`,
       {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
         signal: AbortSignal.timeout(4000),
@@ -43,11 +57,34 @@ async function performWebSearch(query: string) {
       .filter(Boolean)
       .join("\n- ");
 
-    if (!abstract && !related) return null;
-    return abstract ? `${abstract}\n${related ? `\nRelated:\n- ${related}` : ""}` : related;
+    if (abstract || related) {
+      return abstract ? `${abstract}\n${related ? `\nRelated:\n- ${related}` : ""}` : related;
+    }
   } catch {
-    return null;
+    // fallback
   }
+
+  // 3. Wikipedia API fallback (for general entities, people, technology, science, events)
+  try {
+    const res = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(cleaned)}&limit=3&namespace=0&format=json`,
+      { signal: AbortSignal.timeout(4000) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const titles = data[1] || [];
+      const descs = data[2] || [];
+      const links = data[3] || [];
+      const valid = titles
+        .map((t: string, i: number) => descs[i] ? `[${t}] ${descs[i]} (${links[i]})` : null)
+        .filter(Boolean);
+      if (valid.length > 0) return valid.join("\n\n");
+    }
+  } catch {
+    // fallback
+  }
+
+  return null;
 }
 
 // WMO Weather Code to Description & Icon Mapping
@@ -308,11 +345,12 @@ export async function POST(req: NextRequest) {
   if (tools.web_search) {
     const searchDepth = toolConfigs.web_search?.depth || "medium";
     const searchMode = toolConfigs.web_search?.mode || "auto";
-    const isWeatherQuery = /(?:weather|forecast|temperature|temp|climate|rain|snow|cloudy|sunny|humid)/i.test(lastUserMsg);
+    const isWeatherQuery = /(?:wea?th[ea]?r|weqat?her|wethr|forecast|temperature|temper?|climate|rain|precip|snow|cloudy|sunny|humid)/i.test(lastUserMsg);
     const needsSearch =
       searchMode === "always" ||
       isWeatherQuery ||
-      /(?:who|what|where|when|news|price|stock|update|latest|current|search|score|release|today|now|2025|2026)/i.test(
+      lastUserMsg.trim().endsWith("?") ||
+      /(?:who|what|where|when|why|how|which|whose|news|price|stock|update|latest|current|search|score|release|today|tomorrow|tomoraw|yesterday|now|reseach|research|look\s*up|find|online|info|tell|explain|check|is|are|can|did|202[4-9])/i.test(
         lastUserMsg
       );
 
