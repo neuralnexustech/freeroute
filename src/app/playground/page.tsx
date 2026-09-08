@@ -411,6 +411,7 @@ export default function PlaygroundPage() {
         })),
         tools: Object.fromEntries(serverTools.map((t) => [t.id, t.enabled])),
         toolConfigs,
+        clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       };
 
       const startTime = Date.now();

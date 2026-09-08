@@ -2,14 +2,36 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateApiKey } from "@/lib/auth";
 
-// Safe Web Search via DuckDuckGo
+// Safe Web Search via DuckDuckGo (HTML parser + instant answers fallback)
 async function performWebSearch(query: string) {
+  try {
+    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const html = await res.text();
+      const snippetMatches = [...html.matchAll(/<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g)].slice(0, 4);
+      if (snippetMatches.length > 0) {
+        const results = snippetMatches
+          .map((m, i) => `[${i + 1}] ${m[1].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim()}`)
+          .join("\n\n");
+        return results;
+      }
+    }
+  } catch {
+    // fallback
+  }
+
   try {
     const res = await fetch(
       `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
       {
-        headers: { "User-Agent": "freeroute-playground/1.0" },
-        signal: AbortSignal.timeout(4500),
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        signal: AbortSignal.timeout(4000),
       }
     );
     if (!res.ok) return null;
@@ -105,7 +127,10 @@ export async function POST(req: NextRequest) {
 
   // 1. Tool: Datetime
   if (tools.datetime) {
-    const tz = toolConfigs.datetime?.timezone === "utc" ? "UTC" : Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata";
+    const tz =
+      toolConfigs.datetime?.timezone === "utc"
+        ? "UTC"
+        : body.clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata";
     const now = new Date();
     const dateFormatted = now.toLocaleDateString("en-US", {
       weekday: "long",
