@@ -468,30 +468,6 @@ export default function OverviewPage() {
 
   return (
     <div style={{ maxWidth: 1240, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24, paddingBottom: 40, position: "relative" }}>
-      {/* User Header Profile */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, paddingLeft: 4, marginTop: 4 }}>
-        <div
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: "50%",
-            background: "linear-gradient(135deg, #0284c7, #0284c7)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#ffffff",
-            fontWeight: 700,
-            fontSize: 15,
-            boxShadow: "var(--shadow-sm)",
-          }}
-        >
-          S
-        </div>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>shivaprasad</div>
-          <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>bidreshivaprasad@gmail.com</div>
-        </div>
-      </div>
 
       {/* 1. USAGE SUMMARY CARD */}
       <div
