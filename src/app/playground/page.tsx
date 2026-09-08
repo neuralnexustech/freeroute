@@ -193,18 +193,22 @@ function WeatherCard({ weather }: { weather: any }) {
   );
 }
 
-// ── Built-in Excel Spreadsheet / Table Viewer ──────────────────────────────
-function ExcelTableView({
+// ── Built-in Smart Table & Excel Spreadsheet Viewer ──────────────────────────
+function SmartTableView({
   headers,
   rows,
   raw,
+  defaultToExcel = false,
 }: {
   headers: string[];
   rows: string[][];
   raw: string;
+  defaultToExcel?: boolean;
 }) {
   const [filter, setFilter] = useState("");
-  const [viewMode, setViewMode] = useState<"grid" | "clean">("grid");
+  const [viewMode, setViewMode] = useState<"clean" | "grid">(
+    defaultToExcel ? "grid" : "clean"
+  );
   const [copied, setCopied] = useState(false);
 
   // Filter rows
@@ -227,7 +231,7 @@ function ExcelTableView({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `spreadsheet_data_${Date.now()}.csv`;
+    link.download = `data_table_${Date.now()}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -248,81 +252,121 @@ function ExcelTableView({
   const getColLetter = (idx: number) => String.fromCharCode(65 + (idx % 26));
 
   return (
-    <div className="pg-excel-container">
+    <div
+      className={`pg-excel-container ${
+        viewMode === "grid" ? "mode-excel-container" : "mode-clean-container"
+      }`}
+    >
       {/* Toolbar */}
       <div className="pg-excel-toolbar">
         <div className="pg-excel-toolbar-left">
-          <div className="pg-excel-brand-badge">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <line x1="3" y1="9" x2="21" y2="9" />
-              <line x1="3" y1="15" x2="21" y2="15" />
-              <line x1="9" y1="3" x2="9" y2="21" />
-              <line x1="15" y1="3" x2="15" y2="21" />
-            </svg>
-            <span>Spreadsheet View</span>
-          </div>
+          {viewMode === "grid" ? (
+            <div className="pg-excel-brand-badge">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+                <line x1="3" y1="15" x2="21" y2="15" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+                <line x1="15" y1="3" x2="15" y2="21" />
+              </svg>
+              <span>Excel View</span>
+            </div>
+          ) : (
+            <div className="pg-clean-brand-badge">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+              </svg>
+              <span>Data Table</span>
+            </div>
+          )}
           <span className="pg-excel-dim-badge">
             {rows.length} rows × {headers.length} cols
           </span>
         </div>
 
-        <div className="pg-excel-toolbar-center">
-          <div className="pg-excel-search-box">
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search table rows..."
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="pg-excel-search-input"
-            />
-            {filter && (
-              <button onClick={() => setFilter("")} className="pg-excel-clear-btn">
-                ✕
-              </button>
-            )}
+        {/* Search bar is prominent in Excel mode */}
+        {viewMode === "grid" && (
+          <div className="pg-excel-toolbar-center">
+            <div className="pg-excel-search-box">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search rows..."
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="pg-excel-search-input"
+              />
+              {filter && (
+                <button onClick={() => setFilter("")} className="pg-excel-clear-btn">
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="pg-excel-toolbar-right">
-          <button
-            onClick={() => setViewMode(viewMode === "grid" ? "clean" : "grid")}
-            className={`pg-excel-tool-btn ${viewMode === "grid" ? "active" : ""}`}
-            title="Toggle Excel Grid / Clean Mode"
-          >
-            {viewMode === "grid" ? "Excel Grid" : "Clean View"}
-          </button>
+          {viewMode === "clean" ? (
+            <button
+              onClick={() => setViewMode("grid")}
+              className="pg-excel-tool-btn pg-toggle-excel-btn"
+              title="Open full Excel Spreadsheet view with letters, numbers, and search"
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#107c41" strokeWidth="2.2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+                <line x1="3" y1="15" x2="21" y2="15" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+              </svg>
+              <span>Excel View</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setViewMode("clean")}
+              className="pg-excel-tool-btn active"
+              title="Switch back to Clean Table view"
+            >
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+              </svg>
+              <span>Clean View</span>
+            </button>
+          )}
+
           <button
             onClick={handleCopyForExcel}
             className="pg-excel-tool-btn"
-            title="Copy formatted for MS Excel & Google Sheets"
+            title="Copy formatted for Excel / Sheets"
           >
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="9" y="9" width="13" height="13" rx="2" />
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
-            <span>{copied ? "Copied!" : "Copy for Excel"}</span>
+            <span>{copied ? "Copied!" : "Copy"}</span>
           </button>
+
           <button
             onClick={handleExportCsv}
-            className="pg-excel-export-btn"
-            title="Download CSV spreadsheet file"
+            className={viewMode === "grid" ? "pg-excel-export-btn" : "pg-excel-tool-btn"}
+            title="Download CSV file"
           >
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-            <span>Export .CSV</span>
+            <span>CSV</span>
           </button>
         </div>
       </div>
 
-      {/* Spreadsheet Table Wrapper */}
+      {/* Table Scroll Area */}
       <div className="pg-excel-table-scroll">
         <table className={`pg-excel-table ${viewMode === "grid" ? "mode-excel" : "mode-clean"}`}>
           <thead>
@@ -376,7 +420,18 @@ function ExcelTableView({
 }
 
 // ── Markdown & Table & Image Renderer ───────────────────────────────────────
-function RenderMessage({ content }: { content: string }) {
+function RenderMessage({
+  content,
+  userPrompt,
+}: {
+  content: string;
+  userPrompt?: string;
+}) {
+  // Check if user specifically requested Excel / Spreadsheet / CSV / Sheets
+  const userWantsExcel = /(?:excel|\.xlsx|spreadsheet|csv|\bsheet\b)/i.test(
+    userPrompt || ""
+  );
+
   // Parse markdown tables and text blocks
   const tableRegex = /((?:^[ \t]*\|[^\n]+\|[ \t]*(?:\r?\n|$)){2,})/gm;
   const segments: Array<
@@ -444,11 +499,12 @@ function RenderMessage({ content }: { content: string }) {
     <>
       {segments.map((seg, i) =>
         seg.type === "table" ? (
-          <ExcelTableView
+          <SmartTableView
             key={i}
             headers={seg.headers}
             rows={seg.rows}
             raw={seg.raw}
+            defaultToExcel={userWantsExcel}
           />
         ) : (
           <span key={i}>{renderTextPiece(seg.content)}</span>
@@ -1660,7 +1716,15 @@ export default function PlaygroundPage() {
 
                   {/* Card content text */}
                   <div className="pg-card-body">
-                    <RenderMessage content={msg.content} />
+                    <RenderMessage
+                      content={msg.content}
+                      userPrompt={
+                        currentMsgs
+                          .slice(0, idx)
+                          .reverse()
+                          .find((m) => m.role === "user")?.content
+                      }
+                    />
                   </div>
 
                   {/* Card footer actions */}

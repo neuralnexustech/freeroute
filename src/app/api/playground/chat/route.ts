@@ -359,24 +359,35 @@ export async function POST(req: NextRequest) {
       const weatherData = await fetchLiveWeather(lastUserMsg, body.clientTimezone);
       if (weatherData) {
         weatherResult = weatherData;
-        const forecastTable = [
-          "| Day | Date | Condition | High / Low (°C) | High / Low (°F) | Rain Probability |",
-          "| :--- | :--- | :--- | :--- | :--- | :--- |",
-          ...weatherData.daily.map(
-            (d: any) =>
-              `| ${d.dayName} | ${d.date} | ${d.icon} ${d.condition} | ${d.maxC}°C / ${d.minC}°C | ${d.maxF}°F / ${d.minF}°F | ${d.rainProb}% |`
-          ),
-        ].join("\n");
+        const userWantsTableOrExcel = /(?:table|excel|spreadsheet|csv|\bsheet\b)/i.test(lastUserMsg);
+
+        let tablePromptSection = "";
+        if (userWantsTableOrExcel) {
+          const forecastTable = [
+            "| Day | Date | Condition | High / Low (°C) | High / Low (°F) | Rain Probability |",
+            "| :--- | :--- | :--- | :--- | :--- | :--- |",
+            ...weatherData.daily.map(
+              (d: any) =>
+                `| ${d.dayName} | ${d.date} | ${d.icon} ${d.condition} | ${d.maxC}°C / ${d.minC}°C | ${d.maxF}°F / ${d.minF}°F | ${d.rainProb}% |`
+            ),
+          ].join("\n");
+          tablePromptSection = `\nMulti-Day Forecast Table (the user requested a table/spreadsheet):\n${forecastTable}\n`;
+        }
 
         contextAdditions.push(
           `[System Context - Verified Real-Time Weather for ${weatherData.location}]\n` +
             `Current Live Conditions: ${weatherData.current.tempC}°C (${weatherData.current.tempF}°F), feels like ${weatherData.current.feelsLikeC}°C, ${weatherData.current.icon} ${weatherData.current.condition}, Humidity: ${weatherData.current.humidity}%, Wind: ${weatherData.current.windSpeedKmh} km/h.\n` +
-            `Tomorrow's Forecast (${weatherData.tomorrow.dayName}, ${weatherData.tomorrow.date}): ${weatherData.tomorrow.icon} ${weatherData.tomorrow.condition}, High: ${weatherData.tomorrow.maxC}°C (${weatherData.tomorrow.maxF}°F), Low: ${weatherData.tomorrow.minC}°C (${weatherData.tomorrow.minF}°F), Rain Probability: ${weatherData.tomorrow.rainProb}%.\n\n` +
-            `Multi-Day Forecast:\n${forecastTable}\n\n` +
-            `CRITICAL INSTRUCTIONS FOR ASSISTANT:\n` +
+            `Tomorrow's Forecast (${weatherData.tomorrow.dayName}, ${weatherData.tomorrow.date}): ${weatherData.tomorrow.icon} ${weatherData.tomorrow.condition}, High: ${weatherData.tomorrow.maxC}°C (${weatherData.tomorrow.maxF}°F), Low: ${weatherData.tomorrow.minC}°C (${weatherData.tomorrow.minF}°F), Rain Probability: ${weatherData.tomorrow.rainProb}%.\n` +
+            `7-Day Daily Highs/Lows: ${weatherData.daily.map((d: any) => `${d.dayName}: ${d.maxC}°C/${d.minC}°C (${d.condition})`).join(", ")}.\n` +
+            tablePromptSection +
+            `\nCRITICAL INSTRUCTIONS FOR ASSISTANT:\n` +
             `- You have active real-time meteorological satellite and live radar access.\n` +
-            `- Answer the user's weather question directly and authoritatively with tomorrow's specific forecast, temperature range, and rain likelihood for ${weatherData.location}.\n` +
-            `- Include the multi-day forecast table above in your response so the user can view it in the built-in spreadsheet view.\n` +
+            `- Answer the user's weather question directly, authoritatively, and conversationally for ${weatherData.location}.\n` +
+            `- Provide tomorrow's specific forecast, expected conditions, high/low temperatures, and rain probability.\n` +
+            `- Note: The interactive visual Weather Card UI with 7-day forecast cards and temperature unit toggle (°C/°F) is automatically displayed to the user.\n` +
+            (userWantsTableOrExcel
+              ? `- The user explicitly asked for a table/spreadsheet/excel, so provide the data in a clean markdown table.\n`
+              : `- Do NOT output a markdown table or spreadsheet. Keep your response natural, informative, and conversational without raw data tables.\n`) +
             `- NEVER say that you cannot browse the internet, do not have real-time access, or cannot provide current weather.`
         );
 
@@ -577,12 +588,25 @@ export async function POST(req: NextRequest) {
       ) ||
         assistantText.length < 20)
     ) {
-      assistantText = `Here is the live real-time weather forecast for **${weatherResult.location}**:\n\n### 🌤️ Current Live Conditions\n- **Temperature**: ${weatherResult.current.tempC}°C (${weatherResult.current.tempF}°F) · Feels like ${weatherResult.current.feelsLikeC}°C\n- **Condition**: ${weatherResult.current.icon} ${weatherResult.current.condition}\n- **Humidity**: ${weatherResult.current.humidity}%\n- **Wind**: ${weatherResult.current.windSpeedKmh} km/h\n\n### 📅 Tomorrow's Forecast (${weatherResult.tomorrow.dayName}, ${weatherResult.tomorrow.date})\n- **Expected Weather**: ${weatherResult.tomorrow.icon} **${weatherResult.tomorrow.condition}**\n- **Temperature**: High of **${weatherResult.tomorrow.maxC}°C** (${weatherResult.tomorrow.maxF}°F) · Low of **${weatherResult.tomorrow.minC}°C** (${weatherResult.tomorrow.minF}°F)\n- **Precipitation Chance**: **${weatherResult.tomorrow.rainProb}%**\n\n### 📊 7-Day Forecast\n\n| Day | Date | Condition | High / Low (°C) | High / Low (°F) | Rain Probability |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n${weatherResult.daily
-        .map(
-          (d: any) =>
-            `| ${d.dayName} | ${d.date} | ${d.icon} ${d.condition} | ${d.maxC}°C / ${d.minC}°C | ${d.maxF}°F / ${d.minF}°F | ${d.rainProb}% |`
-        )
-        .join("\n")}\n\n*Live weather data retrieved via meteorological radar and satellite feeds.*`;
+      const userWantsTableOrExcel = /(?:table|excel|spreadsheet|csv|\bsheet\b)/i.test(lastUserMsg);
+
+      if (userWantsTableOrExcel) {
+        assistantText = `Here is the weather forecast for **${weatherResult.location}**:\n\n` +
+          `| Day | Date | Condition | High / Low (°C) | High / Low (°F) | Rain Probability |\n` +
+          `| :--- | :--- | :--- | :--- | :--- | :--- |\n` +
+          weatherResult.daily
+            .map(
+              (d: any) =>
+                `| ${d.dayName} | ${d.date} | ${d.icon} ${d.condition} | ${d.maxC}°C / ${d.minC}°C | ${d.maxF}°F / ${d.minF}°F | ${d.rainProb}% |`
+            )
+            .join("\n") +
+          `\n\n*Live weather data retrieved via meteorological radar and satellite feeds.*`;
+      } else {
+        assistantText = `Here is the live real-time weather forecast for **${weatherResult.location}**:\n\n` +
+          `• **Current Conditions**: **${weatherResult.current.tempC}°C** (${weatherResult.current.tempF}°F) · Feels like ${weatherResult.current.feelsLikeC}°C · ${weatherResult.current.icon} **${weatherResult.current.condition}** · Humidity: ${weatherResult.current.humidity}% · Wind: ${weatherResult.current.windSpeedKmh} km/h\n` +
+          `• **Tomorrow (${weatherResult.tomorrow.dayName}, ${weatherResult.tomorrow.date})**: ${weatherResult.tomorrow.icon} **${weatherResult.tomorrow.condition}** with a high of **${weatherResult.tomorrow.maxC}°C** (${weatherResult.tomorrow.maxF}°F) and an overnight low of **${weatherResult.tomorrow.minC}°C** (${weatherResult.tomorrow.minF}°F). The chance of precipitation is **${weatherResult.tomorrow.rainProb}%**.\n\n` +
+          `*Interactive 7-day outlook and °C / °F temperature toggling are available in the weather card above.*`;
+      }
     }
 
     // If image generation tool produced an image, append it nicely
