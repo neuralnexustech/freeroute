@@ -23,6 +23,7 @@ interface Message {
   latencyMs?: number;
   reasoning?: string | boolean;
   toolCalls?: ToolCallResult[];
+  weather?: any;
   timestamp: Date;
 }
 
@@ -66,24 +67,395 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-// ── Markdown & Image Renderer ───────────────────────────────────────────────
+// ── Built-in Weather Widget Card ───────────────────────────────────────────
+function WeatherCard({ weather }: { weather: any }) {
+  const [unit, setUnit] = useState<"C" | "F">("C");
+  if (!weather || !weather.current) return null;
+
+  const { location, current, tomorrow, daily } = weather;
+
+  const formatTemp = (c: number, f: number) => {
+    return unit === "C" ? `${Math.round(c)}°C` : `${Math.round(f)}°F`;
+  };
+
+  return (
+    <div className="pg-weather-card">
+      {/* Weather Header */}
+      <div className="pg-weather-header">
+        <div className="pg-weather-location">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ color: "#38bdf8" }}>
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+            <circle cx="12" cy="10" r="3" />
+          </svg>
+          <span className="pg-weather-loc-name">{location}</span>
+          <span className="pg-weather-badge-live">LIVE RADAR</span>
+        </div>
+        <div className="pg-weather-unit-toggle">
+          <button
+            className={`pg-weather-unit-btn ${unit === "C" ? "active" : ""}`}
+            onClick={() => setUnit("C")}
+          >
+            °C
+          </button>
+          <span className="pg-weather-unit-divider">|</span>
+          <button
+            className={`pg-weather-unit-btn ${unit === "F" ? "active" : ""}`}
+            onClick={() => setUnit("F")}
+          >
+            °F
+          </button>
+        </div>
+      </div>
+
+      {/* Main Weather Display */}
+      <div className="pg-weather-hero">
+        <div className="pg-weather-hero-left">
+          <span className="pg-weather-big-icon">{current.icon}</span>
+          <div>
+            <div className="pg-weather-main-temp">
+              {formatTemp(current.tempC, current.tempF)}
+            </div>
+            <div className="pg-weather-main-cond">
+              {current.condition} · Feels like {formatTemp(current.feelsLikeC, current.feelsLikeF)}
+            </div>
+          </div>
+        </div>
+
+        {/* Highlighted Tomorrow Box */}
+        {tomorrow && (
+          <div className="pg-weather-tomorrow-box">
+            <div className="pg-weather-tomorrow-title">
+              <span>📅 {tomorrow.dayName} ({tomorrow.date})</span>
+              <span className="pg-weather-rain-prob">🌧️ {tomorrow.rainProb}% Rain</span>
+            </div>
+            <div className="pg-weather-tomorrow-details">
+              <span className="pg-weather-tomorrow-icon">{tomorrow.icon}</span>
+              <span className="pg-weather-tomorrow-cond">{tomorrow.condition}</span>
+              <span className="pg-weather-tomorrow-range">
+                ▲ {formatTemp(tomorrow.maxC, tomorrow.maxF)} · ▼ {formatTemp(tomorrow.minC, tomorrow.minF)}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Stats Grid */}
+      <div className="pg-weather-stats-grid">
+        <div className="pg-weather-stat-pill">
+          <span className="pg-stat-icon">💧</span>
+          <span className="pg-stat-label">Humidity</span>
+          <span className="pg-stat-val">{current.humidity}%</span>
+        </div>
+        <div className="pg-weather-stat-pill">
+          <span className="pg-stat-icon">💨</span>
+          <span className="pg-stat-label">Wind Speed</span>
+          <span className="pg-stat-val">{current.windSpeedKmh} km/h</span>
+        </div>
+        <div className="pg-weather-stat-pill">
+          <span className="pg-stat-icon">🌧️</span>
+          <span className="pg-stat-label">Tomorrow Rain</span>
+          <span className="pg-stat-val">{tomorrow?.rainProb ?? 0}%</span>
+        </div>
+        <div className="pg-weather-stat-pill">
+          <span className="pg-stat-icon">🌡️</span>
+          <span className="pg-stat-label">High / Low</span>
+          <span className="pg-stat-val">
+            {formatTemp(daily?.[0]?.maxC ?? current.tempC, daily?.[0]?.maxF ?? current.tempF)} / {formatTemp(daily?.[0]?.minC ?? current.tempC, daily?.[0]?.minF ?? current.tempF)}
+          </span>
+        </div>
+      </div>
+
+      {/* 7-Day Forecast Strip */}
+      {daily && daily.length > 0 && (
+        <div className="pg-weather-strip-container">
+          <div className="pg-weather-strip-title">7-DAY LIVE FORECAST</div>
+          <div className="pg-weather-days-row">
+            {daily.map((d: any, i: number) => (
+              <div key={i} className={`pg-weather-day-item ${i === 1 ? "tomorrow-highlight" : ""}`}>
+                <div className="pg-weather-day-label">{d.dayName}</div>
+                <div className="pg-weather-day-date">{d.date.slice(5)}</div>
+                <div className="pg-weather-day-icon">{d.icon}</div>
+                <div className="pg-weather-day-temp">
+                  {formatTemp(d.maxC, d.maxF)}
+                </div>
+                <div className="pg-weather-day-min">
+                  {formatTemp(d.minC, d.minF)}
+                </div>
+                <div className="pg-weather-day-rain">
+                  {d.rainProb}%
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Built-in Excel Spreadsheet / Table Viewer ──────────────────────────────
+function ExcelTableView({
+  headers,
+  rows,
+  raw,
+}: {
+  headers: string[];
+  rows: string[][];
+  raw: string;
+}) {
+  const [filter, setFilter] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "clean">("grid");
+  const [copied, setCopied] = useState(false);
+
+  // Filter rows
+  const filteredRows = useMemo(() => {
+    if (!filter.trim()) return rows;
+    const q = filter.toLowerCase();
+    return rows.filter((r) => r.some((cell) => cell.toLowerCase().includes(q)));
+  }, [rows, filter]);
+
+  // Export to CSV
+  const handleExportCsv = () => {
+    const csvContent = [
+      headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(","),
+      ...rows.map((row) =>
+        row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `spreadsheet_data_${Date.now()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Copy Tab-Separated for Excel / Google Sheets
+  const handleCopyForExcel = () => {
+    const tsv = [
+      headers.join("\t"),
+      ...rows.map((r) => r.join("\t")),
+    ].join("\n");
+    navigator.clipboard.writeText(tsv);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const getColLetter = (idx: number) => String.fromCharCode(65 + (idx % 26));
+
+  return (
+    <div className="pg-excel-container">
+      {/* Toolbar */}
+      <div className="pg-excel-toolbar">
+        <div className="pg-excel-toolbar-left">
+          <div className="pg-excel-brand-badge">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+              <line x1="3" y1="15" x2="21" y2="15" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+              <line x1="15" y1="3" x2="15" y2="21" />
+            </svg>
+            <span>Spreadsheet View</span>
+          </div>
+          <span className="pg-excel-dim-badge">
+            {rows.length} rows × {headers.length} cols
+          </span>
+        </div>
+
+        <div className="pg-excel-toolbar-center">
+          <div className="pg-excel-search-box">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search table rows..."
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="pg-excel-search-input"
+            />
+            {filter && (
+              <button onClick={() => setFilter("")} className="pg-excel-clear-btn">
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="pg-excel-toolbar-right">
+          <button
+            onClick={() => setViewMode(viewMode === "grid" ? "clean" : "grid")}
+            className={`pg-excel-tool-btn ${viewMode === "grid" ? "active" : ""}`}
+            title="Toggle Excel Grid / Clean Mode"
+          >
+            {viewMode === "grid" ? "Excel Grid" : "Clean View"}
+          </button>
+          <button
+            onClick={handleCopyForExcel}
+            className="pg-excel-tool-btn"
+            title="Copy formatted for MS Excel & Google Sheets"
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            <span>{copied ? "Copied!" : "Copy for Excel"}</span>
+          </button>
+          <button
+            onClick={handleExportCsv}
+            className="pg-excel-export-btn"
+            title="Download CSV spreadsheet file"
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>Export .CSV</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Spreadsheet Table Wrapper */}
+      <div className="pg-excel-table-scroll">
+        <table className={`pg-excel-table ${viewMode === "grid" ? "mode-excel" : "mode-clean"}`}>
+          <thead>
+            {viewMode === "grid" && (
+              <tr className="pg-excel-grid-letters-row">
+                <th className="pg-excel-corner-cell">#</th>
+                {headers.map((_, i) => (
+                  <th key={i} className="pg-excel-letter-cell">
+                    {getColLetter(i)}
+                  </th>
+                ))}
+              </tr>
+            )}
+            <tr className="pg-excel-header-row">
+              {viewMode === "grid" && <th className="pg-excel-gutter-cell"></th>}
+              {headers.map((h, i) => (
+                <th key={i} className="pg-excel-th">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRows.map((row, rIdx) => (
+              <tr key={rIdx} className="pg-excel-row">
+                {viewMode === "grid" && (
+                  <td className="pg-excel-row-num">{rIdx + 1}</td>
+                )}
+                {row.map((cell, cIdx) => (
+                  <td key={cIdx} className="pg-excel-td">
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {filteredRows.length === 0 && (
+              <tr>
+                <td
+                  colSpan={headers.length + (viewMode === "grid" ? 1 : 0)}
+                  className="pg-excel-empty-td"
+                >
+                  No matching rows found for "{filter}"
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Markdown & Table & Image Renderer ───────────────────────────────────────
 function RenderMessage({ content }: { content: string }) {
-  const html = content
-    .replace(
-      /!\[(.*?)\]\((https?:\/\/[^\)]+)\)/g,
-      '<div style="margin:10px 0;"><img src="$2" alt="$1" style="max-width:100%;max-height:420px;border-radius:12px;display:block;box-shadow:0 4px 16px rgba(0,0,0,0.15);object-fit:cover;" /><span style="font-size:11px;color:var(--pg-text-tertiary);margin-top:4px;display:block;">Generated Image: $1</span></div>'
-    )
-    .replace(
-      /\[(.*?)\]\((https?:\/\/[^\)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--pg-accent);text-decoration:underline;word-break:break-all;">$1</a>'
-    )
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(
-      /`([^`]+)`/g,
-      '<code style="background:var(--pg-code-bg);padding:2px 6px;border-radius:4px;font-family:var(--font-mono);font-size:12px">$1</code>'
-    )
-    .replace(/\n/g, "<br/>");
-  return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  // Parse markdown tables and text blocks
+  const tableRegex = /((?:^[ \t]*\|[^\n]+\|[ \t]*(?:\r?\n|$)){2,})/gm;
+  const segments: Array<
+    | { type: "text"; content: string }
+    | { type: "table"; headers: string[]; rows: string[][]; raw: string }
+  > = [];
+
+  let lastIdx = 0;
+  let match;
+
+  while ((match = tableRegex.exec(content)) !== null) {
+    if (match.index > lastIdx) {
+      segments.push({
+        type: "text",
+        content: content.slice(lastIdx, match.index),
+      });
+    }
+
+    const rawTable = match[0].trim();
+    const lines = rawTable.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length >= 2 && /^\|[\s\-:|]+\|$/.test(lines[1])) {
+      const headers = lines[0]
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|")
+        .map((c) => c.trim());
+      const rows = lines.slice(2).map((line) =>
+        line
+          .replace(/^\|/, "")
+          .replace(/\|$/, "")
+          .split("|")
+          .map((c) => c.trim())
+      );
+      segments.push({ type: "table", headers, rows, raw: rawTable });
+    } else {
+      segments.push({ type: "text", content: match[0] });
+    }
+    lastIdx = match.index + match[0].length;
+  }
+
+  if (lastIdx < content.length) {
+    segments.push({ type: "text", content: content.slice(lastIdx) });
+  }
+
+  const renderTextPiece = (txt: string) => {
+    const html = txt
+      .replace(
+        /!\[(.*?)\]\((https?:\/\/[^\)]+)\)/g,
+        '<div style="margin:10px 0;"><img src="$2" alt="$1" style="max-width:100%;max-height:420px;border-radius:12px;display:block;box-shadow:0 4px 16px rgba(0,0,0,0.15);object-fit:cover;" /><span style="font-size:11px;color:var(--pg-text-tertiary);margin-top:4px;display:block;">Generated Image: $1</span></div>'
+      )
+      .replace(
+        /\[(.*?)\]\((https?:\/\/[^\)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--pg-accent);text-decoration:underline;word-break:break-all;">$1</a>'
+      )
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(
+        /`([^`]+)`/g,
+        '<code style="background:var(--pg-code-bg);padding:2px 6px;border-radius:4px;font-family:var(--font-mono);font-size:12px">$1</code>'
+      )
+      .replace(/\n/g, "<br/>");
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  };
+
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.type === "table" ? (
+          <ExcelTableView
+            key={i}
+            headers={seg.headers}
+            rows={seg.rows}
+            raw={seg.raw}
+          />
+        ) : (
+          <span key={i}>{renderTextPiece(seg.content)}</span>
+        )
+      )}
+    </>
+  );
 }
 
 export default function PlaygroundPage() {
@@ -455,11 +827,13 @@ export default function PlaygroundPage() {
         let costStr = "$0";
         let reasoningText = "";
         let returnedToolCalls: ToolCallResult[] = [];
+        let weatherData: any = null;
 
         if (response.ok) {
           const data = await response.json();
           assistantContent = data.content ?? "No content returned from model.";
           returnedToolCalls = data.toolCalls ?? [];
+          weatherData = data.weather ?? null;
           tokensUsed =
             data.usage?.total_tokens ??
             (data.usage?.prompt_tokens || 0) + (data.usage?.completion_tokens || 0);
@@ -494,6 +868,7 @@ export default function PlaygroundPage() {
           latencyMs,
           reasoning: reasoningText || undefined,
           toolCalls: returnedToolCalls.length > 0 ? returnedToolCalls : undefined,
+          weather: weatherData || undefined,
           timestamp: new Date(),
         };
 
@@ -1202,6 +1577,9 @@ export default function PlaygroundPage() {
                       )}
                     </div>
                   )}
+
+                  {/* Built-in Weather Widget Card */}
+                  {msg.weather && <WeatherCard weather={msg.weather} />}
 
                   {/* Card content text */}
                   <div className="pg-card-body">

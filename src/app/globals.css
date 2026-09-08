@@ -2449,3 +2449,420 @@ table.table-center td:first-child {
   border: 1px solid var(--pg-border-subtle);
 }
 
+/* ── Built-in Excel Spreadsheet / Table Viewer UI ── */
+.pg-excel-container {
+  margin: 14px 0;
+  border: 1px solid var(--pg-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--pg-card-bg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+.pg-excel-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--pg-tab-bg);
+  border-bottom: 1px solid var(--pg-border);
+  flex-wrap: wrap;
+}
+.pg-excel-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pg-excel-brand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #107c41;
+  background: rgba(16, 124, 65, 0.1);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(16, 124, 65, 0.25);
+}
+.pg-excel-dim-badge {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--pg-text-tertiary);
+  font-weight: 500;
+}
+.pg-excel-toolbar-center {
+  flex: 1;
+  max-width: 220px;
+}
+.pg-excel-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--pg-input-bg);
+  border: 1px solid var(--pg-border);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+.pg-excel-search-input {
+  border: none;
+  background: transparent;
+  font-size: 11.5px;
+  color: var(--pg-text);
+  outline: none;
+  width: 100%;
+}
+.pg-excel-search-input::placeholder {
+  color: var(--pg-text-tertiary);
+}
+.pg-excel-clear-btn {
+  border: none;
+  background: transparent;
+  font-size: 10px;
+  color: var(--pg-text-tertiary);
+  cursor: pointer;
+  padding: 0;
+}
+.pg-excel-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pg-excel-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--pg-border);
+  background: var(--pg-card-bg);
+  color: var(--pg-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pg-excel-tool-btn:hover {
+  border-color: #107c41;
+  color: var(--pg-text);
+}
+.pg-excel-tool-btn.active {
+  background: rgba(16, 124, 65, 0.1);
+  border-color: #107c41;
+  color: #107c41;
+}
+.pg-excel-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #107c41;
+  background: #107c41;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 2px 5px rgba(16, 124, 65, 0.25);
+}
+.pg-excel-export-btn:hover {
+  background: #0e6b37;
+}
+.pg-excel-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.pg-excel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+.pg-excel-corner-cell {
+  width: 34px;
+  text-align: center;
+  background: var(--pg-tab-bg);
+  color: var(--pg-text-tertiary);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  border-right: 1px solid var(--pg-border);
+  border-bottom: 1px solid var(--pg-border);
+  padding: 4px 2px;
+}
+.pg-excel-letter-cell {
+  background: var(--pg-tab-bg);
+  color: var(--pg-text-tertiary);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  text-align: center;
+  padding: 3px 8px;
+  border-right: 1px solid var(--pg-border-subtle);
+  border-bottom: 1px solid var(--pg-border);
+  font-weight: 600;
+}
+.pg-excel-gutter-cell {
+  width: 34px;
+  background: var(--pg-tab-bg);
+  border-right: 1px solid var(--pg-border);
+  border-bottom: 1px solid var(--pg-border-subtle);
+}
+.pg-excel-row-num {
+  text-align: center;
+  background: var(--pg-tab-bg);
+  color: var(--pg-text-tertiary);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  border-right: 1px solid var(--pg-border);
+  border-bottom: 1px solid var(--pg-border-subtle);
+  padding: 6px 4px;
+  user-select: none;
+}
+.pg-excel-th {
+  padding: 7px 12px;
+  font-weight: 600;
+  color: var(--pg-text);
+  background: var(--pg-tab-bg);
+  border-bottom: 1px solid var(--pg-border);
+  border-right: 1px solid var(--pg-border-subtle);
+  white-space: nowrap;
+}
+.pg-excel-td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--pg-border-subtle);
+  border-right: 1px solid var(--pg-border-subtle);
+  color: var(--pg-text);
+}
+.pg-excel-row:nth-child(even) {
+  background: rgba(125, 125, 125, 0.025);
+}
+.pg-excel-row:hover {
+  background: rgba(16, 124, 65, 0.05);
+}
+.pg-excel-empty-td {
+  padding: 20px;
+  text-align: center;
+  color: var(--pg-text-tertiary);
+  font-size: 12px;
+}
+
+/* ── Built-in Weather Widget Card UI ── */
+.pg-weather-card {
+  margin: 12px 0;
+  border: 1px solid var(--pg-border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.07) 0%, rgba(99, 102, 241, 0.07) 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04);
+}
+.pg-weather-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pg-weather-location {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pg-weather-loc-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pg-text);
+}
+.pg-weather-badge-live {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  background: #0284c7;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.pg-weather-unit-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--pg-tab-bg);
+  border: 1px solid var(--pg-border);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+.pg-weather-unit-btn {
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pg-text-tertiary);
+  cursor: pointer;
+  padding: 1px 3px;
+}
+.pg-weather-unit-btn.active {
+  color: var(--pg-accent);
+  font-weight: 800;
+}
+.pg-weather-unit-divider {
+  font-size: 10px;
+  color: var(--pg-border);
+}
+.pg-weather-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pg-weather-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pg-weather-big-icon {
+  font-size: 38px;
+  line-height: 1;
+}
+.pg-weather-main-temp {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  color: var(--pg-text);
+  line-height: 1;
+}
+.pg-weather-main-cond {
+  font-size: 12.5px;
+  color: var(--pg-text-secondary);
+  margin-top: 3px;
+}
+.pg-weather-tomorrow-box {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 10px;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 230px;
+}
+.pg-weather-tomorrow-title {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #0284c7;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.pg-weather-tomorrow-details {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--pg-text);
+}
+.pg-weather-tomorrow-range {
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--pg-text-secondary);
+  margin-left: auto;
+}
+.pg-weather-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+  gap: 8px;
+}
+.pg-weather-stat-pill {
+  background: var(--pg-tab-bg);
+  border: 1px solid var(--pg-tab-border);
+  border-radius: 8px;
+  padding: 6px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pg-stat-icon {
+  font-size: 12px;
+}
+.pg-stat-label {
+  font-size: 10px;
+  color: var(--pg-text-tertiary);
+  font-weight: 500;
+}
+.pg-stat-val {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--pg-text);
+  font-family: var(--font-mono);
+}
+.pg-weather-strip-container {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.pg-weather-strip-title {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: var(--pg-text-tertiary);
+}
+.pg-weather-days-row {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.pg-weather-day-item {
+  flex: 1;
+  min-width: 68px;
+  background: var(--pg-card-bg);
+  border: 1px solid var(--pg-border);
+  border-radius: 8px;
+  padding: 8px 6px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transition: transform 0.15s;
+}
+.pg-weather-day-item:hover {
+  transform: translateY(-2px);
+  border-color: #38bdf8;
+}
+.pg-weather-day-item.tomorrow-highlight {
+  border-color: #0284c7;
+  background: rgba(56, 189, 248, 0.08);
+}
+.pg-weather-day-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--pg-text);
+}
+.pg-weather-day-date {
+  font-size: 9px;
+  color: var(--pg-text-tertiary);
+}
+.pg-weather-day-icon {
+  font-size: 16px;
+  margin: 1px 0;
+}
+.pg-weather-day-temp {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--pg-text);
+  font-family: var(--font-mono);
+}
+.pg-weather-day-min {
+  font-size: 10.5px;
+  color: var(--pg-text-tertiary);
+  font-family: var(--font-mono);
+}
+.pg-weather-day-rain {
+  font-size: 9px;
+  color: #0284c7;
+  font-weight: 600;
+}
+
