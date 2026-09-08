@@ -23,7 +23,7 @@ interface ModelOption {
   provider?: { slug: string; name: string };
 }
 
-import { CLI_TOOLS, MITM_TOOLS, ToolCard, MitmToolCard } from "@/lib/cliTools";
+import { CLI_TOOLS, ToolCard } from "@/lib/cliTools";
 import Link from "next/link";
 
 
@@ -35,7 +35,7 @@ export default function CLIToolsPage() {
   const [combos, setCombos] = useState<ComboOption[]>([]);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [busyTool, setBusyTool] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"all" | "cli" | "mitm" | "auto" | "guide">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "cli" | "auto" | "guide">("all");
 
   // Selected tool for Settings Modal
   const [selectedTool, setSelectedTool] = useState<ToolCard | null>(null);
@@ -68,12 +68,21 @@ export default function CLIToolsPage() {
 
   const fetchStatuses = async () => {
     try {
-      const res = await fetch("/api/cli-tools/all-statuses");
-      if (res.ok) {
-        const data = await res.json();
-        setStatuses(data);
-      }
-    } catch {}
+      const [allRes, keysRes, combosRes, modelsRes] = await Promise.all([
+        fetch("/api/cli-tools/all-statuses").then((r) => r.json()).catch(() => ({})),
+        fetch("/api/api-keys").then((r) => r.json()).catch(() => ({ keys: [] })),
+        fetch("/api/combos").then((r) => r.json()).catch(() => ({ combos: [] })),
+        fetch("/api/v1/models").then((r) => r.json()).catch(() => ({ data: [] })),
+      ]);
+
+      setStatuses(allRes || {});
+      setApiKeys(keysRes?.keys || []);
+      setCombos(combosRes?.combos || []);
+      const rawModels = modelsRes?.data || [];
+      setModels(rawModels.filter((m: any) => m.provider?.slug !== "combo"));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -351,9 +360,8 @@ export default function CLIToolsPage() {
   };
 
   const tabCounts = {
-    all: CLI_TOOLS.length + MITM_TOOLS.length,
+    all: CLI_TOOLS.length,
     cli: CLI_TOOLS.length,
-    mitm: MITM_TOOLS.length,
     auto: CLI_TOOLS.filter((t) => t.category === "auto").length,
     guide: CLI_TOOLS.filter((t) => t.category === "guide" || t.category === "manual").length,
   };
@@ -365,8 +373,7 @@ export default function CLIToolsPage() {
     return [];
   }, [activeTab]);
 
-  const showCliSection = activeTab === "all" || activeTab === "cli" || activeTab === "auto" || activeTab === "guide";
-  const showMitmSection = activeTab === "all" || activeTab === "mitm";
+  const showCliSection = true;
 
   // Render a Model/Combo Selector
   const renderModelSelect = (
@@ -416,22 +423,14 @@ export default function CLIToolsPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-            CLI & MITM Tools Integration
+            CLI Tools Integration
           </h1>
           <p style={{ fontSize: 13.5, color: "var(--text-tertiary)", margin: "6px 0 0 0" }}>
-            Configure standard terminal CLI tools and MITM proxy-intercepted IDEs to route through your portal with custom models and combos.
+            Configure standard terminal CLI tools to route through your portal with custom models and combos.
           </p>
         </div>
 
         <div style={{ display: "flex", gap: 10 }}>
-          <Link
-            href="/dashboard/mitm"
-            className="btn-secondary"
-            style={{ fontSize: 12.5, padding: "7px 14px", display: "inline-flex", alignItems: "center", gap: 6, color: "#c084fc", borderColor: "rgba(168,85,247,0.3)" }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>security</span>
-            MITM Dashboard
-          </Link>
           <button
             type="button"
             onClick={fetchStatuses}
@@ -449,7 +448,6 @@ export default function CLIToolsPage() {
         {[
           { id: "all", label: "All Tools", icon: "apps", count: tabCounts.all },
           { id: "cli", label: "CLI Tools", icon: "terminal", count: tabCounts.cli },
-          { id: "mitm", label: "MITM Tools", icon: "security", count: tabCounts.mitm },
           { id: "auto", label: "1-Click Auto", icon: "bolt", count: tabCounts.auto },
           { id: "guide", label: "Setup Guides", icon: "menu_book", count: tabCounts.guide },
         ].map((tab) => (
@@ -463,9 +461,9 @@ export default function CLIToolsPage() {
               padding: "10px 18px",
               fontSize: 13,
               fontWeight: activeTab === tab.id ? 600 : 400,
-              color: activeTab === tab.id ? (tab.id === "mitm" ? "#c084fc" : "var(--primary)") : "var(--text-secondary)",
+              color: activeTab === tab.id ? "var(--primary)" : "var(--text-secondary)",
               cursor: "pointer",
-              borderBottom: activeTab === tab.id ? `2px solid ${tab.id === "mitm" ? "#a855f7" : "var(--primary)"}` : "2px solid transparent",
+              borderBottom: activeTab === tab.id ? "2px solid var(--primary)" : "2px solid transparent",
               marginBottom: -1,
               transition: "all 0.15s",
               display: "flex",
@@ -480,8 +478,8 @@ export default function CLIToolsPage() {
             {tab.label}
             <span
               style={{
-                background: activeTab === tab.id ? (tab.id === "mitm" ? "rgba(168,85,247,0.15)" : "rgba(99,102,241,0.12)") : "var(--bg-surface-elevated)",
-                color: activeTab === tab.id ? (tab.id === "mitm" ? "#c084fc" : "var(--primary)") : "var(--text-tertiary)",
+                background: activeTab === tab.id ? "rgba(99,102,241,0.12)" : "var(--bg-surface-elevated)",
+                color: activeTab === tab.id ? "var(--primary)" : "var(--text-tertiary)",
                 fontSize: 11,
                 fontWeight: 600,
                 padding: "1px 6px",
@@ -712,214 +710,7 @@ export default function CLIToolsPage() {
         </div>
       )}
 
-      {/* SECTION 2: MITM Intercepted Tools */}
-      {showMitmSection && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: activeTab === "all" ? 12 : 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, padding: "0 2px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#a855f7" }}>
-                security
-              </span>
-              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
-                MITM Intercepted Tools
-              </h2>
-              <span
-                style={{
-                  background: "rgba(168, 85, 247, 0.15)",
-                  color: "#c084fc",
-                  fontSize: 10.5,
-                  fontWeight: 700,
-                  padding: "2px 7px",
-                  borderRadius: 6,
-                }}
-              >
-                HTTPS Interception
-              </span>
-            </div>
 
-            <Link
-              href="/dashboard/mitm"
-              style={{
-                fontSize: 12.5,
-                fontWeight: 600,
-                color: "#c084fc",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-              }}
-            >
-              Open Dedicated MITM Proxy Dashboard
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
-            </Link>
-          </div>
-
-          <div
-            style={{
-              background: "rgba(168, 85, 247, 0.06)",
-              border: "1px solid rgba(168, 85, 247, 0.2)",
-              borderRadius: 10,
-              padding: "12px 16px",
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              fontSize: 12.5,
-              color: "var(--text-secondary)",
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ color: "#a855f7", fontSize: 18 }}>
-              info
-            </span>
-            <span>
-              These tools do not natively support custom base URLs and are routed by intercepting outgoing HTTPS traffic through your gateway.
-            </span>
-          </div>
-
-          {/* Grid of MITM Tools */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 18 }}>
-            {MITM_TOOLS.map((mTool) => (
-              <Link
-                key={mTool.id}
-                href="/dashboard/mitm"
-                style={{ textDecoration: "none", color: "inherit", display: "block" }}
-              >
-                <div
-                  className="card"
-                  style={{
-                    background: "var(--bg-surface)",
-                    border: "1px solid var(--border-subtle)",
-                    borderRadius: 12,
-                    padding: "20px 22px",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
-                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
-                    minHeight: 220,
-                    cursor: "pointer",
-                    transition: "transform 0.15s, border-color 0.15s, box-shadow 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = "#a855f7";
-                    e.currentTarget.style.transform = "translateY(-2px)";
-                    e.currentTarget.style.boxShadow = "0 4px 14px rgba(168, 85, 247, 0.12)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = "var(--border-subtle)";
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.03)";
-                  }}
-                >
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div
-                          style={{
-                            width: 42,
-                            height: 42,
-                            borderRadius: 10,
-                            background: "var(--bg-surface-elevated)",
-                            border: "1px solid var(--border-subtle)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            overflow: "hidden",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <img
-                            src={mTool.icon}
-                            alt={mTool.name}
-                            width={28}
-                            height={28}
-                            style={{ objectFit: "contain", borderRadius: 4 }}
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
-                              {mTool.name}
-                            </h3>
-                            <span
-                              style={{
-                                background: "rgba(168, 85, 247, 0.15)",
-                                color: "#c084fc",
-                                fontSize: 10,
-                                fontWeight: 700,
-                                padding: "1px 6px",
-                                borderRadius: 4,
-                              }}
-                            >
-                              MITM
-                            </span>
-                          </div>
-                          <p style={{ fontSize: 12, color: "var(--text-tertiary)", margin: "2px 0 0 0" }}>
-                            {mTool.subtitle}
-                          </p>
-                        </div>
-                      </div>
-
-                      <span
-                        className="material-symbols-outlined"
-                        style={{ fontSize: 20, color: "var(--text-tertiary)" }}
-                      >
-                        arrow_forward
-                      </span>
-                    </div>
-
-                    <p style={{ fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.5, margin: "14px 0" }}>
-                      {mTool.description}
-                    </p>
-
-                    <div
-                      style={{
-                        background: "var(--bg-surface-elevated)",
-                        border: "1px solid var(--border-subtle)",
-                        borderRadius: 8,
-                        padding: "8px 10px",
-                        fontSize: 11.5,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 6,
-                      }}
-                    >
-                      <span style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>Target Domain:</span>
-                      <span className="mono" style={{ color: "#c084fc", fontSize: 11 }}>
-                        {mTool.mitmDomain}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 14 }}>
-                    <div
-                      className="btn-secondary"
-                      style={{
-                        width: "100%",
-                        fontSize: 12,
-                        padding: "8px 12px",
-                        fontWeight: 600,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 6,
-                        color: "#c084fc",
-                        borderColor: "rgba(168, 85, 247, 0.3)",
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
-                        tune
-                      </span>
-                      Manage Model Mappings
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* TOOL SETTINGS MODAL */}
       {selectedTool && (

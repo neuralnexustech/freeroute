@@ -15,26 +15,6 @@ export interface ToolCard {
   guideSteps?: Array<{ step: number; title: string; desc: string }>;
 }
 
-export interface MitmToolCard {
-  id: string;
-  name: string;
-  subtitle: string;
-  color: string;
-  icon: string;
-  textIcon: string;
-  website: string;
-  mitmDomain: string;
-  secondaryDomains?: string[];
-  description: string;
-  defaultModels: Array<{ id: string; name: string; alias: string; mandatory?: boolean }>;
-}
-
-export const TOOL_HOSTS: Record<string, string[]> = {
-  antigravity: ["daily-cloudcode-pa.googleapis.com", "cloudcode-pa.googleapis.com"],
-  copilot: ["api.individual.githubcopilot.com", "api.githubcopilot.com"],
-  kiro: ["runtime.us-east-1.kiro.dev", "q.us-east-1.amazonaws.com", "codewhisperer.us-east-1.amazonaws.com"],
-};
-
 // Standard CLI & Terminal Tools (Direct config files / env variables)
 export const CLI_TOOLS: ToolCard[] = [
   {
@@ -237,82 +217,3 @@ export const CLI_TOOLS: ToolCard[] = [
   },
 ];
 
-// MITM Intercepted Tools (HTTPS Interception via local proxy / hosts)
-export const MITM_TOOLS: MitmToolCard[] = [
-  {
-    id: "antigravity",
-    name: "Antigravity",
-    subtitle: "Intercept Antigravity requests via MITM proxy",
-    color: "#4285F4",
-    icon: "/providers/antigravity.png",
-    textIcon: "AG",
-    website: "https://antigravity.google",
-    mitmDomain: "daily-cloudcode-pa.googleapis.com",
-    secondaryDomains: ["cloudcode-pa.googleapis.com"],
-    description: "Google Antigravity IDE with MITM proxy interception.",
-    defaultModels: [
-      { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)", alias: "gemini-3.8-flash-high" },
-      { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium)", alias: "gemini-3.8-flash-medium" },
-      { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)", alias: "gemini-3.8-flash-low" },
-      { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", alias: "gemini-3.7-flash-high" },
-      { id: "gemini-3.7-flash-medium", name: "Gemini 3.7 Flash (Medium)", alias: "gemini-3.7-flash-medium" },
-      { id: "gemini-3.7-flash-low", name: "Gemini 3.7 Flash (Low)", alias: "gemini-3.7-flash-low" },
-      { id: "gemini-3.6-flash-high", name: "Gemini 3.6 Flash (High)", alias: "gemini-3.6-flash-high" },
-      { id: "gemini-3.6-flash-medium", name: "Gemini 3.6 Flash (Medium)", alias: "gemini-3.6-flash-medium" },
-      { id: "gemini-3.6-flash-low", name: "Gemini 3.6 Flash (Low)", alias: "gemini-3.6-flash-low" },
-      { id: "gemini-3.5-flash-low", name: "Gemini 3.5 Flash (Medium) / Default", alias: "gemini-3.5-flash-low", mandatory: true },
-      { id: "gemini-3-flash-agent", name: "Gemini 3.5 Flash (High)", alias: "gemini-3-flash-agent" },
-      { id: "gemini-3.5-flash-extra-low", name: "Gemini 3.5 Flash (Low)", alias: "gemini-3.5-flash-extra-low" },
-      { id: "gemini-3.1-pro-low", name: "Gemini 3.1 Pro (Low)", alias: "gemini-3.1-pro-low" },
-      { id: "gemini-pro-agent", name: "Gemini 3.1 Pro (High)", alias: "gemini-pro-agent" },
-      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (Thinking)", alias: "claude-sonnet-4-6" },
-      { id: "claude-opus-4-6-thinking", name: "Claude Opus 4.6 (Thinking)", alias: "claude-opus-4-6-thinking" },
-      { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B (Medium)", alias: "gpt-oss-120b-medium" },
-      { id: "gemini-3-flash", name: "Gemini 3 Flash (Command)", alias: "gemini-3-flash" },
-    ],
-  },
-  {
-    id: "copilot",
-    name: "GitHub Copilot",
-    subtitle: "Intercept GitHub Copilot requests via MITM proxy",
-    color: "#1F6FEB",
-    icon: "/providers/copilot.png",
-    textIcon: "GH",
-    website: "https://github.com/features/copilot",
-    mitmDomain: "api.individual.githubcopilot.com",
-    secondaryDomains: ["api.githubcopilot.com"],
-    description: "GitHub Copilot IDE with MITM proxy interception.",
-    defaultModels: [
-      { id: "gpt-5-mini", name: "GPT-5 mini", alias: "gpt-5-mini" },
-      { id: "gpt-5.4-nano", name: "GPT-5.4 nano", alias: "gpt-5.4-nano" },
-      { id: "claude-haiku-4.5", name: "Claude Haiku 4.5", alias: "claude-haiku-4.5" },
-      { id: "gpt-4o", name: "GPT-4o", alias: "gpt-4o" },
-      { id: "gpt-4.1", name: "GPT-4.1", alias: "gpt-4.1" },
-    ],
-  },
-  {
-    id: "kiro",
-    name: "Kiro",
-    subtitle: "Intercept Kiro requests via MITM proxy",
-    color: "#FF6B00",
-    icon: "/providers/kiro.png",
-    textIcon: "KR",
-    website: "https://kiro.dev",
-    mitmDomain: "runtime.us-east-1.kiro.dev",
-    secondaryDomains: ["q.us-east-1.amazonaws.com", "codewhisperer.us-east-1.amazonaws.com"],
-    description: "Kiro IDE with MITM proxy interception.",
-    defaultModels: [
-      { id: "auto", name: "Auto (Kiro Agent)", alias: "auto" },
-      { id: "simple-task", name: "Qwen3 Coder Next / Sub-task", alias: "simple-task" },
-      { id: "claude-sonnet-5", name: "Claude Sonnet 5", alias: "claude-sonnet-5" },
-      { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5", alias: "claude-sonnet-4.5" },
-      { id: "claude-sonnet-4", name: "Claude Sonnet 4", alias: "claude-sonnet-4" },
-      { id: "claude-haiku-4.5", name: "Claude Haiku 4.5", alias: "claude-haiku-4.5" },
-      { id: "deepseek-3.2", name: "DeepSeek 3.2", alias: "deepseek-3.2" },
-      { id: "minimax-m2.1", name: "MiniMax M2.1", alias: "minimax-m2.1" },
-      { id: "gpt-5.6-sol", name: "GPT 5.6 Sol", alias: "gpt-5.6-sol" },
-      { id: "gpt-5.6-terra", name: "GPT 5.6 Terra", alias: "gpt-5.6-terra" },
-      { id: "gpt-5.6-luna", name: "GPT 5.6 Luna", alias: "gpt-5.6-luna" },
-    ],
-  },
-];
