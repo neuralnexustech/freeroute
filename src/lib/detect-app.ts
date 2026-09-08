@@ -137,9 +137,11 @@ export function detectApp(req: Request, apiKeyName?: string, bodySample?: any): 
   if (ua.includes("nextchat") || ua.includes("chatgpt-next-web")) return "NextChat";
 
   // 18. Dashboard Internal Test / Playground
+  const host = headers.get("host") || "";
+  const envPort = process.env.PORT || "";
   if (
     referer.includes("/dashboard") ||
-    origin.includes("localhost:20128") ||
+    (origin && ((envPort && origin.includes(envPort)) || (host && origin.includes(host)))) ||
     headers.get("x-freeroute-test") === "true" ||
     ua.includes("next.js")
   ) {

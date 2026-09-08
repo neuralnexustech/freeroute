@@ -29,7 +29,9 @@ const checkCodexInstalled = async () => {
   }
 };
 
-export async function GET() {
+import { getGatewayBaseUrl } from "@/lib/config";
+
+export async function GET(req: NextRequest) {
   try {
     const isInstalled = await checkCodexInstalled();
     let content = "";
@@ -37,7 +39,10 @@ export async function GET() {
       content = await fs.readFile(getCodexConfigPath(), "utf-8");
     } catch {}
 
-    const hasPortalConfig = content.includes("20128") || content.includes("freeroute");
+    const defaultUrl = getGatewayBaseUrl(req);
+    let defaultPort = "";
+    try { defaultPort = new URL(defaultUrl).port; } catch {}
+    const hasPortalConfig = (defaultPort && content.includes(defaultPort)) || content.includes("freeroute");
 
     return NextResponse.json({
       installed: isInstalled,
@@ -54,7 +59,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const { baseUrl, apiKey, model, subagentModel } = body;
 
-    const targetBaseUrl = (baseUrl || "http://127.0.0.1:20128").replace(/\/+$/, "");
+    const defaultBaseUrl = getGatewayBaseUrl(req);
+    const targetBaseUrl = (baseUrl || defaultBaseUrl).replace(/\/+$/, "");
     const normalizedUrl = targetBaseUrl.endsWith("/v1") ? targetBaseUrl : `${targetBaseUrl}/v1`;
     const keyToUse = apiKey || "xpl_gateway_key";
     const modelToUse = model || "meta/llama-3.2-11b-vision-instruct";

@@ -87,6 +87,15 @@ export default function CombosPage() {
   const [selectedProvider, setSelectedProvider] = useState("");
   const [selectedModelToAppend, setSelectedModelToAppend] = useState("");
   const [saving, setSaving] = useState(false);
+  const [originUrl, setOriginUrl] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setOriginUrl(window.location.origin);
+    }
+  }, []);
+
+  const activeOrigin = originUrl || (typeof window !== "undefined" ? window.location.origin : "");
 
   // Test Runner Modal State
   const [testingCombo, setTestingCombo] = useState<Combo | null>(null);
@@ -642,7 +651,7 @@ export default function CombosPage() {
           }}
         >
           {`# Test via cURL:
-curl http://localhost:20128/v1/chat/completions \\
+curl ${activeOrigin}/v1/chat/completions \\
   -H "Authorization: Bearer <YOUR_FREEROUTE_API_KEY>" \\
   -H "Content-Type: application/json" \\
   -d '{

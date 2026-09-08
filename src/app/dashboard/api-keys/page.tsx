@@ -18,10 +18,18 @@ export default function ApiKeysPage() {
   const [expire, setExpire] = useState("Never");
   const [newSecret, setNewSecret] = useState("");
   const [showRevoked, setShowRevoked] = useState(false);
+  const [originUrl, setOriginUrl] = useState("");
   const toast = useToast();
 
   const load = () => fetch("/api/api-keys").then((r) => r.json()).then((d) => setRows(d.keys ?? [])).catch(() => {});
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    if (typeof window !== "undefined") {
+      setOriginUrl(window.location.origin);
+    }
+  }, []);
+
+  const activeOrigin = originUrl || (typeof window !== "undefined" ? window.location.origin : "");
 
   const active = rows.filter((k) => !k.revoked);
   const shown = showRevoked ? rows : active;
@@ -156,36 +164,36 @@ export default function ApiKeysPage() {
         <div style={{ marginBottom: 14 }}>
           <div className="card-label" style={{ marginBottom: 4 }}>Base URL</div>
           <div className="codeblock-container">
-            <code>http://localhost:20128/v1</code>
-            <button className="btn sm code-copy-btn" onClick={() => { navigator.clipboard.writeText("http://localhost:20128/v1"); toast.show("Copied to clipboard"); }}>Copy</button>
+            <code>{`${activeOrigin}/v1`}</code>
+            <button className="btn sm code-copy-btn" onClick={() => { navigator.clipboard.writeText(`${activeOrigin}/v1`); toast.show("Copied to clipboard"); }}>Copy</button>
           </div>
         </div>
         <div style={{ marginBottom: 14 }}>
           <div className="card-label" style={{ marginBottom: 4 }}>List models</div>
           <div className="codeblock-container">
-            <code>curl http://localhost:20128/v1/models -H &quot;Authorization: Bearer $FREEROUTE_API_KEY&quot;</code>
-            <button className="btn sm code-copy-btn" onClick={() => { navigator.clipboard.writeText('curl http://localhost:20128/v1/models -H "Authorization: Bearer $FREEROUTE_API_KEY"'); toast.show("Copied to clipboard"); }}>Copy</button>
+            <code>{`curl ${activeOrigin}/v1/models -H "Authorization: Bearer $FREEROUTE_API_KEY"`}</code>
+            <button className="btn sm code-copy-btn" onClick={() => { navigator.clipboard.writeText(`curl ${activeOrigin}/v1/models -H "Authorization: Bearer $FREEROUTE_API_KEY"`); toast.show("Copied to clipboard"); }}>Copy</button>
           </div>
         </div>
         <div style={{ marginBottom: 14 }}>
           <div className="card-label" style={{ marginBottom: 4 }}>Chat completion</div>
           <div className="codeblock-container">
-            <code>{'curl http://localhost:20128/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer $FREEROUTE_API_KEY" -d \'{"model": "deepseek-ai/deepseek-v4-flash-0731", "messages": [{"role": "user", "content": "Hello"}]}\''}</code>
-            <button className="btn sm code-copy-btn" onClick={() => { navigator.clipboard.writeText('curl http://localhost:20128/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer $FREEROUTE_API_KEY" -d \'{"model": "deepseek-ai/deepseek-v4-flash-0731", "messages": [{"role": "user", "content": "Hello"}]}\''); toast.show("Copied to clipboard"); }}>Copy</button>
+            <code>{`curl ${activeOrigin}/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer $FREEROUTE_API_KEY" -d '{"model": "deepseek-ai/deepseek-v4-flash-0731", "messages": [{"role": "user", "content": "Hello"}]}'`}</code>
+            <button className="btn sm code-copy-btn" onClick={() => { navigator.clipboard.writeText(`curl ${activeOrigin}/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer $FREEROUTE_API_KEY" -d '{"model": "deepseek-ai/deepseek-v4-flash-0731", "messages": [{"role": "user", "content": "Hello"}]}'`); toast.show("Copied to clipboard"); }}>Copy</button>
           </div>
         </div>
         <div style={{ marginBottom: 14 }}>
           <div className="card-label" style={{ marginBottom: 4 }}>Python (openai SDK)</div>
           <div className="codeblock-container">
-            <code>client = OpenAI(base_url=&quot;http://localhost:20128/v1&quot;, api_key=os.environ[&quot;FREEROUTE_API_KEY&quot;])</code>
-            <button className="btn sm code-copy-btn" onClick={() => { navigator.clipboard.writeText('client = OpenAI(base_url="http://localhost:20128/v1", api_key=os.environ["FREEROUTE_API_KEY"])'); toast.show("Copied to clipboard"); }}>Copy</button>
+            <code>{`client = OpenAI(base_url="${activeOrigin}/v1", api_key=os.environ["FREEROUTE_API_KEY"])`}</code>
+            <button className="btn sm code-copy-btn" onClick={() => { navigator.clipboard.writeText(`client = OpenAI(base_url="${activeOrigin}/v1", api_key=os.environ["FREEROUTE_API_KEY"])`); toast.show("Copied to clipboard"); }}>Copy</button>
           </div>
         </div>
         <div>
           <div className="card-label" style={{ marginBottom: 4 }}>Node.js (openai SDK)</div>
           <div className="codeblock-container">
-            <code>new OpenAI(&#123; baseURL: &quot;http://localhost:20128/v1&quot;, apiKey: process.env.FREEROUTE_API_KEY &#125;)</code>
-            <button className="btn sm code-copy-btn" onClick={() => { navigator.clipboard.writeText('new OpenAI({ baseURL: "http://localhost:20128/v1", apiKey: process.env.FREEROUTE_API_KEY })'); toast.show("Copied to clipboard"); }}>Copy</button>
+            <code>{`new OpenAI({ baseURL: "${activeOrigin}/v1", apiKey: process.env.FREEROUTE_API_KEY })`}</code>
+            <button className="btn sm code-copy-btn" onClick={() => { navigator.clipboard.writeText(`new OpenAI({ baseURL: "${activeOrigin}/v1", apiKey: process.env.FREEROUTE_API_KEY })`); toast.show("Copied to clipboard"); }}>Copy</button>
           </div>
         </div>
       </div>

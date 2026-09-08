@@ -295,7 +295,7 @@ export default function CLIToolsPage() {
   // Guide / Manual tool settings
   const [guideModel, setGuideModel] = useState("");
 
-  const gatewayBaseUrl = typeof window !== "undefined" ? `${window.location.origin}/v1` : "http://127.0.0.1:20128/v1";
+  const gatewayBaseUrl = typeof window !== "undefined" ? `${window.location.origin}/v1` : "/v1";
 
   const fetchStatuses = async () => {
     try {

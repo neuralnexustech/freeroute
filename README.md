@@ -21,7 +21,7 @@ Pool generous free-tier quotas across Groq, Gemini, OpenRouter, Experiential Lab
 
 ## 🌟 Overview
 
-**Freeroute** is a self-hosted AI Gateway and LLMOps control plane designed for developers, engineering teams, and AI power users. It acts as a single, unified endpoint (`http://localhost:20128/v1`) that connects your local applications and developer tools to any AI model provider with automatic failovers, intelligent load balancing, cost tracking, and 1-click CLI tool integrations.
+**Freeroute** is a self-hosted AI Gateway and LLMOps control plane designed for developers, engineering teams, and AI power users. It acts as a single, unified endpoint (`http://localhost:20129/v1`) that connects your local applications and developer tools to any AI model provider with automatic failovers, intelligent load balancing, cost tracking, and 1-click CLI tool integrations.
 
 Your credentials, models, combos, and telemetry are safely stored in your user directory (`~/.freeroute/freeroute.db`), ensuring your data persists seamlessly across application updates, git pulls, and rebuilds.
 
@@ -108,7 +108,7 @@ Inspect active SQLite storage (`~/.freeroute/freeroute.db`), monitor entity coun
                                        v
                      +-----------------------------------+
                      |       FREEROUTE AI GATEWAY        |
-                     |        (Port :20128)             |
+                     |        (Port :20129)             |
                      +-----------------+-----------------+
                                        |
             +--------------------------+--------------------------+
@@ -174,7 +174,7 @@ Inspect active SQLite storage (`~/.freeroute/freeroute.db`), monitor entity coun
    npm run dev
    ```
 
-   Open [http://localhost:20128](http://localhost:20128) in your browser to access the Freeroute Dashboard.
+   Open [http://localhost:20129](http://localhost:20129) in your browser to access the Freeroute Dashboard.
 
 ---
 
@@ -201,7 +201,7 @@ Inspect active SQLite storage (`~/.freeroute/freeroute.db`), monitor entity coun
 
 #### Using cURL:
 ```bash
-curl http://localhost:20128/v1/chat/completions \
+curl http://localhost:20129/v1/chat/completions \
   -H "Authorization: Bearer xpl_your_api_key_here" \
   -H "Content-Type: application/json" \
   -d '{
@@ -218,7 +218,7 @@ curl http://localhost:20128/v1/chat/completions \
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:20128/v1",
+    base_url="http://localhost:20129/v1",
     api_key="xpl_your_api_key_here"
 )
 
@@ -237,7 +237,7 @@ print(response.choices[0].message.content)
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  baseURL: "http://localhost:20128/v1",
+  baseURL: "http://localhost:20129/v1",
   apiKey: "xpl_your_api_key_here",
 });
 

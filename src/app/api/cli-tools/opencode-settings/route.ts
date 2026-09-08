@@ -59,13 +59,16 @@ export async function GET() {
   }
 }
 
+import { getGatewayBaseUrl } from "@/lib/config";
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const { baseUrl, apiKey, model, models, activeModel, subagentModel } = body;
 
     const modelsArray = Array.isArray(models) && models.length > 0 ? models : model ? [model] : ["meta/llama-3.2-11b-vision-instruct"];
-    const targetBaseUrl = (baseUrl || "http://127.0.0.1:20128").replace(/\/+$/, "");
+    const defaultBaseUrl = getGatewayBaseUrl(req);
+    const targetBaseUrl = (baseUrl || defaultBaseUrl).replace(/\/+$/, "");
     const normalizedUrl = targetBaseUrl.endsWith("/v1") ? targetBaseUrl : `${targetBaseUrl}/v1`;
     const keyToUse = apiKey || "xpl_gateway_key";
 

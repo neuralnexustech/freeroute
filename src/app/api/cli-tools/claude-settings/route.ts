@@ -42,12 +42,17 @@ const readSettings = async () => {
 };
 
 // GET - Check Claude CLI status and current settings
-export async function GET() {
+import { getGatewayBaseUrl } from "@/lib/config";
+
+export async function GET(req: NextRequest) {
   try {
     const isInstalled = await checkClaudeInstalled();
     const settings = await readSettings();
     const currentUrl = settings?.env?.ANTHROPIC_BASE_URL || "";
-    const hasPortalConfig = !!(currentUrl && (currentUrl.includes("20128") || currentUrl.includes("localhost") || currentUrl.includes("127.0.0.1")));
+    const defaultUrl = getGatewayBaseUrl(req);
+    let defaultPort = "";
+    try { defaultPort = new URL(defaultUrl).port; } catch {}
+    const hasPortalConfig = !!(currentUrl && ((defaultPort && currentUrl.includes(defaultPort)) || currentUrl.includes("freeroute") || currentUrl.includes("localhost") || currentUrl.includes("127.0.0.1")));
 
     return NextResponse.json({
       installed: isInstalled,
@@ -68,7 +73,8 @@ export async function POST(req: NextRequest) {
     const { baseUrl, apiKey, defaultModel, model, opusModel, sonnetModel, haikuModel, maxContextTokens } = body;
 
     const primaryModel = defaultModel || model;
-    const targetBaseUrl = (baseUrl || "http://127.0.0.1:20128").replace(/\/+$/, "");
+    const defaultBaseUrl = getGatewayBaseUrl(req);
+    const targetBaseUrl = (baseUrl || defaultBaseUrl).replace(/\/+$/, "");
     const normalizedUrl = targetBaseUrl.endsWith("/v1") ? targetBaseUrl : `${targetBaseUrl}/v1`;
     const tokenToUse = apiKey || "xpl_gateway_key";
 

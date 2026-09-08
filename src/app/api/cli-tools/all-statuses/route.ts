@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { GET as claudeGet } from "../claude-settings/route";
 import { GET as opencodeGet } from "../opencode-settings/route";
 import { GET as codexGet } from "../codex-settings/route";
@@ -6,11 +6,11 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const [claudeRes, opencodeRes, codexRes] = await Promise.all([
-    claudeGet().then((r) => r.json()).catch(() => ({ installed: false })),
+    claudeGet(req).then((r) => r.json()).catch(() => ({ installed: false })),
     opencodeGet().then((r) => r.json()).catch(() => ({ installed: false })),
-    codexGet().then((r) => r.json()).catch(() => ({ installed: false })),
+    codexGet(req).then((r) => r.json()).catch(() => ({ installed: false })),
   ]);
 
   // Check Cursor

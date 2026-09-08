@@ -80,7 +80,7 @@ export const RAW_PROVIDERS_DATA = [
     category: "apikey" as const,
     icon: "⏣",
     color: "#8B5CF6",
-    baseUrl: "http://localhost:20128/v1",
+    baseUrl: "https://platform.experientiallabs.ai/v1",
     chatPath: "/chat/completions",
     modelsPath: "/models",
     website: "https://platform.experientiallabs.ai/",
