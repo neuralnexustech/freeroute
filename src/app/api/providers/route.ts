@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { PROVIDERS, getProvider } from "@/lib/providers";
 
-const ALLOWED_SLUGS = ["groq", "experiential", "google", "nvidia", "ollama", "openrouter", "kiosapi"];
+const ALLOWED_SLUGS = ["groq", "experiential", "google", "nvidia", "ollama", "openrouter", "kiosapi", "orcarouter", "apinex"];
 
 async function ensureProviders() {
-  // Remove any providers that are not in the allowed 7 providers list
+  // Remove any providers that are not in the allowed providers list
   await prisma.provider.deleteMany({
     where: {
       slug: {

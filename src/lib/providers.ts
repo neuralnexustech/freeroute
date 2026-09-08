@@ -1,4 +1,4 @@
-// Curated Provider Registry: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, and KiosAPI
+// Curated Provider Registry: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, and APInex
 
 export interface ProviderDef {
   slug: string;
@@ -196,7 +196,7 @@ export const RAW_PROVIDERS_DATA = [
     chatPath: "/chat/completions",
     modelsPath: "/models",
     apiKeyUrl: "https://kiosapi.com",
-    website: "https://kiosapi.com/v1/",
+    website: "https://kiosapi.com/",
     docUrl: "https://kiosapi.mintlify.app/",
     authType: "bearer" as const,
     serviceKinds: ["llm"],
@@ -209,6 +209,53 @@ export const RAW_PROVIDERS_DATA = [
       { id: "deepseek-r1", name: "DeepSeek R1" },
       { id: "deepseek-v3", name: "DeepSeek V3" },
       { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+    ],
+  },
+  {
+    slug: "orcarouter",
+    name: "OrcaRouter",
+    category: "apikey" as const,
+    icon: "waves",
+    color: "#0EA5E9",
+    baseUrl: "https://api.orcarouter.ai/v1",
+    chatPath: "/chat/completions",
+    modelsPath: "/models",
+    apiKeyUrl: "https://www.orcarouter.ai",
+    website: "https://www.orcarouter.ai/",
+    docUrl: "https://www.orcarouter.ai/docs",
+    authType: "bearer" as const,
+    serviceKinds: ["llm"],
+    thinkingConfig: null,
+    defaultModels: [
+      { id: "orcarouter/auto", name: "OrcaRouter Auto" },
+      { id: "openai/gpt-4o", name: "GPT-4o" },
+      { id: "openai/gpt-4o-mini", name: "GPT-4o mini" },
+      { id: "anthropic/claude-3.7-sonnet", name: "Claude 3.7 Sonnet" },
+      { id: "deepseek/deepseek-r1", name: "DeepSeek R1" },
+      { id: "deepseek/deepseek-v3", name: "DeepSeek V3" },
+    ],
+  },
+  {
+    slug: "apinex",
+    name: "APInex",
+    category: "apikey" as const,
+    icon: "hub",
+    color: "#10B981",
+    baseUrl: "https://api.apinex.bond/v1",
+    chatPath: "/chat/completions",
+    modelsPath: "/models",
+    apiKeyUrl: "https://apinex.bond",
+    website: "https://apinex.bond/",
+    docUrl: "https://apinex.bond/docs",
+    authType: "bearer" as const,
+    serviceKinds: ["llm"],
+    thinkingConfig: null,
+    defaultModels: [
+      { id: "gpt-4o", name: "GPT-4o" },
+      { id: "claude-3-7-sonnet", name: "Claude 3.7 Sonnet" },
+      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+      { id: "deepseek-r1", name: "DeepSeek R1" },
+      { id: "deepseek-v3", name: "DeepSeek V3" },
     ],
   },
 ];
