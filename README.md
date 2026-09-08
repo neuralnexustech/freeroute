@@ -6,7 +6,7 @@
 
 **Get Up to 50M+ or Virtually Unlimited Free AI Tokens Daily · Universal AI Gateway & LLMOps Control Plane**
 
-Pool generous free-tier quotas across Groq, Gemini, OpenRouter, Experiential Labs & KiosAPI with infinite failover combos, live model catalogs, 14+ CLI developer tools auto-configurators, and zero-config local storage.
+Pool generous free-tier quotas across Groq, Gemini, OpenRouter, Experiential Labs, KiosAPI, OrcaRouter & APInex with infinite failover combos, live model catalogs, 14+ CLI developer tools auto-configurators, and zero-config local storage.
 
 [![Free Tokens](https://img.shields.io/badge/Free%20Tokens-Up%20to%2050M%2B%20%2F%20Virtually%20Unlimited-brightgreen.svg)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -42,7 +42,7 @@ Visual priority tiers: if Tier 1 times out or errors (e.g. rate limit, 5xx), Fre
 ![Combo Modal](assets/screenshots/combo-modal.png)
 
 ### 4. Curated Providers Catalog
-Connect industry-standard AI providers with a single API key: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, and KiosAPI.
+Connect industry-standard AI providers with a single API key: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, and APInex.
 ![Providers Catalog](assets/screenshots/providers.png)
 
 ### 5. 14+ CLI & Developer Tools Hub
@@ -90,6 +90,8 @@ Inspect active SQLite storage (`~/.freeroute/freeroute.db`), monitor entity coun
   - [Ollama Cloud](https://ollama.ai)
   - [OpenRouter](https://openrouter.ai)
   - [KiosAPI](https://kiosapi.com/v1/) ([Docs](https://kiosapi.mintlify.app/))
+  - [OrcaRouter](https://www.orcarouter.ai/) (`https://api.orcarouter.ai/v1`)
+  - [APInex](https://apinex.bond/) (`https://api.apinex.bond/v1`)
 - **🔒 Persistent User Storage**: Stored outside project source code in `~/.freeroute/freeroute.db` (`C:\Users\<user>\.freeroute\freeroute.db` on Windows).
 - **💾 1-Click Backup & Restore**: Export your full database state (keys, providers, combos, settings) to a portable JSON backup and restore it anywhere.
 - **📊 Real-Time Activity Telemetry**: Monitor latency, TTFT, token throughput, live costs, and request status in the **Activitys** dashboard.
