@@ -420,6 +420,72 @@ function SmartTableView({
 }
 
 // ── Markdown & Table & Image Renderer ───────────────────────────────────────
+function sanitizeTableMarkdown(rawContent: string): string {
+  let text = rawContent;
+
+  // 1. Clean up common LLM apologies about Excel files
+  text = text.replace(
+    /(?:It's not possible for me to provide an actual Excel file[^\n.:]*[.:]?|I cannot provide an actual Excel file[^\n.:]*[.:]?|As an AI, I can't generate an Excel file[^\n.:]*[.:]?)(?:\s*(?:however|but|here's|here is)[^\n:]*[:])?/gi,
+    "Here is the requested data in the built-in interactive Excel spreadsheet viewer:"
+  );
+
+  // 2. Unwrap code blocks (``` or ```markdown or ```text) that contain tables
+  text = text.replace(
+    /```(?:markdown|text|table)?\r?\n([\s\S]+?)\r?\n```/g,
+    (match, inner) => {
+      const lines = inner.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+      const pipeLines = lines.filter((l: string) => l.includes("|"));
+      if (pipeLines.length >= 2 && lines.some((l: string) => /[-]{3,}/.test(l))) {
+        return "\n" + inner + "\n";
+      }
+      return match;
+    }
+  );
+
+  // 3. Normalize tables where lines have pipes but might lack outer boundary pipes or have dashed separators like ---|---|---
+  const lines = text.split(/\r?\n/);
+  const outLines: string[] = [];
+  let tableBuffer: string[] = [];
+
+  const flushBuffer = () => {
+    if (
+      tableBuffer.length >= 2 &&
+      tableBuffer.some((l) => /^\|?[\s\-:|]+\|?$/.test(l) && l.includes("-"))
+    ) {
+      const normalized = tableBuffer.map((l) => {
+        let s = l.trim();
+        if (!s.startsWith("|")) s = "| " + s;
+        if (!s.endsWith("|")) s = s + " |";
+        if (/^\|[\s\-:|]+\|$/.test(s) && s.includes("-")) {
+          const cols = s.slice(1, -1).split("|");
+          s = "| " + cols.map(() => ":---").join(" | ") + " |";
+        }
+        return s;
+      });
+      outLines.push(...normalized);
+    } else {
+      outLines.push(...tableBuffer);
+    }
+    tableBuffer = [];
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    const hasPipe = trimmed.includes("|");
+
+    if (hasPipe) {
+      tableBuffer.push(trimmed);
+    } else {
+      flushBuffer();
+      outLines.push(line);
+    }
+  }
+  flushBuffer();
+
+  return outLines.join("\n");
+}
+
 function RenderMessage({
   content,
   userPrompt,
@@ -432,6 +498,9 @@ function RenderMessage({
     userPrompt || ""
   );
 
+  // Sanitize content to unwrap code-blocked tables and ensure consistent pipe boundaries
+  const sanitizedContent = sanitizeTableMarkdown(content);
+
   // Parse markdown tables and text blocks
   const tableRegex = /((?:^[ \t]*\|[^\n]+\|[ \t]*(?:\r?\n|$)){2,})/gm;
   const segments: Array<
@@ -442,11 +511,11 @@ function RenderMessage({
   let lastIdx = 0;
   let match;
 
-  while ((match = tableRegex.exec(content)) !== null) {
+  while ((match = tableRegex.exec(sanitizedContent)) !== null) {
     if (match.index > lastIdx) {
       segments.push({
         type: "text",
-        content: content.slice(lastIdx, match.index),
+        content: sanitizedContent.slice(lastIdx, match.index),
       });
     }
 
@@ -472,8 +541,8 @@ function RenderMessage({
     lastIdx = match.index + match[0].length;
   }
 
-  if (lastIdx < content.length) {
-    segments.push({ type: "text", content: content.slice(lastIdx) });
+  if (lastIdx < sanitizedContent.length) {
+    segments.push({ type: "text", content: sanitizedContent.slice(lastIdx) });
   }
 
   const renderTextPiece = (txt: string) => {

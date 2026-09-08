@@ -527,6 +527,20 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // 9. Built-in Excel Spreadsheet & Table Grounding
+  const userRequestsExcelOrTable = /(?:excel|\.xlsx|spreadsheet|csv|\bsheet\b|table)/i.test(lastUserMsg);
+  if (userRequestsExcelOrTable && !weatherResult) {
+    contextAdditions.push(
+      `[System Context - Built-in Native Excel Spreadsheet & Table Engine]\n` +
+      `The user is requesting data in an Excel spreadsheet, CSV, or table format. The freeroute Playground frontend features an automatic built-in native Excel Spreadsheet Engine with live interactive grid columns (A-Z), row numbers (1-N), full-text search, CSV download, and copy-for-Excel.\n\n` +
+      `CRITICAL INSTRUCTIONS FOR ASSISTANT:\n` +
+      `- NEVER say "It's not possible for me to provide an actual Excel file" or apologize about file generation.\n` +
+      `- Provide the requested data directly as a standard GitHub-Flavored Markdown table (with pipes '| Col 1 | Col 2 |' and divider '| :--- | :--- |').\n` +
+      `- Do NOT enclose the markdown table in triple-backtick code blocks (\`\`\`); write the markdown table directly in your text so the playground spreadsheet engine can instantly render it as an interactive Excel sheet.\n` +
+      `- Provide complete, high-quality rows and columns matching the user's request.`
+    );
+  }
+
   // Inject gathered tool contexts into system prompt or first user message
   const preparedMessages = [...messages];
   if (contextAdditions.length > 0) {
@@ -607,6 +621,26 @@ export async function POST(req: NextRequest) {
           `• **Tomorrow (${weatherResult.tomorrow.dayName}, ${weatherResult.tomorrow.date})**: ${weatherResult.tomorrow.icon} **${weatherResult.tomorrow.condition}** with a high of **${weatherResult.tomorrow.maxC}°C** (${weatherResult.tomorrow.maxF}°F) and an overnight low of **${weatherResult.tomorrow.minC}°C** (${weatherResult.tomorrow.minF}°F). The chance of precipitation is **${weatherResult.tomorrow.rainProb}%**.\n\n` +
           `*Interactive 7-day outlook and °C / °F temperature toggling are available in the weather card above.*`;
       }
+    }
+
+    // Clean up any canned model apologies regarding Excel files and unwrap any code-blocked tables
+    if (userRequestsExcelOrTable) {
+      assistantText = assistantText
+        .replace(
+          /(?:It's not possible for me to provide an actual Excel file[^\n.:]*[.:]?|I cannot provide an actual Excel file[^\n.:]*[.:]?|As an AI, I can't generate an Excel file[^\n.:]*[.:]?)(?:\s*(?:however|but|here's|here is)[^\n:]*[:])?/gi,
+          "Here is the requested data in the built-in interactive Excel spreadsheet viewer:"
+        );
+
+      // Unwrap code blocks that contain markdown tables
+      assistantText = assistantText.replace(
+        /```(?:markdown|text|table)?\r?\n([\s\S]+?)\r?\n```/g,
+        (match: string, inner: string) => {
+          if (inner.includes("|") && /[-]{3,}/.test(inner)) {
+            return "\n" + inner + "\n";
+          }
+          return match;
+        }
+      );
     }
 
     // If image generation tool produced an image, append it nicely
