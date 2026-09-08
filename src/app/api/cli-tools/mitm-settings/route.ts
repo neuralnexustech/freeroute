@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import { execSync } from "child_process";
 import { getGatewayBaseUrl } from "@/lib/config";
+import {
+  getMitmStatus,
+  startServer,
+  stopServer,
+  enableToolDNS,
+  disableToolDNS,
+  trustCert,
+  initDbHooks,
+} from "@/mitm/manager";
+import { isAdmin as checkIsAdmin } from "@/mitm/winElevated";
 
 const DATA_FILE = path.join(process.cwd(), "data", "mitm-settings.json");
 
@@ -50,18 +59,6 @@ const DEFAULT_MAPPINGS: MitmSettingsData = {
   selectedApiKey: "sk_freeroute (default)",
 };
 
-function checkIsAdmin(): boolean {
-  if (process.platform === "win32") {
-    try {
-      execSync("net session >nul 2>&1", { windowsHide: true });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  return typeof (process as any).getuid === "function" && (process as any).getuid() === 0;
-}
-
 async function readSettings(): Promise<MitmSettingsData> {
   try {
     const raw = await fs.readFile(DATA_FILE, "utf-8");
@@ -80,18 +77,61 @@ async function writeSettings(data: MitmSettingsData): Promise<void> {
   }
 }
 
+// Hook up manager persistence
+initDbHooks(
+  async () => {
+    const s = await readSettings();
+    return {
+      mitmEnabled: s.running,
+      mitmRouterBaseUrl: s.mitmRouterBaseUrl,
+      dnsToolEnabled: s.dnsStatus,
+    };
+  },
+  async (updates: any) => {
+    const s = await readSettings();
+    if (updates.mitmEnabled !== undefined) s.running = updates.mitmEnabled;
+    if (updates.mitmRouterBaseUrl !== undefined) s.mitmRouterBaseUrl = updates.mitmRouterBaseUrl;
+    if (updates.dnsToolEnabled !== undefined) s.dnsStatus = updates.dnsToolEnabled;
+    await writeSettings(s);
+  }
+);
+
 export async function GET(req: NextRequest) {
   const data = await readSettings();
   const gatewayUrl = data.mitmRouterBaseUrl || getGatewayBaseUrl(req);
   const isAdmin = checkIsAdmin();
   const isWin = process.platform === "win32";
 
-  return NextResponse.json({
-    mappings: data.mappings || DEFAULT_MAPPINGS.mappings,
+  let realStatus = {
     running: data.running ?? false,
+    pid: null as number | null,
     certExists: data.certExists ?? true,
     certTrusted: data.certTrusted ?? true,
     dnsStatus: data.dnsStatus || { antigravity: false, copilot: false, kiro: false },
+  };
+
+  try {
+    const live = await getMitmStatus();
+    if (live) {
+      realStatus = {
+        running: live.running,
+        pid: live.pid,
+        certExists: live.certExists,
+        certTrusted: live.certTrusted,
+        dnsStatus: (live.dnsStatus as Record<string, boolean>) || realStatus.dnsStatus,
+      };
+    }
+  } catch (e: any) {
+    console.warn("Could not query live MITM status:", e.message);
+  }
+
+  return NextResponse.json({
+    mappings: data.mappings || DEFAULT_MAPPINGS.mappings,
+    running: realStatus.running,
+    pid: realStatus.pid,
+    certExists: realStatus.certExists,
+    certTrusted: realStatus.certTrusted,
+    dnsStatus: realStatus.dnsStatus,
     mitmRouterBaseUrl: gatewayUrl,
     selectedApiKey: data.selectedApiKey || "sk_freeroute (default)",
     isAdmin,
@@ -106,36 +146,73 @@ export async function POST(req: NextRequest) {
 
     // 1. Toggle Server
     if (body.action === "start") {
-      current.running = true;
       if (body.mitmRouterBaseUrl) current.mitmRouterBaseUrl = body.mitmRouterBaseUrl;
       if (body.selectedApiKey) current.selectedApiKey = body.selectedApiKey;
       await writeSettings(current);
-      return NextResponse.json({ success: true, running: true, data: current });
+
+      const apiKey = body.selectedApiKey || current.selectedApiKey || "sk_freeroute";
+      const result = await startServer(apiKey, body.sudoPassword, !!body.forceKillPort443);
+      current.running = result.running;
+      await writeSettings(current);
+
+      const live = await getMitmStatus();
+      return NextResponse.json({
+        success: true,
+        running: result.running,
+        pid: result.pid,
+        certExists: live.certExists,
+        certTrusted: live.certTrusted,
+        dnsStatus: live.dnsStatus,
+        data: current,
+      });
     }
 
     if (body.action === "stop") {
+      await stopServer(body.sudoPassword);
       current.running = false;
-      // When stopping server, also turn off active DNS
       current.dnsStatus = { antigravity: false, copilot: false, kiro: false };
       await writeSettings(current);
-      return NextResponse.json({ success: true, running: false, data: current });
+
+      return NextResponse.json({
+        success: true,
+        running: false,
+        data: current,
+      });
     }
 
     // 2. Trust Cert
     if (body.action === "trust-cert") {
-      current.certTrusted = true;
+      await trustCert(body.sudoPassword);
+      const live = await getMitmStatus();
+      current.certTrusted = live.certTrusted;
       await writeSettings(current);
-      return NextResponse.json({ success: true, certTrusted: true });
+
+      return NextResponse.json({
+        success: true,
+        certTrusted: live.certTrusted,
+      });
     }
 
     // 3. Toggle Tool DNS
     if (body.action === "toggle-dns") {
       const toolId = body.tool;
       if (!toolId) return NextResponse.json({ error: "Missing tool ID" }, { status: 400 });
-      if (!current.dnsStatus) current.dnsStatus = {};
-      current.dnsStatus[toolId] = !current.dnsStatus[toolId];
+
+      const currentDns = current.dnsStatus?.[toolId] || false;
+      if (currentDns) {
+        await disableToolDNS(toolId, body.sudoPassword);
+      } else {
+        await enableToolDNS(toolId, body.sudoPassword);
+      }
+
+      const live = await getMitmStatus();
+      current.dnsStatus = (live.dnsStatus as Record<string, boolean>) || {};
       await writeSettings(current);
-      return NextResponse.json({ success: true, dnsStatus: current.dnsStatus });
+
+      return NextResponse.json({
+        success: true,
+        dnsStatus: current.dnsStatus,
+      });
     }
 
     // 4. Save Config
@@ -161,6 +238,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err: any) {
+    if (err.code === "PORT_443_BUSY") {
+      return NextResponse.json(
+        { error: err.message, code: "PORT_443_BUSY", portOwner: err.portOwner },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({ error: err.message || "Failed to process request" }, { status: 500 });
   }
 }

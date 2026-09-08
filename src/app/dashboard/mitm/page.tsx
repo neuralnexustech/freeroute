@@ -114,13 +114,38 @@ export default function MitmDashboardPage() {
       const data = await res.json();
       if (res.ok) {
         setServerRunning(data.running);
-        if (data.data?.dnsStatus) setDnsStatus(data.data.dnsStatus);
+        if (data.dnsStatus) setDnsStatus(data.dnsStatus);
+        else if (data.data?.dnsStatus) setDnsStatus(data.data.dnsStatus);
+        if (data.certTrusted !== undefined) setCertTrusted(data.certTrusted);
+        if (data.certExists !== undefined) setCertExists(data.certExists);
         toast.show(data.running ? "MITM Server started successfully" : "MITM Server stopped");
       } else {
         toast.show(data.error || "Failed to toggle server");
       }
     } catch (e: any) {
       toast.show(e.message || "Failed to toggle server");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleTrustCert = async () => {
+    setActionLoading(true);
+    try {
+      const res = await fetch("/api/cli-tools/mitm-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "trust-cert" }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCertTrusted(true);
+        toast.show("Root CA Certificate trusted successfully");
+      } else {
+        toast.show(data.error || "Failed to trust certificate");
+      }
+    } catch (e: any) {
+      toast.show(e.message || "Failed to trust certificate");
     } finally {
       setActionLoading(false);
     }
@@ -442,8 +467,32 @@ export default function MitmDashboardPage() {
           )}
         </div>
 
-        {/* Start / Stop Server Button */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
+        {/* Action Buttons: Trust Cert + Start / Stop Server */}
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
+          {certExists && !certTrusted && (
+            <button
+              type="button"
+              onClick={handleTrustCert}
+              disabled={actionLoading}
+              className="btn-secondary"
+              style={{
+                fontSize: 12,
+                padding: "8px 16px",
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                borderRadius: 8,
+                borderColor: "rgba(245, 158, 11, 0.4)",
+                color: "#d97706",
+                background: "rgba(245, 158, 11, 0.08)",
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>verified_user</span>
+              Trust Cert
+            </button>
+          )}
+
           {serverRunning ? (
             <button
               type="button"
