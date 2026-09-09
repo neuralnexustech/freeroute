@@ -1162,45 +1162,47 @@ export default function PlaygroundPage() {
   }, []);
 
   // ── 2. Real Persistent Chat Rooms & Messages ──────────────────────────────
-  const [rooms, setRooms] = useState<Room[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("fr_pg_rooms");
-        if (saved) return JSON.parse(saved);
-      } catch {}
-    }
-    return [{ id: "r-init", title: "New chat", updatedAt: Date.now() }];
-  });
+  // Use plain defaults (no localStorage reads) in useState to avoid SSR/CSR hydration mismatch.
+  // After mount, we load persisted state from localStorage in useEffect.
+  const [rooms, setRooms] = useState<Room[]>([{ id: "r-init", title: "New chat", updatedAt: Date.now() }]);
+  const [activeRoom, setActiveRoom] = useState<string>("r-init");
+  const [messages, setMessages] = useState<Record<string, Message[]>>({ "r-init": [] });
+  const [_storageLoaded, setStorageLoaded] = useState(false);
 
-  const [activeRoom, setActiveRoom] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("fr_pg_active_room");
-        if (saved) return saved;
-      } catch {}
-    }
-    return "r-init";
-  });
+  // Hydrate from localStorage after mount (client only) - this avoids hydration mismatch
+  useEffect(() => {
+    try {
+      const savedRooms = localStorage.getItem("fr_pg_rooms");
+      const savedActiveRoom = localStorage.getItem("fr_pg_active_room");
+      const savedMessages = localStorage.getItem("fr_pg_messages");
 
-  const [messages, setMessages] = useState<Record<string, Message[]>>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("fr_pg_messages");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          // ensure dates are Date objects
-          Object.keys(parsed).forEach((k) => {
-            parsed[k] = parsed[k].map((m: any) => ({
-              ...m,
-              timestamp: new Date(m.timestamp),
-            }));
-          });
-          return parsed;
+      if (savedRooms) {
+        const parsedRooms = JSON.parse(savedRooms);
+        setRooms(parsedRooms);
+        if (savedActiveRoom) {
+          const existsInRooms = parsedRooms.some((r: Room) => r.id === savedActiveRoom);
+          if (existsInRooms) setActiveRoom(savedActiveRoom);
+          else if (parsedRooms.length > 0) setActiveRoom(parsedRooms[0].id);
         }
-      } catch {}
+      }
+
+      if (savedMessages) {
+        const parsed = JSON.parse(savedMessages);
+        // Ensure dates are Date objects
+        Object.keys(parsed).forEach((k) => {
+          parsed[k] = parsed[k].map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp),
+          }));
+        });
+        setMessages(parsed);
+      }
+    } catch {
+      // Ignore parse errors
     }
-    return { "r-init": [] };
-  });
+    setStorageLoaded(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Save rooms to localStorage
   useEffect(() => {

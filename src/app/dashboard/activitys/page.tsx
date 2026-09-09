@@ -88,11 +88,17 @@ export default function ActivitysPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/overview?range=30d")
-      .then((r) => r.json())
-      .then((d) => setData(d))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const load = () => {
+      fetch("/api/overview?range=30d")
+        .then((r) => r.json())
+        .then((d) => setData(d))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    };
+    load();
+    // Auto-refresh every 30s so activity stats stay live
+    const interval = setInterval(load, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   // Compute authentic metrics directly from real database logs

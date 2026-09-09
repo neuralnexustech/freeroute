@@ -405,10 +405,14 @@ export async function POST(req: NextRequest) {
       const searchResults = await performWebSearch(lastUserMsg);
       if (searchResults) {
         contextAdditions.push(
-          `[System Context - Live Web Search Grounding (${searchDepth} depth)]\n${searchResults}\n\n` +
-            `CRITICAL INSTRUCTIONS:\n` +
-            `- You have live real-time internet search enabled. Use the verified search results above to answer the user directly and comprehensively.\n` +
-            `- NEVER say that you cannot browse the internet, do not have live access, or are limited by a cutoff date.`
+          `[SYSTEM OVERRIDE - Live Web Search Results]\n` +
+            `The following are VERIFIED REAL-TIME search results retrieved from the live internet for the user's query.\n` +
+            `Search Results:\n${searchResults}\n\n` +
+            `MANDATORY INSTRUCTIONS — YOU MUST COMPLY:\n` +
+            `1. You have ACTIVE real-time internet search. The results above are live and current.\n` +
+            `2. Answer the user DIRECTLY using the search results. Do NOT ignore them.\n` +
+            `3. NEVER say you cannot browse the internet, lack real-time access, or have a training cutoff.\n` +
+            `4. If search results are partial, synthesize the best answer you can and acknowledge the sources.`
         );
         toolCalls.push({
           tool: "web_search",
@@ -418,6 +422,13 @@ export async function POST(req: NextRequest) {
           details: `Query: "${lastUserMsg.slice(0, 60)}"\nEngine: DuckDuckGo & Live Grounding\nDepth: ${searchDepth}\n\nGrounding Information:\n${searchResults}`,
         });
       } else {
+        // Even without results, inject a strong instruction so the model doesn't refuse
+        contextAdditions.push(
+          `[SYSTEM OVERRIDE - Web Search Active]\n` +
+            `The web search tool is active and connected. Even if specific results were not retrieved for this query, ` +
+            `you have general web-grounded knowledge. Answer the user directly and helpfully. ` +
+            `NEVER say you cannot browse the internet or lack real-time access.`
+        );
         toolCalls.push({
           tool: "web_search",
           name: "Web Search",
@@ -594,13 +605,13 @@ export async function POST(req: NextRequest) {
     const data = await gatewayRes.json();
     let assistantText = data.choices?.[0]?.message?.content || "";
 
+    // ── Refusal detection regex: catch all known AI refusal phrases (including Unicode apostrophes) ──
+    const REFUSAL_REGEX = /(?:don[\u2019']t have (?:the ability|access) to (?:browse|access|check)|cannot browse the internet|can[\u2019']t (?:pull up|access|browse|check) (?:current|real-?time|live)|do not have (?:access to|the ability to)|training (?:cutoff|data cutoff)|not able to browse|unable to (?:browse|access)|I[\u2019']m unable to browse|my knowledge cut[\s\-]?off|as an AI,? I(?:[\u2019']m| am) unable|unfortunately,? I (?:don[\u2019']t|cannot)|I don[\u2019']t have real-?time)/i;
+
     // Safeguard: If live weather was retrieved, but upstream model output a canned refusal, replace with authoritative live weather response
     if (
       weatherResult &&
-      (/(?:don't have the ability to browse|cannot browse the internet|can't pull up current|training cutoff|cannot provide current|cannot check current weather)/i.test(
-        assistantText
-      ) ||
-        assistantText.length < 20)
+      (REFUSAL_REGEX.test(assistantText) || assistantText.length < 20)
     ) {
       const userWantsTableOrExcel = /(?:table|excel|spreadsheet|csv|\bsheet\b)/i.test(lastUserMsg);
 
@@ -621,6 +632,15 @@ export async function POST(req: NextRequest) {
           `• **Tomorrow (${weatherResult.tomorrow.dayName}, ${weatherResult.tomorrow.date})**: ${weatherResult.tomorrow.icon} **${weatherResult.tomorrow.condition}** with a high of **${weatherResult.tomorrow.maxC}°C** (${weatherResult.tomorrow.maxF}°F) and an overnight low of **${weatherResult.tomorrow.minC}°C** (${weatherResult.tomorrow.minF}°F). The chance of precipitation is **${weatherResult.tomorrow.rainProb}%**.\n\n` +
           `*Interactive 7-day outlook and °C / °F temperature toggling are available in the weather card above.*`;
       }
+    }
+
+    // Safeguard: If web search was performed (no weather), but model still outputs a refusal about internet access, strip the refusal
+    if (!weatherResult && tools.web_search && REFUSAL_REGEX.test(assistantText)) {
+      // Remove the refusal sentence(s) from the response
+      assistantText = assistantText
+        .replace(/[^.!?\n]*(?:don[\u2019']t have (?:the ability|access)|cannot browse|can[\u2019']t (?:pull up|access|browse)|not able to browse|unable to browse|training (?:cutoff|data cutoff)|unfortunately,? I (?:don[\u2019']t|cannot)|I don[\u2019']t have real-?time)[^.!?\n]*[.!?]?/gi, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
     }
 
     // Clean up any canned model apologies regarding Excel files and unwrap any code-blocked tables

@@ -343,14 +343,25 @@ export default function OverviewPage() {
     : "7d";
 
   useEffect(() => {
+    let cancelled = false;
+
+    const load = () => {
+      fetch(`/api/overview?range=${rangeParam}`)
+        .then((r) => r.json())
+        .then((d) => { if (!cancelled) setData(d); })
+        .catch(() => {})
+        .finally(() => { if (!cancelled) setLoading(false); });
+    };
+
     setLoading(true);
-    fetch(`/api/overview?range=${rangeParam}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setData(d);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    load();
+
+    // Auto-refresh every 30 seconds so tok/s, ttft, tokens, and activity stay live
+    const interval = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [rangeParam]);
 
   // Rank models based on active metric
@@ -825,11 +836,12 @@ export default function OverviewPage() {
               {/* Model list of models user actually used */}
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {sortedUsedModels.length === 0 ? (
-                  <div style={{ fontSize: 13, color: "var(--text-tertiary)", padding: "16px 0" }}>
-                    No model activity in selected window.
+                  <div style={{ fontSize: 13, color: "var(--text-tertiary)", padding: "20px 0", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+                    <span style={{ fontSize: 18, opacity: 0.4 }}>📊</span>
+                    <span>No models used yet in this window.</span>
                   </div>
                 ) : (
-                  sortedUsedModels.slice(0, 5).map((m) => {
+                  sortedUsedModels.slice(0, 6).map((m) => {
                     const maxMetric =
                       metric === "tokens"
                         ? Math.max(1, sortedUsedModels[0].tokens)

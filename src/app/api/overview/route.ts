@@ -187,8 +187,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 5. Complete ranked list of models: used models first, followed by catalog models
-    const topDisplayModels = [...usedModelsList];
+    // 5. Complete ranked list of models for drawer — used models first, then catalog
     const usedSlugs = new Set(usedModelsList.map((u) => u.slug));
 
     const PRIORITY_SLUGS = [
@@ -249,21 +248,10 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Fill topDisplayModels up to 5 models for the main card
-    for (const cm of distinctCatalog) {
-      if (topDisplayModels.length >= 5) break;
-      topDisplayModels.push({
-        slug: cm.slug,
-        name: cm.displayName,
-        provider: cm.provider.slug,
-        requests: 0,
-        tokens: 0,
-        promptTokens: 0,
-        completionTokens: 0,
-        spend: 0,
-        color: "#94a3b8",
-      });
-    }
+    // topDisplayModels only contains models the user actually used (no zero-padding).
+    // The UI will show an empty state if this is empty.
+    // Limit to 6 for the main card (the rest are in the drawer).
+    const topDisplayModels = usedModelsList.slice(0, 6);
 
     // Complete list of 14 distinct models for the "View all (14)" slide-out drawer
     const allModelsForDrawer = [...usedModelsList];

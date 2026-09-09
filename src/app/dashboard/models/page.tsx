@@ -153,6 +153,9 @@ export default function ModelsPage() {
   };
   useEffect(() => {
     load();
+    // Auto-refresh every 30s so tok/s and ttft stats stay live
+    const interval = setInterval(load, 30_000);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
