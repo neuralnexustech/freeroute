@@ -568,19 +568,18 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 9. Web Application & Shell Tool Development Instructions
-  const isWebDevRequest = /(?:website|web\s*app|landing\s*page|develop|build|create|react|html|frontend|page|ui|app|component|site|dashboard)\s*(?:for|with|using|like|a|an)?/i.test(lastUserMsg);
+  // 9. Web Application & Prototype Development Instructions (High-Fidelity Artifact Engine)
+  const isWebDevRequest = /(?:website|web\s*app|landing\s*page|develop|build|create|react|html|frontend|page|ui|app|component|site|dashboard|prototype)\s*(?:for|with|using|like|a|an)?/i.test(lastUserMsg);
   if (isWebDevRequest) {
     contextAdditions.push(
-      `[System Context - Full-Stack Web Development Workspace]\n` +
-      `The freeroute playground features an integrated real-time Web Development Workspace & IDE.\n` +
-      `- If you are asked to develop a website, app, or UI component, provide high quality, complete, beautiful code (HTML/React/CSS/JS).\n` +
-      `- Label each code block clearly with its file path using triple backticks with language and filename, for example:\n` +
-      `  \`\`\`tsx:src/App.tsx\n` +
-      `  \`\`\`css:src/index.css\n` +
-      `  \`\`\`html:index.html\n` +
-      `- If tools.shell is active, you may also suggest or use shell commands for package installations or script execution.\n` +
-      `- Ensure code is production-grade, aesthetically stunning, and immediately runnable in the workspace preview.`
+      `[System Context - freeroute Design Studio & Prototype Engine]\n` +
+      `The freeroute playground features an integrated sandboxed Design Studio & Prototype Engine.\n` +
+      `- When asked to build a website, dashboard, landing page, or prototype, output a complete, production-grade, self-contained deliverables.\n` +
+      `- Use standard HTML5 with Tailwind CSS CDN (<script src="https://cdn.tailwindcss.com"></script>), Google Fonts (Inter, Plus Jakarta Sans), and inline SVG icons.\n` +
+      `- Ensure code is 100% self-contained and immediately runnable in the sandbox with zero external build/npm steps. Avoid unbundled ESM imports that cause script runtime errors.\n` +
+      `- Enclose code in a code block marked with \`\`\`html:index.html (or \`\`\`html) so the sandbox immediately mounts the live interactive interface.\n` +
+      `- Deliver state-of-the-art UI/UX: rich color palettes, micro-interactions, responsive mobile and desktop layout, dark mode support, and realistic mock data.\n` +
+      `- In your conversation text, provide a concise, polished executive summary of what was designed and structured — never dump raw unformatted code directly in the conversational text.`
     );
   }
 

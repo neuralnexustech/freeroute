@@ -4,6 +4,8 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useTheme } from "@/components/ThemeProvider";
 import { notifyClientTelemetry } from "@/hooks/useLiveTelemetry";
+import { buildSrcdoc, sanitizeTitle } from "@/lib/srcdoc";
+import { parseArtifactProject, recoverStandaloneHtmlDocument } from "@/lib/artifactParser";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface ToolCallResult {
@@ -821,114 +823,8 @@ function CodeViewerCard({
 
 // ── Multi-File Project Parser ───────────────────────────────────────────────
 function extractProjectFiles(rawCode: string, language: string, title: string): WorkspaceFile[] {
-  const files: WorkspaceFile[] = [];
-
-  // 1. Check if rawCode contains multiple marked files like `// filepath: ...` or ```lang:path or ```lang filename="path"
-  const codeBlockRegex = /```(\w+)?(?:\s+(?:filename|title)=["']?([^\s"'\n]+)["']?|:([^\s\n]+))?\r?\n([\s\S]*?)\r?\n```/g;
-  let match: RegExpExecArray | null;
-  while ((match = codeBlockRegex.exec(rawCode)) !== null) {
-    const lang = (match[1] || "typescript").toLowerCase();
-    let filePath = (match[2] || match[3] || "").trim();
-    const content = match[4] || "";
-
-    if (!filePath) {
-      const firstLine = content.split(/\r?\n/)[0]?.trim() || "";
-      const pathMatch = firstLine.match(/^(?:\/\/|\/\*|#|\/\/ file:|\/\/ filepath:|\/\* File:)\s*([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/i);
-      if (pathMatch && (pathMatch[1].includes("/") || pathMatch[1].includes("."))) {
-        filePath = pathMatch[1].trim();
-      }
-    }
-
-    if (filePath) {
-      let normalizedPath = filePath.replace(/^\/+/, "");
-      if (normalizedPath.startsWith("components/") || normalizedPath.startsWith("shaders/") || normalizedPath.startsWith("utils/")) {
-        normalizedPath = `src/${normalizedPath}`;
-      }
-      const name = normalizedPath.split("/").pop() || normalizedPath;
-      files.push({ name, path: normalizedPath, language: lang, content });
-    }
-  }
-
-  // If no blocks were found, create the main file
-  if (files.length === 0) {
-    const isHtml = checkIsHtml(language, rawCode);
-    const mainName = isHtml ? "index.html" : title.includes(".") ? title : "App.tsx";
-    const mainPath = isHtml ? "index.html" : `src/${mainName}`;
-
-    files.push({
-      name: mainName,
-      path: mainPath,
-      language: isHtml ? "html" : language || "typescript",
-      content: rawCode,
-    });
-  }
-
-  // Replicate the exact modern project tree from Image 1:
-  // src/App.tsx, src/index.css, src/main.tsx, src/vite-env.d.ts, index.html, package.json, tsconfig.json, vite.config.ts
-  if (!files.some((f) => f.name === "index.css")) {
-    files.push({
-      name: "index.css",
-      path: "src/index.css",
-      language: "css",
-      content: `/* App Base Styling */\n:root {\n  --primary: #6366f1;\n  --bg: #0b0f19;\n  --text: #f8fafc;\n}\n\n* {\n  box-sizing: border-box;\n  margin: 0;\n  padding: 0;\n}\n\nbody {\n  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n  background: var(--bg);\n  color: var(--text);\n  min-height: 100vh;\n  display: flex;\n  flex-direction: column;\n}`,
-    });
-  }
-
-  if (!files.some((f) => f.name === "main.tsx")) {
-    files.push({
-      name: "main.tsx",
-      path: "src/main.tsx",
-      language: "typescript",
-      content: `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App';\nimport './index.css';\n\nReactDOM.createRoot(document.getElementById('root')!).render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>\n);`,
-    });
-  }
-
-  if (!files.some((f) => f.name === "vite-env.d.ts")) {
-    files.push({
-      name: "vite-env.d.ts",
-      path: "src/vite-env.d.ts",
-      language: "typescript",
-      content: `/// <reference types="vite/client" />`,
-    });
-  }
-
-  if (!files.some((f) => f.name === "index.html")) {
-    files.push({
-      name: "index.html",
-      path: "index.html",
-      language: "html",
-      content: `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>freeroute App Sandbox</title>\n  </head>\n  <body>\n    <div id="root"></div>\n    <script type="module" src="/src/main.tsx"></script>\n  </body>\n</html>`,
-    });
-  }
-
-  if (!files.some((f) => f.name === "package.json")) {
-    files.push({
-      name: "package.json",
-      path: "package.json",
-      language: "json",
-      content: `{\n  "name": "freeroute-app",\n  "private": true,\n  "version": "0.1.0",\n  "type": "module",\n  "scripts": {\n    "dev": "vite",\n    "build": "tsc && vite build",\n    "preview": "vite preview"\n  },\n  "dependencies": {\n    "react": "^18.3.1",\n    "react-dom": "^18.3.1"\n  },\n  "devDependencies": {\n    "@types/react": "^18.3.3",\n    "@types/react-dom": "^18.3.0",\n    "@vitejs/plugin-react": "^4.3.1",\n    "typescript": "^5.5.4",\n    "vite": "^5.4.0"\n  }\n}`,
-    });
-  }
-
-  if (!files.some((f) => f.name === "tsconfig.json")) {
-    files.push({
-      name: "tsconfig.json",
-      path: "tsconfig.json",
-      language: "json",
-      content: `{\n  "compilerOptions": {\n    "target": "ES2020",\n    "useDefineForClassFields": true,\n    "lib": ["ES2020", "DOM", "DOM.Iterable"],\n    "module": "ESNext",\n    "skipLibCheck": true,\n    "moduleResolution": "bundler",\n    "jsx": "react-jsx",\n    "strict": true\n  },\n  "include": ["src"]\n}`,
-    });
-  }
-
-  if (!files.some((f) => f.name === "vite.config.ts")) {
-    files.push({
-      name: "vite.config.ts",
-      path: "vite.config.ts",
-      language: "typescript",
-      content: `import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\n\nexport default defineConfig({\n  plugins: [react()],\n});`,
-    });
-  }
-
-  return files;
+  const parsed = parseArtifactProject(rawCode, title);
+  return parsed.files;
 }
 
 // ── Building State Animated Geometric Modular Block SVG (Image 2) ───────────
@@ -990,36 +886,61 @@ function getFileIcon(fileName: string) {
   return <span>📄</span>;
 }
 
-// ── In-Browser Multi-Component React & Tailwind Live Compiler ────────────────
-function compileProjectPreview(files: WorkspaceFile[], artifact: ActiveArtifact): string {
-  const cssFiles = files.filter((f) => f.name.endsWith(".css"));
-  const htmlFile = files.find((f) => f.name.endsWith(".html"));
+// ── Bulletproof Self-Contained Sandbox Compiler ─────────────────────────────
+function compileProjectPreview(
+  files: WorkspaceFile[],
+  artifact: ActiveArtifact,
+  reloadKey: number = 0
+): string {
+  // 1. Look for explicit HTML file
+  const htmlFile = files.find((f) => f.name.toLowerCase().endsWith(".html"));
+  const cssFiles = files.filter((f) => f.name.toLowerCase().endsWith(".css"));
+  const jsFiles = files.filter((f) => f.name.toLowerCase().endsWith(".js") && !f.name.includes("vite"));
   const reactFiles = files.filter(
     (f) =>
       f.name.endsWith(".tsx") ||
       f.name.endsWith(".jsx") ||
-      (f.name.endsWith(".ts") && !f.name.endsWith(".d.ts") && !f.name.includes("vite.config")) ||
-      (f.name.endsWith(".js") && !f.name.includes("vite.config"))
+      (f.name.endsWith(".ts") && !f.name.endsWith(".d.ts"))
   );
 
-  // If user only provided pure HTML without any React/TSX components
-  const isPureHtml =
-    (artifact.isHtml && reactFiles.length === 0) ||
-    (htmlFile && htmlFile.content.includes("<html") && reactFiles.length === 0);
-
-  if (isPureHtml && htmlFile) {
+  if (htmlFile) {
     let doc = htmlFile.content;
-    if (cssFiles.length > 0 && !doc.includes("<style>")) {
-      const injectedStyles = cssFiles.map((c) => `<style>${c.content}</style>`).join("\n");
-      doc = doc.replace("</head>", `${injectedStyles}\n</head>`);
+    // Inject companion CSS if not already present
+    if (cssFiles.length > 0 && !doc.includes(cssFiles[0].content)) {
+      const extraStyles = cssFiles
+        .map((c) => `<style>/* ${c.name} */\n${c.content}</style>`)
+        .join("\n");
+      doc = doc.includes("</head>")
+        ? doc.replace("</head>", `${extraStyles}\n</head>`)
+        : extraStyles + doc;
     }
-    return doc;
+    // Inject companion JS if not already linked
+    if (jsFiles.length > 0) {
+      const extraScripts = jsFiles
+        .map((j) => `<script>/* ${j.name} */\n${j.content}<\/script>`)
+        .join("\n");
+      doc = doc.includes("</body>")
+        ? doc.replace("</body>", `${extraScripts}\n</body>`)
+        : doc + extraScripts;
+    }
+    return buildSrcdoc(doc, {
+      title: artifact.title,
+      reloadKey,
+    });
   }
 
-  // Combined CSS styles
-  const allCss = cssFiles.map((c) => c.content).join("\n\n");
+  // 2. Check if artifact raw code is HTML
+  const raw = artifact.code || (files[0] ? files[0].content : "");
+  const recovered = recoverStandaloneHtmlDocument(raw);
+  if (recovered) {
+    return buildSrcdoc(recovered, {
+      title: artifact.title,
+      reloadKey,
+    });
+  }
 
-  // Determine App file or main entrypoint
+  // 3. Fallback for React/TSX components (from legacy messages)
+  const allCss = cssFiles.map((c) => c.content).join("\n\n");
   const appFile =
     reactFiles.find(
       (f) =>
@@ -1028,17 +949,11 @@ function compileProjectPreview(files: WorkspaceFile[], artifact: ActiveArtifact)
         f.name.toLowerCase() === "app.tsx"
     ) || reactFiles[0];
 
-  // Component files that should be loaded before App
   const childFiles = reactFiles.filter((f) => f.path !== appFile?.path);
 
-  // Function to adapt component code for in-browser Babel Standalone execution
   const adaptCode = (code: string, fileName: string) => {
     let cleaned = code;
-
-    // 1. Remove TypeScript imports of types
     cleaned = cleaned.replace(/import\s+type\s+[^;]+;/g, "");
-
-    // 2. Transform React imports
     cleaned = cleaned.replace(
       /import\s+(?:React\s*,\s*)?\{([^}]+)\}\s+from\s+['"]react['"];?/g,
       "const { $1 } = React;"
@@ -1048,18 +963,12 @@ function compileProjectPreview(files: WorkspaceFile[], artifact: ActiveArtifact)
       (_, hooks) => (hooks ? `const { ${hooks} } = React;` : `/* React */`)
     );
     cleaned = cleaned.replace(/import\s+['"]react['"];?/g, "/* React */");
-
-    // 3. Transform Lucide icons import
     cleaned = cleaned.replace(
       /import\s+\{([^}]+)\}\s+from\s+['"]lucide-react['"];?/g,
-      "const { $1 } = window.LucideIcons;"
+      "const { $1 } = window.LucideIcons || {};"
     );
-
-    // 4. Remove relative/other component and style imports
     cleaned = cleaned.replace(/import\s+[^'"]+\s+from\s+['"][^'"]+['"];?/g, "/* local import */");
     cleaned = cleaned.replace(/import\s+['"][^'"]+['"];?/g, "/* style import */");
-
-    // 5. Strip TypeScript interfaces, types, generics, and type assertions so Babel never throws syntax errors
     cleaned = cleaned.replace(/interface\s+[A-Za-z0-9_$]+(?:\s+extends\s+[^{]+)?\s*\{[\s\S]*?\}/g, "");
     cleaned = cleaned.replace(/type\s+[A-Za-z0-9_$]+(?:\s*<[^>]+>)?\s*=\s*[^;]+;/g, "");
     cleaned = cleaned.replace(/\s+as\s+[A-Za-z0-9_<>[\]|&, ]+/g, "");
@@ -1068,19 +977,15 @@ function compileProjectPreview(files: WorkspaceFile[], artifact: ActiveArtifact)
     cleaned = cleaned.replace(/!;+/g, ";");
     cleaned = cleaned.replace(/(useState|useRef|useMemo|useCallback)<[^>]+>\(/g, "$1(");
     cleaned = cleaned.replace(/:\s*React\.FC(?:<[^>]+>)?/g, "");
-
-    // 6. Transform exports so components are attached to window and defined in scope
     cleaned = cleaned.replace(/export\s+default\s+function\s+([a-zA-Z0-9_$]+)/g, "function $1");
     cleaned = cleaned.replace(/export\s+function\s+([a-zA-Z0-9_$]+)/g, "function $1");
     cleaned = cleaned.replace(/export\s+const\s+([a-zA-Z0-9_$]+)/g, "const $1");
     cleaned = cleaned.replace(/export\s+default\s+([a-zA-Z0-9_$]+);?/g, "window.$1 = $1;");
 
-    // Extract component name from fileName (e.g. Navigation.tsx -> Navigation)
     const baseName = fileName.replace(/\.[^/.]+$/, "").split("/").pop() || "";
     if (baseName && baseName !== "main" && baseName !== "vite-env.d") {
       cleaned += `\nif (typeof ${baseName} !== 'undefined') { window.${baseName} = ${baseName}; }`;
     }
-
     return cleaned;
   };
 
@@ -1091,68 +996,24 @@ function compileProjectPreview(files: WorkspaceFile[], artifact: ActiveArtifact)
     ? `// --- File: ${appFile.path} ---\n${adaptCode(appFile.content, appFile.name)}`
     : "";
 
-  return `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Preview</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              primary: '#6366f1',
-            }
-          }
-        }
-      };
-    </script>
+  const reactDoc = `
     <!-- React 18 & ReactDOM 18 -->
     <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
-    <!-- Babel Standalone for In-Browser TSX Compilation -->
     <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
     <style>
-      /* Project Custom CSS */
       ${allCss}
-      
-      html, body {
-        margin: 0;
-        padding: 0;
-        min-height: 100vh;
-      }
     </style>
-  </head>
-  <body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
     <div id="root">
-      <div style="display:flex;height:100vh;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif;color:#64748b;">
+      <div style="display:flex;min-height:100vh;align-items:center;justify-content:center;color:#64748b;font-family:system-ui,-apple-system,sans-serif;">
         <div style="text-align:center;">
-          <div style="display:inline-block;width:32px;height:32px;border:3px solid #e2e8f0;border-top-color:#6366f1;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
-          <div style="margin-top:12px;font-size:14px;font-weight:500;">Rendering Live Preview...</div>
+          <div style="display:inline-block;width:28px;height:28px;border:3px solid #e2e8f0;border-top-color:#6366f1;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+          <div style="margin-top:10px;font-size:13px;font-weight:500;">Loading prototype...</div>
         </div>
         <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
       </div>
     </div>
-
     <script>
-      // Global error overlay
-      window.onerror = function(msg, url, line, col, error) {
-        const root = document.getElementById('root');
-        if (root) {
-          root.innerHTML = '<div style="padding:24px;margin:24px auto;max-width:640px;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;color:#991b1b;font-family:system-ui,-apple-system,sans-serif;">' +
-            '<h3 style="margin:0 0 8px;font-size:16px;font-weight:700;">Preview Runtime Error</h3>' +
-            '<pre style="margin:0;font-size:12px;font-family:monospace;white-space:pre-wrap;overflow:auto;background:rgba(0,0,0,0.04);padding:10px;border-radius:6px;">' +
-            (error ? (error.stack || error.message) : msg) +
-            '</pre></div>';
-        }
-        return false;
-      };
-
-      // Expose standard React hooks globally
       window.useState = React.useState;
       window.useEffect = React.useEffect;
       window.useMemo = React.useMemo;
@@ -1160,93 +1021,60 @@ function compileProjectPreview(files: WorkspaceFile[], artifact: ActiveArtifact)
       window.useCallback = React.useCallback;
       window.useContext = React.useContext;
 
-      // Universal Icon Component & Proxy for Lucide Icons
-      window.__UniversalIcon = function(props) {
-        const name = (props.__iconName || 'icon').toLowerCase();
-        let pathD = 'M12 8v8M8 12h8';
-        if (name.includes('check')) pathD = 'M20 6L9 17l-5-5';
-        else if (name.includes('arrow') && name.includes('right')) pathD = 'M5 12h14M12 5l7 7-7 7';
-        else if (name.includes('arrow') && name.includes('left')) pathD = 'M19 12H5M12 19l-7-7 7-7';
-        else if (name.includes('chevron') && name.includes('right')) pathD = 'M9 18l6-6-6-6';
-        else if (name.includes('chevron') && name.includes('down')) pathD = 'M6 9l6 6 6-6';
-        else if (name.includes('star')) pathD = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z';
-        else if (name.includes('shield')) pathD = 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z';
-        else if (name.includes('zap') || name.includes('bolt')) pathD = 'M13 2L3 14h9l-1 8 10-12h-9l1-8z';
-        else if (name.includes('menu')) pathD = 'M3 12h18M3 6h18M3 18h18';
-        else if (name.includes('close') || name === 'x') pathD = 'M18 6L6 18M6 6l12 12';
-        else if (name.includes('user')) pathD = 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z';
-        else if (name.includes('sparkle')) pathD = 'M12 3l1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3z';
-
-        return React.createElement('svg', {
-          width: props.size || props.width || 18,
-          height: props.size || props.height || 18,
-          viewBox: '0 0 24 24',
-          fill: 'none',
-          stroke: props.color || 'currentColor',
-          strokeWidth: props.strokeWidth || 2,
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-          className: props.className || '',
-          style: props.style,
-        }, React.createElement('path', { d: pathD }));
-      };
-
       window.LucideIcons = new Proxy({}, {
         get: function(target, prop) {
           if (typeof prop === 'string') {
-            if (!target[prop]) {
-              const comp = function(props) {
-                return window.__UniversalIcon(Object.assign({ __iconName: prop }, props));
-              };
-              comp.displayName = prop;
-              target[prop] = comp;
-            }
-            return target[prop];
+            return function(props) {
+              return React.createElement('svg', Object.assign({
+                width: props.size || 18,
+                height: props.size || 18,
+                viewBox: '0 0 24 24',
+                fill: 'none',
+                stroke: props.color || 'currentColor',
+                strokeWidth: props.strokeWidth || 2,
+                strokeLinecap: 'round',
+                strokeLinejoin: 'round'
+              }, props), React.createElement('circle', { cx: 12, cy: 12, r: 8 }));
+            };
           }
           return undefined;
         }
       });
     </script>
-
     <script type="text/babel" data-presets="react,typescript">
-      ${childCodeBlocks}
-
-      ${appCodeBlock}
-
-      // Mount App into root
       try {
+        ${childCodeBlocks}
+        ${appCodeBlock}
         const MountApp = window.App || (typeof App !== 'undefined' ? App : null);
         if (MountApp) {
-          const rootEl = document.getElementById('root');
-          ReactDOM.createRoot(rootEl).render(React.createElement(MountApp));
+          ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(MountApp));
         } else {
           const candidates = ['App', 'Scene', 'HeroSection', 'Main', 'LandingPage', 'Home'];
           let foundComp = null;
           for (const name of candidates) {
             if (window[name]) { foundComp = window[name]; break; }
           }
-          if (!foundComp) {
-            const keys = Object.keys(window);
-            for (const k of keys) {
-              if (typeof window[k] === 'function' && /^[A-Z]/.test(k) && k !== 'React' && k !== 'ReactDOM' && k !== 'Babel') {
-                foundComp = window[k];
-                break;
-              }
-            }
-          }
           if (foundComp) {
             ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(foundComp));
-          } else {
-            document.getElementById('root').innerHTML = '<div class="p-8 text-center font-sans"><h2 class="text-xl font-bold text-slate-800">Workspace Application Loaded</h2><p class="text-slate-500 mt-2">All components compiled successfully.</p></div>';
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Mount error:', err);
-        document.getElementById('root').innerHTML = '<div class="p-6 m-6 bg-red-50 border border-red-200 rounded-xl text-red-800 font-sans"><h3 class="font-bold">Render Error</h3><pre class="mt-2 text-xs font-mono">' + (err.stack || err.message) + '</pre></div>';
+        if (window.parent) {
+          window.parent.postMessage({
+            type: 'freeroute:preview-error',
+            message: err ? (err.message || String(err)) : 'Rendering notice'
+          }, '*');
+        }
       }
     </script>
   </body>
 </html>`;
+
+  return buildSrcdoc(reactDoc, {
+    title: artifact.title,
+    reloadKey,
+  });
 }
 
 // ── Hierarchical File Tree Builder (Matching Arena.ai Image 2) ───────────────
@@ -1399,7 +1227,26 @@ function WorkspaceIDE({
 }) {
   const [tab, setTab] = useState<"code" | "preview">(artifact.activeTab);
   const [previewKey, setPreviewKey] = useState(0);
+  const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [previewError, setPreviewError] = useState<{ message: string; filename?: string; lineno?: number } | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Catch non-blocking error signals emitted from inside the sandbox iframe
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.type === "freeroute:preview-error") {
+        setPreviewError({
+          message: e.data.message || "Notice encountered in prototype execution",
+          filename: e.data.filename,
+          lineno: e.data.lineno,
+        });
+      } else if (e.data?.type === "freeroute:preview-ready") {
+        setPreviewError(null);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
   // Initialize files from artifact
   const files = useMemo(() => {
@@ -1436,8 +1283,13 @@ function WorkspaceIDE({
   };
 
   const [activeFilePath, setActiveFilePath] = useState<string>(
-    artifact.selectedFile || files[0]?.path || "src/App.tsx"
+    artifact.selectedFile || files[0]?.path || "index.html"
   );
+
+  // Clear notice whenever the user reloads or switches files
+  useEffect(() => {
+    setPreviewError(null);
+  }, [previewKey, activeFilePath]);
 
   // Keep active file in sync if files change or artifact changes
   useEffect(() => {
@@ -1461,15 +1313,27 @@ function WorkspaceIDE({
   }, [files, activeFilePath, artifact]);
 
   const handleDownload = () => {
-    const blob = new Blob([activeFile.content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = activeFile.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    if (tab === "preview") {
+      const blob = new Blob([compiledHtml], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${artifact.title.replace(/\.[^/.]+$/, "") || "prototype"}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } else {
+      const blob = new Blob([activeFile.content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = activeFile.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
   };
 
   const handleCopy = () => {
@@ -1478,10 +1342,10 @@ function WorkspaceIDE({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Compile runnable HTML document with Babel Standalone + React 18
+  // Compile runnable HTML document with self-contained runtime
   const compiledHtml = useMemo(() => {
-    return compileProjectPreview(files, artifact);
-  }, [files, artifact]);
+    return compileProjectPreview(files, artifact, previewKey);
+  }, [files, artifact, previewKey]);
 
   // Display URL for the address bar (Matching Image 2)
   const displayUrl = useMemo(() => {
@@ -1566,9 +1430,49 @@ function WorkspaceIDE({
           </div>
         </div>
 
+        {/* Device Viewport Switcher (Desktop / Tablet / Mobile) */}
+        {tab === "preview" && (
+          <div className="pg-ws-viewport-btns" title="Device viewport switcher">
+            <button
+              className={`pg-ws-viewport-btn ${device === "desktop" ? "active" : ""}`}
+              onClick={() => setDevice("desktop")}
+              title="Desktop (Full)"
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
+              <span>Desktop</span>
+            </button>
+            <button
+              className={`pg-ws-viewport-btn ${device === "tablet" ? "active" : ""}`}
+              onClick={() => setDevice("tablet")}
+              title="Tablet (768px)"
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="4" y="2" width="16" height="20" rx="2" />
+                <line x1="12" y1="18" x2="12" y2="18.01" strokeWidth="3" />
+              </svg>
+              <span>Tablet</span>
+            </button>
+            <button
+              className={`pg-ws-viewport-btn ${device === "mobile" ? "active" : ""}`}
+              onClick={() => setDevice("mobile")}
+              title="Mobile (375px)"
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="5" y="2" width="14" height="20" rx="2" />
+                <line x1="12" y1="18" x2="12" y2="18.01" strokeWidth="3" />
+              </svg>
+              <span>Mobile</span>
+            </button>
+          </div>
+        )}
+
         {/* Topbar Right: Download button + Close button */}
         <div className="pg-ws-topbar-right">
-          <button className="pg-ws-download-btn" onClick={handleDownload} title="Download file">
+          <button className="pg-ws-download-btn" onClick={handleDownload} title={tab === "preview" ? "Download Standalone HTML" : "Download File"}>
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
@@ -1595,15 +1499,46 @@ function WorkspaceIDE({
           </p>
         </div>
       ) : tab === "preview" ? (
-        /* Live App Preview with In-Browser Compiled TSX */
+        /* Live App Preview with Studio Stage Canvas */
         <div className="pg-ws-preview-view">
-          <iframe
-            key={previewKey}
-            srcDoc={compiledHtml}
-            sandbox="allow-scripts allow-modals allow-same-origin"
-            className="pg-ws-iframe"
-            title="App Preview"
-          />
+          <div className="pg-ws-stage-canvas">
+            <div className={`pg-ws-stage-container ${device}`}>
+              {device === "mobile" && <div className="pg-ws-device-pill" />}
+              <iframe
+                key={`${previewKey}_${device}`}
+                srcDoc={compiledHtml}
+                sandbox="allow-scripts allow-modals allow-same-origin allow-forms allow-popups"
+                className="pg-ws-iframe"
+                title="App Preview"
+              />
+            </div>
+            {previewError && (
+              <div className="pg-ws-error-toast">
+                <div className="pg-ws-error-icon">⚠️</div>
+                <div className="pg-ws-error-content">
+                  <div className="pg-ws-error-title">Preview Notice</div>
+                  <div className="pg-ws-error-desc">{previewError.message}</div>
+                </div>
+                <button
+                  className="pg-ws-error-retry"
+                  onClick={() => {
+                    setPreviewError(null);
+                    setPreviewKey((k) => k + 1);
+                  }}
+                  title="Reload preview"
+                >
+                  Reload
+                </button>
+                <button
+                  className="pg-ws-error-close"
+                  onClick={() => setPreviewError(null)}
+                  title="Dismiss notification"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         /* Workspace IDE Layout (Image 2) */
