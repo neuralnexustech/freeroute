@@ -14,6 +14,13 @@ interface ToolCallResult {
   details?: string;
 }
 
+interface WorkspaceFile {
+  name: string;
+  path: string;
+  language: string;
+  content: string;
+}
+
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -26,6 +33,11 @@ interface Message {
   toolCalls?: ToolCallResult[];
   weather?: any;
   timestamp: Date;
+  isGenerating?: boolean;
+  statusStep?: string;
+  steps?: string[];
+  projectFiles?: WorkspaceFile[];
+  thoughtDurationSec?: number;
 }
 
 interface Room {
@@ -634,13 +646,6 @@ function sanitizeTableMarkdown(rawContent: string): string {
 }
 
 // ── Workspace IDE & Multi-File Project Artifact System (Images 1 & 2) ────────
-interface WorkspaceFile {
-  name: string;
-  path: string;
-  language: string;
-  content: string;
-}
-
 interface ActiveArtifact {
   id: string;
   title: string;
@@ -942,6 +947,29 @@ function BuildingIconSvg() {
   );
 }
 
+// ── File Type Icons Helper ───────────────────────────────────────────────────
+function getFileIcon(fileName: string) {
+  if (fileName.endsWith(".tsx") || fileName.endsWith(".jsx")) {
+    return <span style={{ color: "#00d8ff" }}>⚛</span>;
+  }
+  if (fileName.endsWith(".ts")) {
+    return <span style={{ color: "#3178c6", fontWeight: 700, fontSize: 10 }}>TS</span>;
+  }
+  if (fileName.endsWith(".js")) {
+    return <span style={{ color: "#f7df1e", fontWeight: 700, fontSize: 10 }}>JS</span>;
+  }
+  if (fileName.endsWith(".css")) {
+    return <span style={{ color: "#38bdf8", fontWeight: 700, fontSize: 9 }}>🎨</span>;
+  }
+  if (fileName.endsWith(".html")) {
+    return <span style={{ color: "#e34f26", fontWeight: 700, fontSize: 10 }}>5</span>;
+  }
+  if (fileName.endsWith(".json")) {
+    return <span style={{ color: "#cb3837", fontWeight: 700, fontSize: 10 }}>{}</span>;
+  }
+  return <span>📄</span>;
+}
+
 // ── Right Web Development Workspace IDE (Images 1 & 2) ──────────────────────
 function WorkspaceIDE({
   artifact,
@@ -1000,28 +1028,6 @@ function WorkspaceIDE({
     navigator.clipboard.writeText(activeFile.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const getFileIcon = (fileName: string) => {
-    if (fileName.endsWith(".tsx") || fileName.endsWith(".jsx")) {
-      return <span style={{ color: "#00d8ff" }}>⚛</span>;
-    }
-    if (fileName.endsWith(".ts")) {
-      return <span style={{ color: "#3178c6", fontWeight: 700, fontSize: 10 }}>TS</span>;
-    }
-    if (fileName.endsWith(".js")) {
-      return <span style={{ color: "#f7df1e", fontWeight: 700, fontSize: 10 }}>JS</span>;
-    }
-    if (fileName.endsWith(".css")) {
-      return <span style={{ color: "#2965f1", fontWeight: 700, fontSize: 9 }}>CSS</span>;
-    }
-    if (fileName.endsWith(".html")) {
-      return <span style={{ color: "#e34f26", fontWeight: 700, fontSize: 10 }}>5</span>;
-    }
-    if (fileName.endsWith(".json")) {
-      return <span style={{ color: "#cb3837", fontWeight: 700, fontSize: 10 }}>{}</span>;
-    }
-    return <span>📄</span>;
   };
 
   // Compile runnable HTML document from active project files
@@ -1266,6 +1272,207 @@ function WorkspaceIDE({
         </div>
       )}
     </aside>
+  );
+}
+
+// ── Narrative Text Renderer (Arena.ai Clean Markdown & Inline Formatting) ───
+function RenderNarrativeText({ text }: { text: string }) {
+  const html = text
+    .replace(
+      /!\[(.*?)\]\((https?:\/\/[^\)]+)\)/g,
+      '<div style="margin:10px 0;"><img src="$2" alt="$1" style="max-width:100%;max-height:420px;border-radius:12px;display:block;" /></div>'
+    )
+    .replace(
+      /\[(.*?)\]\((https?:\/\/[^\)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--pg-accent);text-decoration:underline;">$1</a>'
+    )
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(
+      /`([^`]+)`/g,
+      '<code style="background:var(--pg-code-bg);padding:2px 6px;border-radius:4px;font-family:var(--font-mono);font-size:12px">$1</code>'
+    )
+    .replace(/\n/g, "<br/>");
+  return <span dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+// ── In-Message Live Generating Card (Arena.ai Live Step-by-step Status) ─────
+function ArenaGeneratingCard({
+  modelName,
+  statusStep,
+  steps,
+}: {
+  modelName?: string;
+  statusStep?: string;
+  steps?: string[];
+}) {
+  return (
+    <div className="pg-arena-generating-card">
+      <div className="pg-arena-generating-top">
+        <div className="pg-model-name-title">
+          <span className="pg-pulse-dot" />
+          <span>{modelName || "freeroute agent"}</span>
+        </div>
+        <div className="pg-typing-indicator">
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
+
+      <div className="pg-arena-generating-status">
+        <span className="pg-arena-spinner">⚡</span>
+        <span className="pg-arena-status-text">{statusStep || "Building software..."}</span>
+      </div>
+
+      {steps && steps.length > 0 && (
+        <div className="pg-arena-generating-steps">
+          {steps.map((st, i) => (
+            <div key={i} className="pg-arena-gen-step-item">
+              <span className="pg-arena-step-check">✓</span>
+              <span>{st}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Arena.ai Agent Response Card (No Code in Chat, Compact Files, Show More) ──
+function ArenaAgentCard({
+  message,
+  projectFiles,
+  thoughtDurationSec,
+  steps,
+  onSelectFile,
+  onMakeBetter,
+}: {
+  message: Message;
+  projectFiles: WorkspaceFile[];
+  thoughtDurationSec?: number;
+  steps?: string[];
+  onSelectFile?: (filePath: string) => void;
+  onMakeBetter?: () => void;
+}) {
+  const [showMore, setShowMore] = useState(false);
+
+  // Clean narrative explanation without raw code dumps
+  const cleanNarrative = useMemo(() => {
+    const raw = message.content || "";
+    const stripped = raw.replace(/```[\s\S]*?```/g, "").trim();
+    if (stripped && stripped.length > 20) {
+      return stripped;
+    }
+    if (projectFiles.length > 0) {
+      return "I've structured and developed the web application with interactive components, custom styling, and responsive layout. You can inspect the source code and preview in the right-side workspace.";
+    }
+    return raw || "Project workspace generated successfully.";
+  }, [message.content, projectFiles]);
+
+  const completedSteps = useMemo(() => {
+    if (steps && steps.length > 0) return steps;
+    return [
+      "Explored project specifications & architecture",
+      ...projectFiles.map((f) => `Created ${f.path} (${f.content.split(/\r?\n/).length} lines)`),
+      "Compiled live workspace sandbox preview",
+    ];
+  }, [steps, projectFiles]);
+
+  const durationText = thoughtDurationSec
+    ? `${thoughtDurationSec} seconds`
+    : message.latencyMs
+    ? `${Math.max(1, Math.round(message.latencyMs / 1000))} seconds`
+    : "18 seconds";
+
+  return (
+    <div className="pg-arena-agent-card">
+      {/* 1. Thought Duration Line with Clock Icon (Arena.ai) */}
+      <div className="pg-arena-thought-bar">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2">
+          <circle cx="12" cy="10" r="8" />
+          <polyline points="12 6 12 10 15 12" />
+        </svg>
+        <span>Thought for {durationText}</span>
+      </div>
+
+      {/* 2. Narrative summary text (No raw code dumped into chat) */}
+      <div className="pg-arena-narrative">
+        <RenderNarrativeText text={cleanNarrative} />
+      </div>
+
+      {/* 3. Collapsible Activity Summary with Show More / Show Less (Arena.ai) */}
+      <div className="pg-arena-activity-box">
+        <div
+          className="pg-arena-activity-header"
+          onClick={() => setShowMore((v) => !v)}
+          title="Toggle execution activity log"
+        >
+          <div className="pg-arena-activity-summary">
+            <span className="pg-arena-chevron">{showMore ? "▼" : "▶"}</span>
+            <span>
+              Explored {projectFiles.length} files, {completedSteps.length} build actions
+            </span>
+          </div>
+          <button
+            className="pg-arena-toggle-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMore((v) => !v);
+            }}
+          >
+            {showMore ? "Show Less ∧" : "Show More ⌵"}
+          </button>
+        </div>
+
+        {showMore && (
+          <div className="pg-arena-activity-details">
+            {completedSteps.map((st, idx) => (
+              <div key={idx} className="pg-arena-step-row">
+                <span className="pg-arena-step-check">✓</span>
+                <span>{st}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 4. Compact Clickable File Chips (Click opens file in right-side editor!) */}
+      {projectFiles.length > 0 && (
+        <div className="pg-arena-files-list">
+          {projectFiles
+            .filter((f) => f.path.startsWith("src/") || f.name === "index.html" || f.name === "package.json")
+            .slice(0, 8)
+            .map((f) => {
+              const lineCount = f.content.split(/\r?\n/).length;
+              return (
+                <button
+                  key={f.path}
+                  className="pg-arena-file-pill"
+                  onClick={() => onSelectFile?.(f.path)}
+                  title={`Open ${f.path} in right editor`}
+                >
+                  <span className="pg-arena-file-icon">{getFileIcon(f.name)}</span>
+                  <span className="pg-arena-file-name">{f.path}</span>
+                  <span className="pg-arena-file-meta">{lineCount} lines</span>
+                  <span className="pg-arena-file-open-tag">Open in Editor ↗</span>
+                </button>
+              );
+            })}
+        </div>
+      )}
+
+      {/* 5. Arena Action Bar with 'make better' button */}
+      <div className="pg-arena-action-row">
+        <div className="pg-arena-action-left" />
+        <button
+          className="pg-arena-make-better-btn"
+          onClick={onMakeBetter}
+          title="Improve this design or ask for enhancements"
+        >
+          <span>make better</span>
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1923,6 +2130,23 @@ export default function PlaygroundPage() {
         timestamp: new Date(),
       };
 
+      // Check if user is asking to build or develop a web app / site / page
+      const isWebDevIntent = /(?:website|web\s*app|landing\s*page|develop|build|create|react|html|frontend|page|ui|app|component|site|dashboard|saas)\b/i.test(text);
+
+      const assistantId = uid();
+      const initialAssistantMsg: Message = {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+        model: activeModelObj.displayName,
+        timestamp: new Date(),
+        isGenerating: true,
+        statusStep: isWebDevIntent ? "Analyzing project requirements..." : "Thinking...",
+        steps: isWebDevIntent
+          ? ["Explored project specifications & architecture"]
+          : ["Analyzing prompt & grounding tools"],
+      };
+
       // Update room title if first message
       setRooms((rs) =>
         rs.map((r) =>
@@ -1934,7 +2158,7 @@ export default function PlaygroundPage() {
         )
       );
 
-      const updatedMsgs = [...currentMsgs, userMsg];
+      const updatedMsgs = [...currentMsgs, userMsg, initialAssistantMsg];
       setMessages((m) => ({
         ...m,
         [activeRoom]: updatedMsgs,
@@ -1944,8 +2168,6 @@ export default function PlaygroundPage() {
       const activeTools = determineActiveTools(text, serverTools, toolConfigs);
       setActiveRunningTools(activeTools);
 
-      // Check if user is asking to build or develop a web app / site / page
-      const isWebDevIntent = /(?:website|web\s*app|landing\s*page|develop|build|create|react|html|frontend|page|ui|app|component|site|dashboard)\b/i.test(text);
       if (isWebDevIntent) {
         setActiveArtifact({
           id: `ws_building_${Date.now()}`,
@@ -1959,15 +2181,48 @@ export default function PlaygroundPage() {
         });
       }
 
-      // Context window trimming based on Chat Memory slider
-      const historySlice =
-        memoryValue >= 20
-          ? updatedMsgs
-          : updatedMsgs.slice(-memoryValue);
+      // Live progress steps simulated in that same conversation message
+      const progressInterval = setInterval(() => {
+        setMessages((m) => {
+          const list = m[activeRoom] || [];
+          return {
+            ...m,
+            [activeRoom]: list.map((msg) => {
+              if (msg.id !== assistantId || !msg.isGenerating) return msg;
+              const currentSteps = msg.steps || [];
+              if (currentSteps.length === 1) {
+                return {
+                  ...msg,
+                  statusStep: isWebDevIntent ? "Creating src/App.tsx components..." : "Synthesizing answer...",
+                  steps: [...currentSteps, isWebDevIntent ? "Created src/App.tsx" : "Evaluating response tokens"],
+                };
+              } else if (currentSteps.length === 2 && isWebDevIntent) {
+                return {
+                  ...msg,
+                  statusStep: "Styling layout in src/index.css...",
+                  steps: [...currentSteps, "Configured styles in src/index.css"],
+                };
+              } else if (currentSteps.length === 3 && isWebDevIntent) {
+                return {
+                  ...msg,
+                  statusStep: "Compiling live preview bundle...",
+                  steps: [...currentSteps, "Built live preview sandbox"],
+                };
+              }
+              return msg;
+            }),
+          };
+        });
+      }, 900);
+
+      // Context window trimming based on Chat Memory slider (exclude currently generating message)
+      const historyToSend = updatedMsgs
+        .filter((m) => !m.isGenerating && m.content)
+        .slice(-(memoryValue >= 20 ? updatedMsgs.length : memoryValue));
 
       const requestPayload = {
         model: selectedModel,
-        messages: historySlice.map((m) => ({
+        messages: historyToSend.map((m) => ({
           role: m.role,
           content: m.content,
         })),
@@ -1988,6 +2243,7 @@ export default function PlaygroundPage() {
           body: JSON.stringify(requestPayload),
         });
 
+        clearInterval(progressInterval);
         const latencyMs = Date.now() - startTime;
         let assistantContent = "";
         let tokensUsed = 0;
@@ -2018,9 +2274,25 @@ export default function PlaygroundPage() {
                 : JSON.stringify(data.reasoning);
           }
 
-          // If this was a web development request or the response contains code, populate the Workspace IDE
-          if (isWebDevIntent || assistantContent.includes("```")) {
-            const projectFiles = extractProjectFiles(assistantContent, "tsx", "App.tsx");
+          const hasCode = isWebDevIntent || assistantContent.includes("```");
+          const projectFiles = hasCode
+            ? extractProjectFiles(assistantContent, "tsx", "App.tsx")
+            : [];
+
+          const finalSteps = projectFiles.length > 0
+            ? [
+                "Explored project requirements & architecture",
+                ...projectFiles
+                  .filter((f) => f.path.startsWith("src/") || f.name === "index.html")
+                  .map((f) => `Created ${f.path} (${f.content.split(/\r?\n/).length} lines)`),
+                "Compiled live workspace preview & interactions",
+              ]
+            : ["Analyzed prompt & verified tool context", "Generated response"];
+
+          const latencySec = Math.max(1, Math.round(latencyMs / 1000));
+
+          // If project files exist, populate the Workspace IDE in preview mode
+          if (projectFiles.length > 0) {
             const mainFile = projectFiles.find((f) => f.name === "App.tsx") || projectFiles[0];
             setActiveArtifact({
               id: `ws_${Date.now()}`,
@@ -2035,36 +2307,52 @@ export default function PlaygroundPage() {
               urlPath: "/",
             });
           }
+
+          setMessages((m) => ({
+            ...m,
+            [activeRoom]: (m[activeRoom] || []).map((msg) =>
+              msg.id === assistantId
+                ? {
+                    ...msg,
+                    content: assistantContent,
+                    isGenerating: false,
+                    statusStep: undefined,
+                    steps: finalSteps,
+                    projectFiles: projectFiles.length > 0 ? projectFiles : undefined,
+                    thoughtDurationSec: latencySec,
+                    tokens: tokensUsed,
+                    cost: costStr,
+                    latencyMs,
+                    reasoning: reasoningText || undefined,
+                    toolCalls: returnedToolCalls.length > 0 ? returnedToolCalls : undefined,
+                    weather: weatherData || undefined,
+                  }
+                : msg
+            ),
+          }));
         } else {
           const errData = await response.json().catch(() => ({}));
           const errMsg =
             errData?.error?.message ||
             `Gateway HTTP ${response.status}: Failed to route to ${activeModelObj.displayName}`;
           assistantContent = `⚠️ **Gateway Error**: ${errMsg}\n\n*Check that your upstream providers have valid API keys connected in the [Providers](/dashboard/providers) tab.*`;
-          // If error occurs and we were in building state, close the building screen
           if (isWebDevIntent) {
             setActiveArtifact(null);
           }
+          setMessages((m) => ({
+            ...m,
+            [activeRoom]: (m[activeRoom] || []).map((msg) =>
+              msg.id === assistantId
+                ? {
+                    ...msg,
+                    content: assistantContent,
+                    isGenerating: false,
+                    statusStep: undefined,
+                  }
+                : msg
+            ),
+          }));
         }
-
-        const assistantMsg: Message = {
-          id: uid(),
-          role: "assistant",
-          content: assistantContent,
-          model: activeModelObj.displayName,
-          tokens: tokensUsed,
-          cost: costStr,
-          latencyMs,
-          reasoning: reasoningText || undefined,
-          toolCalls: returnedToolCalls.length > 0 ? returnedToolCalls : undefined,
-          weather: weatherData || undefined,
-          timestamp: new Date(),
-        };
-
-        setMessages((m) => ({
-          ...m,
-          [activeRoom]: [...updatedMsgs, assistantMsg],
-        }));
 
         setRooms((rs) =>
           rs.map((r) =>
@@ -2074,30 +2362,51 @@ export default function PlaygroundPage() {
           )
         );
 
-        // Notify all open dashboard tabs via BroadcastChannel for 0ms instantaneous update
         notifyClientTelemetry();
       } catch (e: any) {
+        clearInterval(progressInterval);
         if (isWebDevIntent) {
           setActiveArtifact(null);
         }
-        const errorMsg: Message = {
-          id: uid(),
-          role: "assistant",
-          content: `⚠️ **Connection Error**: Could not connect to gateway: ${e?.message ?? "Network error"}`,
-          model: activeModelObj.displayName,
-          timestamp: new Date(),
-        };
         setMessages((m) => ({
           ...m,
-          [activeRoom]: [...updatedMsgs, errorMsg],
+          [activeRoom]: (m[activeRoom] || []).map((msg) =>
+            msg.id === assistantId
+              ? {
+                  ...msg,
+                  content: `⚠️ **Connection Error**: Could not connect to gateway: ${e?.message ?? "Network error"}`,
+                  isGenerating: false,
+                  statusStep: undefined,
+                }
+              : msg
+          ),
         }));
       } finally {
+        clearInterval(progressInterval);
         setLoading(false);
         setActiveRunningTools([]);
       }
     },
     [input, loading, activeRoom, currentMsgs, selectedModel, memoryValue, activeModelObj, serverTools, toolConfigs]
   );
+
+  const handleOpenFileInWorkspace = useCallback((filePath: string, files: WorkspaceFile[]) => {
+    const target = files.find((f) => f.path === filePath) || files[0];
+    if (!target) return;
+
+    setActiveArtifact({
+      id: `ws_${Date.now()}`,
+      title: target.name,
+      language: target.language,
+      code: target.content,
+      isHtml: true,
+      activeTab: "code",
+      isBuilding: false,
+      projectFiles: files,
+      selectedFile: target.path,
+      urlPath: "/",
+    });
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -2688,9 +2997,24 @@ export default function PlaygroundPage() {
               }
 
               // Assistant message card
+              if (msg.isGenerating) {
+                return (
+                  <div key={msg.id} className="pg-assistant-card">
+                    <ArenaGeneratingCard
+                      modelName={msg.model || activeModelObj.displayName}
+                      statusStep={msg.statusStep}
+                      steps={msg.steps}
+                    />
+                  </div>
+                );
+              }
+
               const hasReasoning = !!msg.reasoning;
               const isReasoningExpanded = showReasoning[msg.id];
               const isCardCollapsed = !!collapsedCards[msg.id];
+              const hasProjectFiles =
+                Boolean(msg.projectFiles && msg.projectFiles.length > 0) ||
+                Boolean(msg.content && (msg.content.includes("```") || /(?:src\/App\.tsx|src\/index\.css|index\.html)/i.test(msg.content)));
 
               return (
                 <div key={msg.id} className="pg-assistant-card">
@@ -2782,23 +3106,40 @@ export default function PlaygroundPage() {
                     <ToolCallsViewer toolCalls={msg.toolCalls} />
                   )}
 
-                  {/* Card content text */}
+                  {/* Card content text: ArenaAgentCard if project/code files exist, else RenderMessage */}
                   <div className="pg-card-body">
-                    <RenderMessage
-                      content={msg.content}
-                      userPrompt={
-                        currentMsgs
-                          .slice(0, idx)
-                          .reverse()
-                          .find((m) => m.role === "user")?.content
-                      }
-                      onOpenArtifact={(art) => {
-                        setActiveArtifact({
-                          id: `${msg.id}_${Date.now()}`,
-                          ...art,
-                        });
-                      }}
-                    />
+                    {hasProjectFiles ? (
+                      <ArenaAgentCard
+                        message={msg}
+                        projectFiles={msg.projectFiles || extractProjectFiles(msg.content, "tsx", "App.tsx")}
+                        thoughtDurationSec={msg.thoughtDurationSec}
+                        steps={msg.steps}
+                        onSelectFile={(filePath) => {
+                          const files = msg.projectFiles || extractProjectFiles(msg.content, "tsx", "App.tsx");
+                          handleOpenFileInWorkspace(filePath, files);
+                        }}
+                        onMakeBetter={() => {
+                          setInput("Make better: enhance the design with polished micro-interactions, responsive styling, and cleaner layout");
+                          textareaRef.current?.focus();
+                        }}
+                      />
+                    ) : (
+                      <RenderMessage
+                        content={msg.content}
+                        userPrompt={
+                          currentMsgs
+                            .slice(0, idx)
+                            .reverse()
+                            .find((m) => m.role === "user")?.content
+                        }
+                        onOpenArtifact={(art) => {
+                          setActiveArtifact({
+                            id: `${msg.id}_${Date.now()}`,
+                            ...art,
+                          });
+                        }}
+                      />
+                    )}
                   </div>
 
                   {/* Card footer actions */}
@@ -2880,8 +3221,8 @@ export default function PlaygroundPage() {
             })
           )}
 
-          {/* Thinking Card when waiting for LLM completion - tools show while generating and disappear when complete */}
-          {loading && (
+          {/* Thinking Card when waiting for LLM completion without active generating message */}
+          {loading && !currentMsgs.some((m) => m.isGenerating) && (
             <div className="pg-typing-card" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
                 <div className="pg-model-name-title">

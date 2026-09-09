@@ -1,6 +1,6 @@
 {
   "name": "freeroute",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "private": true,
   "description": "freeroute — Open AI Gateway & LLMOps Routing Platform",
   "author": "neuralnexustech (https://github.com/neuralnexustech)",
