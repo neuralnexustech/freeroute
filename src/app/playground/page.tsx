@@ -1600,6 +1600,7 @@ export default function PlaygroundPage() {
   const [rooms, setRooms] = useState<Room[]>([{ id: "r-init", title: "New chat", updatedAt: Date.now() }]);
   const [activeRoom, setActiveRoom] = useState<string>("r-init");
   const [messages, setMessages] = useState<Record<string, Message[]>>({ "r-init": [] });
+  const [roomArtifacts, setRoomArtifacts] = useState<Record<string, ActiveArtifact | null>>({});
   const [_storageLoaded, setStorageLoaded] = useState(false);
 
   // Hydrate from localStorage after mount (client only) - this avoids hydration mismatch
@@ -1630,6 +1631,11 @@ export default function PlaygroundPage() {
         });
         setMessages(parsed);
       }
+
+      const savedArtifacts = localStorage.getItem("fr_pg_artifacts");
+      if (savedArtifacts) {
+        setRoomArtifacts(JSON.parse(savedArtifacts));
+      }
     } catch {
       // Ignore parse errors
     }
@@ -1652,6 +1658,13 @@ export default function PlaygroundPage() {
     } catch {}
   }, [messages]);
 
+  // Save room workspace files/artifacts to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("fr_pg_artifacts", JSON.stringify(roomArtifacts));
+    } catch {}
+  }, [roomArtifacts]);
+
   // ── 3. Chat Controls & State ──────────────────────────────────────────────
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -1670,8 +1683,20 @@ export default function PlaygroundPage() {
   const [showReasoning, setShowReasoning] = useState<Record<string, boolean>>({});
   const [collapsedCards, setCollapsedCards] = useState<Record<string, boolean>>({});
 
-  // Active Code Artifact Drawer / Slider State (Claude-style side panel)
-  const [activeArtifact, setActiveArtifact] = useState<ActiveArtifact | null>(null);
+  // Active Code Artifact Drawer / Slider State (associated with active room)
+  const activeArtifact = roomArtifacts[activeRoom] || null;
+  const setActiveArtifact = useCallback((art: ActiveArtifact | null | ((prev: ActiveArtifact | null) => ActiveArtifact | null)) => {
+    setRoomArtifacts((prev) => {
+      const current = prev[activeRoom] || null;
+      const nextVal = typeof art === "function" ? art(current) : art;
+      if (!nextVal) {
+        const copy = { ...prev };
+        delete copy[activeRoom];
+        return copy;
+      }
+      return { ...prev, [activeRoom]: nextVal };
+    });
+  }, [activeRoom]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1681,7 +1706,7 @@ export default function PlaygroundPage() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeArtifact]);
+  }, [activeArtifact, setActiveArtifact]);
 
   // Active Tool Drilldown Configuration State
   const [activeToolConfig, setActiveToolConfig] = useState<string | null>(null);
@@ -1828,6 +1853,12 @@ export default function PlaygroundPage() {
       delete copy[id];
       return copy;
     });
+    // Also delete any created files/artifacts belonging to this chat conversation
+    setRoomArtifacts((prev) => {
+      const copy = { ...prev };
+      delete copy[id];
+      return copy;
+    });
     showToast("Chat removed");
   };
 
@@ -1845,6 +1876,21 @@ export default function PlaygroundPage() {
         setActiveRoom(filtered[0].id);
       }
       return filtered;
+    });
+    setMessages((prev) => {
+      const copy = { ...prev };
+      selectedRooms.forEach((id) => {
+        delete copy[id];
+      });
+      return copy;
+    });
+    // Also delete all created files/artifacts for the selected rooms
+    setRoomArtifacts((prev) => {
+      const copy = { ...prev };
+      selectedRooms.forEach((id) => {
+        delete copy[id];
+      });
+      return copy;
     });
     setSelectedRooms([]);
     setSelectMode(false);
