@@ -1822,34 +1822,40 @@ function ArenaAgentCard({
         )}
       </div>
 
-      {/* 4. Compact Clickable File Chips (Click opens file in right-side editor!) */}
-      {projectFiles.length > 0 && (
-        <div className="pg-arena-files-list">
-          {projectFiles
-            .filter((f) => f.path.startsWith("src/") || f.name === "index.html" || f.name === "package.json")
-            .slice(0, 8)
-            .map((f) => {
-              const lineCount = f.content.split(/\r?\n/).length;
-              return (
-                <button
-                  key={f.path}
-                  className="pg-arena-file-pill"
-                  onClick={() => onSelectFile?.(f.path)}
-                  title={`Open ${f.path} in right editor`}
-                >
-                  <span className="pg-arena-file-icon">{getFileIcon(f.name)}</span>
-                  <span className="pg-arena-file-name">{f.path}</span>
-                  <span className="pg-arena-file-meta">{lineCount} lines</span>
-                  <span className="pg-arena-file-open-tag">Open in Editor ↗</span>
-                </button>
-              );
-            })}
-        </div>
-      )}
-
-      {/* 5. Arena Action Bar with 'make better' button */}
+      {/* 4. Arena Action Bar with Feedback Icons and 'make better' button (Matching Image 2) */}
       <div className="pg-arena-action-row">
-        <div className="pg-arena-action-left" />
+        <div className="pg-arena-action-left">
+          <button
+            className="pg-msg-action-icon"
+            title="Good response"
+            onClick={() => {}}
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+            </svg>
+          </button>
+          <button
+            className="pg-msg-action-icon"
+            title="Bad response"
+            onClick={() => {}}
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+            </svg>
+          </button>
+          <button
+            className="pg-msg-action-icon"
+            title="Copy response"
+            onClick={() => {
+              navigator.clipboard.writeText(cleanNarrative);
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          </button>
+        </div>
         <button
           className="pg-arena-make-better-btn"
           onClick={onMakeBetter}
