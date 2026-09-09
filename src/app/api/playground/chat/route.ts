@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateApiKey } from "@/lib/auth";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
+
+const execAsync = promisify(exec);
 
 // Clean conversational prefixes from search queries
 function cleanSearchQuery(query: string): string {
@@ -234,29 +238,43 @@ async function performWebFetch(url: string) {
   }
 }
 
-// Safe sandboxed Shell command emulator
-function evaluateShell(cmd: string) {
-  const trimmed = cmd.trim();
-  if (/^echo\s+(.*)/i.test(trimmed)) {
-    return trimmed.replace(/^echo\s+/i, "").replace(/['"]/g, "");
+// Real shell command execution with timeout & error handling
+async function executeShellCommand(cmd: string, timeoutMs: number = 30000) {
+  const trimmed = cmd.trim().replace(/^[$>]\s*/, "");
+  const startTime = Date.now();
+
+  try {
+    const { stdout, stderr } = await execAsync(trimmed, {
+      timeout: timeoutMs,
+      maxBuffer: 1024 * 1024, // 1MB buffer
+      cwd: process.cwd(),
+      windowsHide: true,
+      env: {
+        ...process.env,
+        PAGER: "cat",
+        GIT_PAGER: "cat",
+      },
+    });
+
+    const durationMs = Date.now() - startTime;
+    return {
+      stdout: stdout ? stdout.trim() : "",
+      stderr: stderr ? stderr.trim() : "",
+      exitCode: 0,
+      durationMs,
+    };
+  } catch (err: any) {
+    const durationMs = Date.now() - startTime;
+    const stdout = (err.stdout || "").toString().trim();
+    const stderr = (err.stderr || err.message || "Execution failed").toString().trim();
+    const exitCode = typeof err.code === "number" ? err.code : 1;
+    return {
+      stdout,
+      stderr,
+      exitCode,
+      durationMs,
+    };
   }
-  if (/^(date|time)/i.test(trimmed)) {
-    return new Date().toISOString();
-  }
-  if (/^pwd/i.test(trimmed)) {
-    return "/workspace/freeroute";
-  }
-  if (/^(ls|dir)/i.test(trimmed)) {
-    return "src/  prisma/  public/  package.json  next.config.mjs  tsconfig.json";
-  }
-  if (/^node\s+-v/i.test(trimmed)) {
-    return "v20.14.0";
-  }
-  if (/^curl\s+(https?:\/\/[^\s]+)/i.test(trimmed)) {
-    const url = trimmed.match(/^curl\s+(https?:\/\/[^\s]+)/i)?.[1];
-    return `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"status":"ok","url":"${url}"}`;
-  }
-  return `[shell sandbox] Executed command: ${trimmed}\nExit code: 0\nStatus: completed`;
 }
 
 export async function POST(req: NextRequest) {
@@ -443,20 +461,32 @@ export async function POST(req: NextRequest) {
   // 4. Tool: Shell Command Execution
   if (tools.shell) {
     const shellMatch =
-      lastUserMsg.match(/```(?:bash|sh|shell|cmd)?\n([\s\S]+?)```/i) ||
-      lastUserMsg.match(/(?:run|execute|shell|bash|cmd)\s*[:]\s*(.+)/i) ||
-      lastUserMsg.match(/^\$(.+)/i);
+      lastUserMsg.match(/```(?:bash|sh|shell|cmd|powershell|ps1)?\n([\s\S]+?)```/i) ||
+      lastUserMsg.match(/(?:run|execute|shell|bash|cmd|terminal)\s*[:]\s*(.+)/i) ||
+      lastUserMsg.match(/^(?:run|exec|execute)\s+[`"']([^`"']+)['"`]/i) ||
+      lastUserMsg.match(/^[$>]\s*(.+)/i);
 
     if (shellMatch) {
-      const command = (shellMatch[1] || shellMatch[0]).trim().replace(/^\$\s*/, "");
-      const output = evaluateShell(command);
-      contextAdditions.push(`[System Context - Shell Execution in Sandboxed Container]\nCommand: ${command}\nOutput:\n${output}`);
+      const command = (shellMatch[1] || shellMatch[0]).trim().replace(/^[$>]\s*/, "");
+      const result = await executeShellCommand(command);
+
+      let outputText = "";
+      if (result.stdout) outputText += result.stdout;
+      if (result.stderr) outputText += (outputText ? "\n" : "") + `[stderr]:\n${result.stderr}`;
+      if (!outputText) outputText = `(Command completed with exit code ${result.exitCode}, no output)`;
+
+      contextAdditions.push(
+        `[System Context - Shell Execution]\n` +
+        `Command: ${command}\n` +
+        `Exit Code: ${result.exitCode} (${result.durationMs}ms)\n` +
+        `Output:\n${outputText}`
+      );
       toolCalls.push({
         tool: "shell",
         name: "Shell",
         icon: "🐚",
         summary: `Executed: ${command.slice(0, 32)}${command.length > 32 ? "..." : ""}`,
-        details: `Container: OpenRouter Sandboxed Container\nEnvironment: Linux x86_64 · Node 20 · Python 3.11\nCommand: ${command}\nExit code: 0\n\nOutput:\n${output}`,
+        details: `Command: ${command}\nExit code: ${result.exitCode}\nDuration: ${result.durationMs}ms\n\nOutput:\n${outputText}`,
       });
     }
   }

@@ -1275,7 +1275,7 @@ export default function PlaygroundPage() {
     { id: "fusion", name: "Fusion", desc: "Multi-model consensus and analysis", sub: "3 models", icon: "🔀", enabled: false },
     { id: "advisor", name: "Advisor", desc: "Consult a stronger model for guidance", sub: "1 advisor", icon: "💡", enabled: false },
     { id: "subagent", name: "Subagent", desc: "Delegate tasks to smaller, faster models", sub: "1 subagent", icon: "🔲", enabled: false },
-    { id: "shell", name: "Shell", desc: "Run shell commands in a sandboxed container", sub: "OpenRouter", icon: "🐚", enabled: false },
+    { id: "shell", name: "Shell", desc: "Run shell commands in a sandboxed container", sub: "Shell", icon: "🐚", enabled: false },
   ]);
 
   // Track tools actively executing for the current user prompt
@@ -1302,7 +1302,7 @@ export default function PlaygroundPage() {
         case "subagent":
           return "1 subagent";
         case "shell":
-          return "OpenRouter";
+          return "Shell";
         default:
           return "Auto";
       }
@@ -2776,17 +2776,17 @@ export default function PlaygroundPage() {
                         {activeToolConfig === "shell" && (
                           <>
                             <div className="pg-drilldown-section">
-                              <span className="pg-drilldown-label">Container Sandbox</span>
+                              <span className="pg-drilldown-label">Execution Environment</span>
                               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                                 <div className="pg-drilldown-item selected">
-                                  <span>OpenRouter Sandboxed Container</span>
+                                  <span>Shell (30s Timeout)</span>
                                   <span>✓</span>
                                 </div>
                               </div>
                             </div>
 
                             <div className="pg-drilldown-info-box">
-                              🐚 Executes shell and code scripts in an isolated container environment (Linux x86_64 · Node 20 · Python 3.11) with a 30s timeout and returns outputs directly.
+                              🐚 Executes shell commands and scripts with a 30s safety timeout and returns outputs directly to the model.
                             </div>
                           </>
                         )}

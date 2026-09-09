@@ -61,8 +61,8 @@ Full visibility into incoming requests, TTFT, tokens per second, status codes, a
 Inspect active SQLite storage (`~/.freeroute/freeroute.db`), monitor entity counts, and export/restore 1-click JSON backups.
 ![Database & Backup](assets/screenshots/database-backup.png)
 
-### 9. AI Playground & 8 OpenRouter Server Tools
-Interactive chat interface matching OpenRouter with multi-room history, context memory slider, and 8 server tools:
+### 9. AI Playground & 8 Server Tools
+Interactive conversational playground with multi-room history, context memory slider, and 8 server tools:
 - **Web Search**: Real-time web search grounding with configurable depth (Low, Medium, High).
 - **Web Fetch**: Clean Markdown content extraction from mentioned URLs.
 - **Image Generation**: On-the-fly text-to-image rendering powered by FLUX.1 Schnell.
@@ -70,7 +70,7 @@ Interactive chat interface matching OpenRouter with multi-room history, context 
 - **Fusion**: Multi-model deliberation running a 3-model panel in parallel with consensus analysis.
 - **Advisor**: Mid-generation consultation of stronger frontier reasoning models (Claude 3.7 Sonnet, DeepSeek R1).
 - **Subagent**: Modular task decomposition delegated to high-speed worker models (North Mini, Gemma 2).
-- **Shell**: Sandboxed container execution environment with 30s timeout.
+- **Shell**: Real shell command and script execution with 30s safety timeout.
 
 ![AI Playground Conversation](assets/screenshots/playground.png)
 
