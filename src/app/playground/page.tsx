@@ -823,35 +823,45 @@ function CodeViewerCard({
 function extractProjectFiles(rawCode: string, language: string, title: string): WorkspaceFile[] {
   const files: WorkspaceFile[] = [];
 
-  // 1. Check if rawCode contains multiple marked files like `// filepath: ...` or ```lang:path
-  const codeBlockRegex = /```(\w+)?(?::([^\n]+))?\r?\n([\s\S]*?)\r?\n```/g;
+  // 1. Check if rawCode contains multiple marked files like `// filepath: ...` or ```lang:path or ```lang filename="path"
+  const codeBlockRegex = /```(\w+)?(?:\s+(?:filename|title)=["']?([^\s"'\n]+)["']?|:([^\s\n]+))?\r?\n([\s\S]*?)\r?\n```/g;
   let match: RegExpExecArray | null;
   while ((match = codeBlockRegex.exec(rawCode)) !== null) {
     const lang = (match[1] || "typescript").toLowerCase();
-    const filePath = match[2]?.trim() || "";
-    const content = match[3] || "";
+    let filePath = (match[2] || match[3] || "").trim();
+    const content = match[4] || "";
+
+    if (!filePath) {
+      const firstLine = content.split(/\r?\n/)[0]?.trim() || "";
+      const pathMatch = firstLine.match(/^(?:\/\/|\/\*|#|\/\/ file:|\/\/ filepath:|\/\* File:)\s*([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/i);
+      if (pathMatch && (pathMatch[1].includes("/") || pathMatch[1].includes("."))) {
+        filePath = pathMatch[1].trim();
+      }
+    }
+
     if (filePath) {
-      const name = filePath.split("/").pop() || filePath;
-      files.push({ name, path: filePath, language: lang, content });
+      let normalizedPath = filePath.replace(/^\/+/, "");
+      if (normalizedPath.startsWith("components/") || normalizedPath.startsWith("shaders/") || normalizedPath.startsWith("utils/")) {
+        normalizedPath = `src/${normalizedPath}`;
+      }
+      const name = normalizedPath.split("/").pop() || normalizedPath;
+      files.push({ name, path: normalizedPath, language: lang, content });
     }
   }
 
-  // If blocks were found with explicit filepaths, return them
-  if (files.length > 0) {
-    return files;
+  // If no blocks were found, create the main file
+  if (files.length === 0) {
+    const isHtml = checkIsHtml(language, rawCode);
+    const mainName = isHtml ? "index.html" : title.includes(".") ? title : "App.tsx";
+    const mainPath = isHtml ? "index.html" : `src/${mainName}`;
+
+    files.push({
+      name: mainName,
+      path: mainPath,
+      language: isHtml ? "html" : language || "typescript",
+      content: rawCode,
+    });
   }
-
-  // If it's HTML, create an integrated multi-file project structure like Image 1
-  const isHtml = checkIsHtml(language, rawCode);
-  const mainName = isHtml ? "index.html" : title.includes(".") ? title : "App.tsx";
-  const mainPath = isHtml ? "index.html" : `src/${mainName}`;
-
-  files.push({
-    name: mainName,
-    path: mainPath,
-    language: isHtml ? "html" : language || "typescript",
-    content: rawCode,
-  });
 
   // Replicate the exact modern project tree from Image 1:
   // src/App.tsx, src/index.css, src/main.tsx, src/vite-env.d.ts, index.html, package.json, tsconfig.json, vite.config.ts
@@ -947,27 +957,436 @@ function BuildingIconSvg() {
   );
 }
 
-// ── File Type Icons Helper ───────────────────────────────────────────────────
+// ── File Type Icons Helper (Matching Arena.ai Image 2) ─────────────────────────
 function getFileIcon(fileName: string) {
-  if (fileName.endsWith(".tsx") || fileName.endsWith(".jsx")) {
-    return <span style={{ color: "#00d8ff" }}>⚛</span>;
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".tsx") || lower.endsWith(".jsx")) {
+    return <span style={{ color: "#00d8ff", fontSize: 13, lineHeight: 1 }}>⚛</span>;
   }
-  if (fileName.endsWith(".ts")) {
-    return <span style={{ color: "#3178c6", fontWeight: 700, fontSize: 10 }}>TS</span>;
+  if (lower.includes("vite.config")) {
+    return <span style={{ color: "#bd34fe", fontSize: 11, fontWeight: 800 }}>⚡</span>;
   }
-  if (fileName.endsWith(".js")) {
+  if (lower.endsWith(".d.ts") || lower.endsWith(".ts") || lower.includes("tsconfig")) {
+    return <span style={{ color: "#3178c6", fontWeight: 700, fontSize: 10, letterSpacing: -0.5 }}>TS</span>;
+  }
+  if (lower.endsWith(".js") || lower.endsWith(".mjs")) {
     return <span style={{ color: "#f7df1e", fontWeight: 700, fontSize: 10 }}>JS</span>;
   }
-  if (fileName.endsWith(".css")) {
-    return <span style={{ color: "#38bdf8", fontWeight: 700, fontSize: 9 }}>🎨</span>;
+  if (lower.endsWith(".css")) {
+    return <span style={{ color: "#38bdf8", fontSize: 11 }}>🎨</span>;
   }
-  if (fileName.endsWith(".html")) {
-    return <span style={{ color: "#e34f26", fontWeight: 700, fontSize: 10 }}>5</span>;
+  if (lower.endsWith(".html")) {
+    return <span style={{ color: "#e34f26", fontWeight: 800, fontSize: 10 }}>5</span>;
   }
-  if (fileName.endsWith(".json")) {
+  if (lower.includes("package") && lower.endsWith(".json")) {
+    return <span style={{ color: "#cb3837", fontWeight: 700, fontSize: 10 }}>npm</span>;
+  }
+  if (lower.endsWith(".json")) {
     return <span style={{ color: "#cb3837", fontWeight: 700, fontSize: 10 }}>{}</span>;
   }
+  if (lower.endsWith(".svg")) {
+    return <span style={{ color: "#ffb13b", fontSize: 11 }}>❖</span>;
+  }
   return <span>📄</span>;
+}
+
+// ── In-Browser Multi-Component React & Tailwind Live Compiler ────────────────
+function compileProjectPreview(files: WorkspaceFile[], artifact: ActiveArtifact): string {
+  const cssFiles = files.filter((f) => f.name.endsWith(".css"));
+  const htmlFile = files.find((f) => f.name.endsWith(".html"));
+  const reactFiles = files.filter(
+    (f) =>
+      f.name.endsWith(".tsx") ||
+      f.name.endsWith(".jsx") ||
+      (f.name.endsWith(".ts") && !f.name.endsWith(".d.ts") && !f.name.includes("vite.config")) ||
+      (f.name.endsWith(".js") && !f.name.includes("vite.config"))
+  );
+
+  // If user only provided pure HTML without any React/TSX components
+  const isPureHtml =
+    (artifact.isHtml && reactFiles.length === 0) ||
+    (htmlFile && htmlFile.content.includes("<html") && reactFiles.length === 0);
+
+  if (isPureHtml && htmlFile) {
+    let doc = htmlFile.content;
+    if (cssFiles.length > 0 && !doc.includes("<style>")) {
+      const injectedStyles = cssFiles.map((c) => `<style>${c.content}</style>`).join("\n");
+      doc = doc.replace("</head>", `${injectedStyles}\n</head>`);
+    }
+    return doc;
+  }
+
+  // Combined CSS styles
+  const allCss = cssFiles.map((c) => c.content).join("\n\n");
+
+  // Determine App file or main entrypoint
+  const appFile =
+    reactFiles.find(
+      (f) =>
+        f.path.toLowerCase().endsWith("app.tsx") ||
+        f.path.toLowerCase().endsWith("app.jsx") ||
+        f.name.toLowerCase() === "app.tsx"
+    ) || reactFiles[0];
+
+  // Component files that should be loaded before App
+  const childFiles = reactFiles.filter((f) => f.path !== appFile?.path);
+
+  // Function to adapt component code for in-browser Babel Standalone execution
+  const adaptCode = (code: string, fileName: string) => {
+    let cleaned = code;
+
+    // 1. Remove TypeScript imports of types
+    cleaned = cleaned.replace(/import\s+type\s+[^;]+;/g, "");
+
+    // 2. Transform React imports
+    cleaned = cleaned.replace(
+      /import\s+(?:React\s*,\s*)?\{([^}]+)\}\s+from\s+['"]react['"];?/g,
+      "const { $1 } = React;"
+    );
+    cleaned = cleaned.replace(
+      /import\s+React(?:\s*,\s*\{([^}]+)\})?\s+from\s+['"]react['"];?/g,
+      (_, hooks) => (hooks ? `const { ${hooks} } = React;` : `/* React */`)
+    );
+    cleaned = cleaned.replace(/import\s+['"]react['"];?/g, "/* React */");
+
+    // 3. Transform Lucide icons import
+    cleaned = cleaned.replace(
+      /import\s+\{([^}]+)\}\s+from\s+['"]lucide-react['"];?/g,
+      "const { $1 } = window.LucideIcons;"
+    );
+
+    // 4. Remove relative/other component and style imports
+    cleaned = cleaned.replace(/import\s+[^'"]+\s+from\s+['"][^'"]+['"];?/g, "/* local import */");
+    cleaned = cleaned.replace(/import\s+['"][^'"]+['"];?/g, "/* style import */");
+
+    // 5. Strip TypeScript interfaces, types, generics, and type assertions so Babel never throws syntax errors
+    cleaned = cleaned.replace(/interface\s+[A-Za-z0-9_$]+(?:\s+extends\s+[^{]+)?\s*\{[\s\S]*?\}/g, "");
+    cleaned = cleaned.replace(/type\s+[A-Za-z0-9_$]+(?:\s*<[^>]+>)?\s*=\s*[^;]+;/g, "");
+    cleaned = cleaned.replace(/\s+as\s+[A-Za-z0-9_<>[\]|&, ]+/g, "");
+    cleaned = cleaned.replace(/!\./g, ".");
+    cleaned = cleaned.replace(/!\)/g, ")");
+    cleaned = cleaned.replace(/!;+/g, ";");
+    cleaned = cleaned.replace(/(useState|useRef|useMemo|useCallback)<[^>]+>\(/g, "$1(");
+    cleaned = cleaned.replace(/:\s*React\.FC(?:<[^>]+>)?/g, "");
+
+    // 6. Transform exports so components are attached to window and defined in scope
+    cleaned = cleaned.replace(/export\s+default\s+function\s+([a-zA-Z0-9_$]+)/g, "function $1");
+    cleaned = cleaned.replace(/export\s+function\s+([a-zA-Z0-9_$]+)/g, "function $1");
+    cleaned = cleaned.replace(/export\s+const\s+([a-zA-Z0-9_$]+)/g, "const $1");
+    cleaned = cleaned.replace(/export\s+default\s+([a-zA-Z0-9_$]+);?/g, "window.$1 = $1;");
+
+    // Extract component name from fileName (e.g. Navigation.tsx -> Navigation)
+    const baseName = fileName.replace(/\.[^/.]+$/, "").split("/").pop() || "";
+    if (baseName && baseName !== "main" && baseName !== "vite-env.d") {
+      cleaned += `\nif (typeof ${baseName} !== 'undefined') { window.${baseName} = ${baseName}; }`;
+    }
+
+    return cleaned;
+  };
+
+  const childCodeBlocks = childFiles
+    .map((f) => `// --- File: ${f.path} ---\n${adaptCode(f.content, f.name)}`)
+    .join("\n\n");
+  const appCodeBlock = appFile
+    ? `// --- File: ${appFile.path} ---\n${adaptCode(appFile.content, appFile.name)}`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Preview</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: '#6366f1',
+            }
+          }
+        }
+      };
+    </script>
+    <!-- React 18 & ReactDOM 18 -->
+    <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel Standalone for In-Browser TSX Compilation -->
+    <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+    <style>
+      /* Project Custom CSS */
+      ${allCss}
+      
+      html, body {
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+      }
+    </style>
+  </head>
+  <body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
+    <div id="root">
+      <div style="display:flex;height:100vh;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif;color:#64748b;">
+        <div style="text-align:center;">
+          <div style="display:inline-block;width:32px;height:32px;border:3px solid #e2e8f0;border-top-color:#6366f1;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+          <div style="margin-top:12px;font-size:14px;font-weight:500;">Rendering Live Preview...</div>
+        </div>
+        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+      </div>
+    </div>
+
+    <script>
+      // Global error overlay
+      window.onerror = function(msg, url, line, col, error) {
+        const root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '<div style="padding:24px;margin:24px auto;max-width:640px;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;color:#991b1b;font-family:system-ui,-apple-system,sans-serif;">' +
+            '<h3 style="margin:0 0 8px;font-size:16px;font-weight:700;">Preview Runtime Error</h3>' +
+            '<pre style="margin:0;font-size:12px;font-family:monospace;white-space:pre-wrap;overflow:auto;background:rgba(0,0,0,0.04);padding:10px;border-radius:6px;">' +
+            (error ? (error.stack || error.message) : msg) +
+            '</pre></div>';
+        }
+        return false;
+      };
+
+      // Expose standard React hooks globally
+      window.useState = React.useState;
+      window.useEffect = React.useEffect;
+      window.useMemo = React.useMemo;
+      window.useRef = React.useRef;
+      window.useCallback = React.useCallback;
+      window.useContext = React.useContext;
+
+      // Universal Icon Component & Proxy for Lucide Icons
+      window.__UniversalIcon = function(props) {
+        const name = (props.__iconName || 'icon').toLowerCase();
+        let pathD = 'M12 8v8M8 12h8';
+        if (name.includes('check')) pathD = 'M20 6L9 17l-5-5';
+        else if (name.includes('arrow') && name.includes('right')) pathD = 'M5 12h14M12 5l7 7-7 7';
+        else if (name.includes('arrow') && name.includes('left')) pathD = 'M19 12H5M12 19l-7-7 7-7';
+        else if (name.includes('chevron') && name.includes('right')) pathD = 'M9 18l6-6-6-6';
+        else if (name.includes('chevron') && name.includes('down')) pathD = 'M6 9l6 6 6-6';
+        else if (name.includes('star')) pathD = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z';
+        else if (name.includes('shield')) pathD = 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z';
+        else if (name.includes('zap') || name.includes('bolt')) pathD = 'M13 2L3 14h9l-1 8 10-12h-9l1-8z';
+        else if (name.includes('menu')) pathD = 'M3 12h18M3 6h18M3 18h18';
+        else if (name.includes('close') || name === 'x') pathD = 'M18 6L6 18M6 6l12 12';
+        else if (name.includes('user')) pathD = 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z';
+        else if (name.includes('sparkle')) pathD = 'M12 3l1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3z';
+
+        return React.createElement('svg', {
+          width: props.size || props.width || 18,
+          height: props.size || props.height || 18,
+          viewBox: '0 0 24 24',
+          fill: 'none',
+          stroke: props.color || 'currentColor',
+          strokeWidth: props.strokeWidth || 2,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          className: props.className || '',
+          style: props.style,
+        }, React.createElement('path', { d: pathD }));
+      };
+
+      window.LucideIcons = new Proxy({}, {
+        get: function(target, prop) {
+          if (typeof prop === 'string') {
+            if (!target[prop]) {
+              const comp = function(props) {
+                return window.__UniversalIcon(Object.assign({ __iconName: prop }, props));
+              };
+              comp.displayName = prop;
+              target[prop] = comp;
+            }
+            return target[prop];
+          }
+          return undefined;
+        }
+      });
+    </script>
+
+    <script type="text/babel" data-presets="react,typescript">
+      ${childCodeBlocks}
+
+      ${appCodeBlock}
+
+      // Mount App into root
+      try {
+        const MountApp = window.App || (typeof App !== 'undefined' ? App : null);
+        if (MountApp) {
+          const rootEl = document.getElementById('root');
+          ReactDOM.createRoot(rootEl).render(React.createElement(MountApp));
+        } else {
+          const candidates = ['App', 'Scene', 'HeroSection', 'Main', 'LandingPage', 'Home'];
+          let foundComp = null;
+          for (const name of candidates) {
+            if (window[name]) { foundComp = window[name]; break; }
+          }
+          if (!foundComp) {
+            const keys = Object.keys(window);
+            for (const k of keys) {
+              if (typeof window[k] === 'function' && /^[A-Z]/.test(k) && k !== 'React' && k !== 'ReactDOM' && k !== 'Babel') {
+                foundComp = window[k];
+                break;
+              }
+            }
+          }
+          if (foundComp) {
+            ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(foundComp));
+          } else {
+            document.getElementById('root').innerHTML = '<div class="p-8 text-center font-sans"><h2 class="text-xl font-bold text-slate-800">Workspace Application Loaded</h2><p class="text-slate-500 mt-2">All components compiled successfully.</p></div>';
+          }
+        }
+      } catch (err) {
+        console.error('Mount error:', err);
+        document.getElementById('root').innerHTML = '<div class="p-6 m-6 bg-red-50 border border-red-200 rounded-xl text-red-800 font-sans"><h3 class="font-bold">Render Error</h3><pre class="mt-2 text-xs font-mono">' + (err.stack || err.message) + '</pre></div>';
+      }
+    </script>
+  </body>
+</html>`;
+}
+
+// ── Hierarchical File Tree Builder (Matching Arena.ai Image 2) ───────────────
+interface FileTreeNode {
+  id: string;
+  name: string;
+  path: string;
+  isFolder: boolean;
+  children: FileTreeNode[];
+  file?: WorkspaceFile;
+}
+
+function buildFileTree(files: WorkspaceFile[]): FileTreeNode[] {
+  const rootNodes: FileTreeNode[] = [];
+
+  const findOrCreateFolder = (parentList: FileTreeNode[], folderName: string, folderPath: string): FileTreeNode => {
+    let folder = parentList.find((n) => n.isFolder && n.name === folderName);
+    if (!folder) {
+      folder = {
+        id: `dir_${folderPath}`,
+        name: folderName,
+        path: folderPath,
+        isFolder: true,
+        children: [],
+      };
+      parentList.push(folder);
+    }
+    return folder;
+  };
+
+  for (const file of files) {
+    const parts = file.path.split("/").filter(Boolean);
+    if (parts.length <= 1) {
+      rootNodes.push({
+        id: `file_${file.path}`,
+        name: file.name,
+        path: file.path,
+        isFolder: false,
+        children: [],
+        file,
+      });
+    } else {
+      let currentLevel = rootNodes;
+      let accumulatedPath = "";
+      for (let i = 0; i < parts.length - 1; i++) {
+        accumulatedPath = accumulatedPath ? `${accumulatedPath}/${parts[i]}` : parts[i];
+        const folder = findOrCreateFolder(currentLevel, parts[i], accumulatedPath);
+        currentLevel = folder.children;
+      }
+      currentLevel.push({
+        id: `file_${file.path}`,
+        name: parts[parts.length - 1],
+        path: file.path,
+        isFolder: false,
+        children: [],
+        file,
+      });
+    }
+  }
+
+  const sortNodes = (nodes: FileTreeNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.isFolder && !b.isFolder) return -1;
+      if (!a.isFolder && b.isFolder) return 1;
+      return a.name.localeCompare(b.name);
+    });
+    for (const node of nodes) {
+      if (node.isFolder) sortNodes(node.children);
+    }
+  };
+
+  sortNodes(rootNodes);
+  return rootNodes;
+}
+
+function FileTreeNodeView({
+  node,
+  depth = 0,
+  activeFilePath,
+  expandedDirs,
+  onToggleDir,
+  onSelectFile,
+}: {
+  node: FileTreeNode;
+  depth?: number;
+  activeFilePath: string;
+  expandedDirs: Set<string>;
+  onToggleDir: (path: string) => void;
+  onSelectFile: (path: string) => void;
+}) {
+  const isExpanded = expandedDirs.has(node.path);
+
+  if (node.isFolder) {
+    return (
+      <div className="pg-ws-tree-folder">
+        <div
+          className="pg-ws-tree-folder-head"
+          style={{ paddingLeft: `${6 + depth * 12}px` }}
+          onClick={() => onToggleDir(node.path)}
+          title={node.path}
+        >
+          <span style={{ fontSize: 9, opacity: 0.6, width: 10, display: "inline-block" }}>
+            {isExpanded ? "▾" : "▸"}
+          </span>
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          </svg>
+          <span className="pg-ws-folder-name">{node.name}</span>
+        </div>
+        {isExpanded && (
+          <div className="pg-ws-tree-children">
+            {node.children.map((child) => (
+              <FileTreeNodeView
+                key={child.id}
+                node={child}
+                depth={depth + 1}
+                activeFilePath={activeFilePath}
+                expandedDirs={expandedDirs}
+                onToggleDir={onToggleDir}
+                onSelectFile={onSelectFile}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const isActive = activeFilePath === node.path;
+  return (
+    <div
+      className={`pg-ws-tree-file ${isActive ? "active" : ""}`}
+      style={{ paddingLeft: `${18 + depth * 12}px` }}
+      onClick={() => onSelectFile(node.path)}
+      title={node.path}
+    >
+      <span className="pg-ws-file-icon">{getFileIcon(node.name)}</span>
+      <span className="pg-ws-file-name">{node.name}</span>
+    </div>
+  );
 }
 
 // ── Right Web Development Workspace IDE (Images 1 & 2) ──────────────────────
@@ -990,11 +1409,37 @@ function WorkspaceIDE({
     return extractProjectFiles(artifact.code, artifact.language, artifact.title);
   }, [artifact.projectFiles, artifact.code, artifact.language, artifact.title]);
 
+  // Build hierarchical file tree
+  const fileTree = useMemo(() => buildFileTree(files), [files]);
+
+  // Auto-expand all directory folders initially
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    files.forEach((f) => {
+      const parts = f.path.split("/");
+      let acc = "";
+      for (let i = 0; i < parts.length - 1; i++) {
+        acc = acc ? `${acc}/${parts[i]}` : parts[i];
+        s.add(acc);
+      }
+    });
+    return s;
+  });
+
+  const handleToggleDir = (path: string) => {
+    setExpandedDirs((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
   const [activeFilePath, setActiveFilePath] = useState<string>(
     artifact.selectedFile || files[0]?.path || "src/App.tsx"
   );
 
-  // Keep active file in sync if files change
+  // Keep active file in sync if files change or artifact changes
   useEffect(() => {
     if (artifact.selectedFile) {
       setActiveFilePath(artifact.selectedFile);
@@ -1004,12 +1449,15 @@ function WorkspaceIDE({
   }, [files, artifact.selectedFile, activeFilePath]);
 
   const activeFile = useMemo(() => {
-    return files.find((f) => f.path === activeFilePath) || files[0] || {
-      name: artifact.title,
-      path: artifact.title,
-      language: artifact.language,
-      content: artifact.code,
-    };
+    return (
+      files.find((f) => f.path === activeFilePath) ||
+      files[0] || {
+        name: artifact.title,
+        path: artifact.title,
+        language: artifact.language,
+        content: artifact.code,
+      }
+    );
   }, [files, activeFilePath, artifact]);
 
   const handleDownload = () => {
@@ -1030,43 +1478,22 @@ function WorkspaceIDE({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Compile runnable HTML document from active project files
+  // Compile runnable HTML document with Babel Standalone + React 18
   const compiledHtml = useMemo(() => {
-    const htmlFile = files.find((f) => f.name.endsWith(".html"));
-    const cssFiles = files.filter((f) => f.name.endsWith(".css"));
-    const jsFiles = files.filter((f) => f.name.endsWith(".js") || f.name.endsWith(".tsx") || f.name.endsWith(".ts"));
-
-    if (htmlFile && htmlFile.content.includes("<html")) {
-      let doc = htmlFile.content;
-      if (cssFiles.length > 0 && !doc.includes("<style>")) {
-        const injectedStyles = cssFiles.map((c) => `<style>${c.content}</style>`).join("\n");
-        doc = doc.replace("</head>", `${injectedStyles}\n</head>`);
-      }
-      return doc;
-    }
-
-    // Default bundle for modern preview
-    return `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      ${cssFiles.map((c) => c.content).join("\n")}
-    </style>
-  </head>
-  <body class="bg-white text-slate-900 antialiased p-4">
-    <div id="root">
-      ${artifact.code.includes("<") ? artifact.code : `<div class="p-8 font-sans max-w-xl mx-auto"><h1 class="text-2xl font-bold mb-4">${artifact.title}</h1><p class="text-slate-600">${artifact.code.slice(0, 300)}</p></div>`}
-    </div>
-  </body>
-</html>`;
+    return compileProjectPreview(files, artifact);
   }, [files, artifact]);
+
+  // Display URL for the address bar (Matching Image 2)
+  const displayUrl = useMemo(() => {
+    if (artifact.urlPath && artifact.urlPath !== "/") {
+      return `01a08464-dcd3-76e2-801d.arena.site${artifact.urlPath}`;
+    }
+    return "01a08464-dcd3-76e2-801d.arena.site/";
+  }, [artifact.urlPath]);
 
   return (
     <aside className="pg-workspace-slider">
-      {/* ── Topbar (Image 1) ── */}
+      {/* ── Topbar (Images 1 & 2) ── */}
       <div className="pg-ws-topbar">
         {/* Toggle Mode: Preview (Eye) vs Code (</>) */}
         <div className="pg-ws-toggle-group">
@@ -1092,7 +1519,7 @@ function WorkspaceIDE({
           </button>
         </div>
 
-        {/* Address Bar: ↻ / (Image 1) */}
+        {/* Address Bar: ↻ url (Image 2) */}
         <div className="pg-ws-url-bar">
           <button
             className="pg-ws-reload-btn"
@@ -1104,13 +1531,13 @@ function WorkspaceIDE({
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
           </button>
-          <span className="pg-ws-url-text">{artifact.urlPath || "/"}</span>
+          <span className="pg-ws-url-text" title={displayUrl}>{displayUrl}</span>
           <div className="pg-ws-url-actions">
             <button
               className="pg-ws-icon-btn"
               title="Copy URL"
               onClick={() => {
-                navigator.clipboard.writeText("http://localhost:3000" + (artifact.urlPath || "/"));
+                navigator.clipboard.writeText(`https://${displayUrl}`);
                 alert("URL copied!");
               }}
             >
@@ -1155,9 +1582,9 @@ function WorkspaceIDE({
         </div>
       </div>
 
-      {/* ── Main Workspace Body: Check if Building (Image 2) or Loaded (Image 1) ── */}
+      {/* ── Main Workspace Body: Check if Building or Loaded ── */}
       {artifact.isBuilding ? (
-        /* Image 2 Building State */
+        /* Building State (Image 2) */
         <div className="pg-ws-building-screen">
           <div className="pg-ws-building-icon-wrap">
             <BuildingIconSvg />
@@ -1168,7 +1595,7 @@ function WorkspaceIDE({
           </p>
         </div>
       ) : tab === "preview" ? (
-        /* Live App Preview */
+        /* Live App Preview with In-Browser Compiled TSX */
         <div className="pg-ws-preview-view">
           <iframe
             key={previewKey}
@@ -1179,64 +1606,23 @@ function WorkspaceIDE({
           />
         </div>
       ) : (
-        /* Image 1 Workspace IDE Layout */
+        /* Workspace IDE Layout (Image 2) */
         <div className="pg-ws-body">
-          {/* Left Sidebar: FILES Tree (Image 1) */}
+          {/* Left Sidebar: Dynamic Hierarchical FILES Tree */}
           <aside className="pg-ws-files-sidebar">
             <div className="pg-ws-files-title">FILES</div>
             <div className="pg-ws-tree">
-              {/* Folder: src */}
-              <div className="pg-ws-tree-folder">
-                <div className="pg-ws-tree-folder-head">
-                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                  </svg>
-                  <span>src</span>
-                </div>
-                <div className="pg-ws-tree-children">
-                  {/* Optional subfolders for visual parity with Image 1 */}
-                  <div className="pg-ws-tree-folder-head" style={{ opacity: 0.8, padding: "2px 6px" }}>
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                    </svg>
-                    <span>shaders</span>
-                  </div>
-                  <div className="pg-ws-tree-folder-head" style={{ opacity: 0.8, padding: "2px 6px" }}>
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                    </svg>
-                    <span>utils</span>
-                  </div>
-
-                  {/* Files under src */}
-                  {files
-                    .filter((f) => f.path.startsWith("src/"))
-                    .map((file) => (
-                      <div
-                        key={file.path}
-                        className={`pg-ws-tree-file ${activeFilePath === file.path ? "active" : ""}`}
-                        onClick={() => setActiveFilePath(file.path)}
-                      >
-                        <span className="pg-ws-file-icon">{getFileIcon(file.name)}</span>
-                        <span>{file.name}</span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-
-              {/* Root level files (index.html, package.json, etc.) */}
-              {files
-                .filter((f) => !f.path.startsWith("src/"))
-                .map((file) => (
-                  <div
-                    key={file.path}
-                    className={`pg-ws-tree-file ${activeFilePath === file.path ? "active" : ""}`}
-                    onClick={() => setActiveFilePath(file.path)}
-                  >
-                    <span className="pg-ws-file-icon">{getFileIcon(file.name)}</span>
-                    <span>{file.name}</span>
-                  </div>
-                ))}
+              {fileTree.map((node) => (
+                <FileTreeNodeView
+                  key={node.id}
+                  node={node}
+                  depth={0}
+                  activeFilePath={activeFilePath}
+                  expandedDirs={expandedDirs}
+                  onToggleDir={handleToggleDir}
+                  onSelectFile={(p) => setActiveFilePath(p)}
+                />
+              ))}
             </div>
           </aside>
 

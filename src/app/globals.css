@@ -3565,9 +3565,18 @@ table.table-center td:first-child {
   font-family: var(--font-mono);
   color: #555;
   font-weight: 500;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: background 0.12s ease;
+}
+.pg-ws-tree-folder-head:hover {
+  background: #f0f0f0;
 }
 [data-theme="dark"] .pg-ws-tree-folder-head {
   color: #94a3b8;
+}
+[data-theme="dark"] .pg-ws-tree-folder-head:hover {
+  background: #1a202c;
 }
 
 .pg-ws-tree-children {
@@ -3602,13 +3611,13 @@ table.table-center td:first-child {
 }
 
 .pg-ws-tree-file.active {
-  background: #ece7ff;
-  color: #6d28d9;
+  background: #e5e7eb;
+  color: #111827;
   font-weight: 600;
 }
 [data-theme="dark"] .pg-ws-tree-file.active {
-  background: rgba(139, 92, 246, 0.18);
-  color: #a78bfa;
+  background: #1e293b;
+  color: #f8fafc;
 }
 
 .pg-ws-file-icon {
