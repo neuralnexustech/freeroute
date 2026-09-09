@@ -83,6 +83,14 @@ export function parseArtifactProject(
       const pathMatch = firstLine.match(/^(?:\/\/|\/\*|#|\/\/ file:|\/\/ filepath:)\s*([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/i);
       if (pathMatch && (pathMatch[1].includes("/") || pathMatch[1].includes("."))) {
         filePath = pathMatch[1].trim();
+      } else if (lang === "html") {
+        filePath = "index.html";
+      } else if (lang === "tsx" || lang === "jsx") {
+        filePath = "App.tsx";
+      } else if (lang === "css") {
+        filePath = "styles.css";
+      } else if (lang === "json") {
+        filePath = "package.json";
       }
     }
 
@@ -96,11 +104,14 @@ export function parseArtifactProject(
     }
   }
 
-  // 2. Look for primary HTML
+  // 2. Look for primary HTML or React component
   let primaryHtml = "";
   const directHtml = files.find((f) => f.name.endsWith(".html"));
+  const directReact = files.find((f) => f.name.endsWith(".tsx") || f.name.endsWith(".jsx"));
   if (directHtml) {
     primaryHtml = directHtml.content;
+  } else if (directReact) {
+    primaryHtml = directReact.content;
   } else {
     const recovered = recoverStandaloneHtmlDocument(text);
     if (recovered) {
@@ -114,7 +125,7 @@ export function parseArtifactProject(
     }
   }
 
-  // 3. If no files were found from fences or HTML recovery, check if text has full HTML tags
+  // 3. If no files were found from fences or HTML recovery, check if text has full HTML tags or React code
   if (files.length === 0) {
     const trimmed = text.trim();
     if (
@@ -126,6 +137,17 @@ export function parseArtifactProject(
         name: "index.html",
         path: "index.html",
         language: "html",
+        content: primaryHtml,
+      });
+    } else if (
+      (trimmed.includes("export default function") || trimmed.includes("import React")) &&
+      trimmed.length > MIN_HTML_LENGTH
+    ) {
+      primaryHtml = trimmed;
+      files.push({
+        name: "App.tsx",
+        path: "App.tsx",
+        language: "tsx",
         content: primaryHtml,
       });
     } else {

@@ -581,13 +581,19 @@ export async function POST(req: NextRequest) {
   if (isWebDevRequest) {
     contextAdditions.push(
       `[System Context - freeroute Design Studio & Prototype Engine]\n` +
-      `The freeroute playground features an integrated sandboxed Design Studio & Prototype Engine.\n` +
-      `- When asked to build a website, dashboard, landing page, or prototype, output a complete, production-grade, self-contained deliverables.\n` +
-      `- Use standard HTML5 with Tailwind CSS CDN (<script src="https://cdn.tailwindcss.com"></script>), Google Fonts (Inter, Plus Jakarta Sans), and inline SVG icons.\n` +
-      `- Ensure code is 100% self-contained and immediately runnable in the sandbox with zero external build/npm steps. Avoid unbundled ESM imports that cause script runtime errors.\n` +
-      `- Enclose code in a code block marked with \`\`\`html:index.html (or \`\`\`html) so the sandbox immediately mounts the live interactive interface.\n` +
-      `- Deliver state-of-the-art UI/UX: rich color palettes, micro-interactions, responsive mobile and desktop layout, dark mode support, and realistic mock data.\n` +
-      `- In your conversation text, provide a concise, polished executive summary of what was designed and structured — never dump raw unformatted code directly in the conversational text.`
+      `The freeroute playground features an integrated sandboxed Design Studio & Prototype Engine based on modern workable runtimes.\n` +
+      `- Deliverable Contract: Output a complete, production-grade, 100% WORKABLE and INTERACTIVE application prototype.\n` +
+      `- Recommended Formats:\n` +
+      `   1. Modern React 18 TSX component (\`\`\`tsx:App.tsx\`\`\` or \`\`\`tsx\`\`\`) with 'export default function App() { ... }', using React hooks (useState, useEffect, useMemo, useRef), Tailwind CSS utility classes, and icons from 'lucide-react' (e.g. import { Cloud, Sun, Users, BarChart2, TrendingUp, Check, ArrowRight, Activity, Zap, Search, Bell } from 'lucide-react').\n` +
+      `   2. OR a self-contained responsive HTML5 application (\`\`\`html:index.html\`\`\` or \`\`\`html\`\`\`) with Tailwind CSS CDN, Google Fonts (Inter, Plus Jakarta Sans), and keyframe animations.\n` +
+      `- WORKABILITY CONTRACT (MANDATORY):\n` +
+      `   • Every button, tab, toggle, filter, and modal MUST be functional with real interactive state (e.g. switching tabs changes the active view, clicking filter buttons filters the list, search inputs filter data in real-time, toggles change state).\n` +
+      `   • Provide rich, realistic mock domain data (e.g. realistic user names, transactions, revenue numbers, metrics, timestamps) — NEVER use empty placeholders or generic 'Lorem ipsum'.\n` +
+      `   • When charts are appropriate, use Chart.js via '<canvas id="..."></canvas>' or 'useRef' with Chart.js to render actual graphical trendlines, bars, or donut charts.\n` +
+      `   • Include sleek animations: hover effects, smooth transitions, pill badges, and keyframe animations (animate-float, animate-pulse-glow, animate-slide-in).\n` +
+      `- Code Hygiene:\n` +
+      `   • When using React, use JSX elements directly (e.g. <Users className="w-5 h-5" />). Do NOT wrap SVG string markup inside JSX curly braces like <span>{"<svg...>"}</span>.\n` +
+      `   • In your conversational text, give a short executive summary of what was designed and structured; never dump raw code in the conversational message.`
     );
   }
 
