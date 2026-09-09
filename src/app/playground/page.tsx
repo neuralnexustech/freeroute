@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useTheme } from "@/components/ThemeProvider";
+import { notifyClientTelemetry } from "@/hooks/useLiveTelemetry";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface ToolCallResult {
@@ -1557,6 +1558,9 @@ export default function PlaygroundPage() {
               : r
           )
         );
+
+        // Notify all open dashboard tabs via BroadcastChannel for 0ms instantaneous update
+        notifyClientTelemetry();
       } catch (e: any) {
         const errorMsg: Message = {
           id: uid(),

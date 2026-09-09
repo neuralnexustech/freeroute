@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
+import { useLiveTelemetry } from "@/hooks/useLiveTelemetry";
 
 interface OverviewData {
   spend: number;
@@ -87,19 +88,20 @@ export default function ActivitysPage() {
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const load = () => {
+    fetch("/api/overview?range=30d")
+      .then((r) => r.json())
+      .then((d) => setData(d))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => {
-    const load = () => {
-      fetch("/api/overview?range=30d")
-        .then((r) => r.json())
-        .then((d) => setData(d))
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    };
     load();
-    // Auto-refresh every 30s so activity stats stay live
-    const interval = setInterval(load, 30_000);
-    return () => clearInterval(interval);
   }, []);
+
+  // Exact real-time updates via SSE & BroadcastChannel
+  const { isLive } = useLiveTelemetry(load);
 
   // Compute authentic metrics directly from real database logs
   const totalSpend = data?.spend ?? 0;

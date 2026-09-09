@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
+import { useLiveTelemetry } from "@/hooks/useLiveTelemetry";
 
 interface ModelRow {
   id: string;
@@ -153,11 +154,11 @@ export default function ModelsPage() {
   };
   useEffect(() => {
     load();
-    // Auto-refresh every 30s so tok/s and ttft stats stay live
-    const interval = setInterval(load, 30_000);
-    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Exact real-time updates for tok/s, ttft and active status via SSE & BroadcastChannel
+  const { isLive } = useLiveTelemetry(load);
 
   const providers = [...new Set(rows.map((m) => m.provider.name))].sort();
   const modalities = [...new Set(rows.flatMap((m) => m.modalities.split(",").map((s) => s.trim())))].sort();
@@ -195,8 +196,35 @@ export default function ModelsPage() {
   return (
     <>
       <div className="toolbar-row">
-        <div className="tab-group">
+        <div className="tab-group" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button className="active">Models</button>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              fontSize: 11,
+              color: isLive ? "#10b981" : "var(--text-tertiary)",
+              fontWeight: 600,
+              background: isLive ? "rgba(16, 185, 129, 0.08)" : "rgba(255, 255, 255, 0.04)",
+              border: isLive ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid var(--border-subtle)",
+              padding: "2px 7px",
+              borderRadius: 12,
+              userSelect: "none",
+            }}
+            title={isLive ? "Exact Live Benchmarks Stream Connected" : "Connecting to live stream..."}
+          >
+            <span
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: "50%",
+                background: isLive ? "#10b981" : "var(--text-tertiary)",
+                boxShadow: isLive ? "0 0 5px #10b981" : "none",
+              }}
+            />
+            {isLive ? "Live" : "Connecting..."}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button className="btn primary" onClick={pullInfo} disabled={pulling}>{pulling ? "Updating Info…" : "⇩ Pull Info"}</button>

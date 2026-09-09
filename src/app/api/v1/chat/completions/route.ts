@@ -9,6 +9,7 @@ import {
   ComboStrategy,
 } from "@/lib/combo";
 import { detectApp } from "@/lib/detect-app";
+import { broadcastTelemetry } from "@/lib/telemetryEvents";
 
 function estimateCost(
   model: { inputPrice: number; outputPrice: number } | null,
@@ -31,6 +32,16 @@ async function saveLogWithApp(
   if (errorMessage) {
     await prisma.$executeRaw`UPDATE "RequestLog" SET "errorMessage" = ${errorMessage} WHERE "id" = ${log.id}`.catch(() => {});
   }
+  // Immediately broadcast live event to all connected dashboard clients
+  broadcastTelemetry({
+    type: "request",
+    timestamp: Date.now(),
+    modelSlug: log.modelSlug,
+    tokens: (log.promptTokens || 0) + (log.completionTokens || 0),
+    status: log.status,
+    cost: log.cost,
+    app: appName,
+  });
   return log;
 }
 

@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { useLiveTelemetry } from "@/hooks/useLiveTelemetry";
 
 type Metric = "tokens" | "spend" | "requests";
 
@@ -342,27 +343,21 @@ export default function OverviewPage() {
     : range === "All time" ? "all"
     : "7d";
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = () => {
-      fetch(`/api/overview?range=${rangeParam}`)
-        .then((r) => r.json())
-        .then((d) => { if (!cancelled) setData(d); })
-        .catch(() => {})
-        .finally(() => { if (!cancelled) setLoading(false); });
-    };
-
-    setLoading(true);
-    load();
-
-    // Auto-refresh every 30 seconds so tok/s, ttft, tokens, and activity stay live
-    const interval = setInterval(load, 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+  const loadData = useCallback(() => {
+    fetch(`/api/overview?range=${rangeParam}`)
+      .then((r) => r.json())
+      .then((d) => setData(d))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [rangeParam]);
+
+  useEffect(() => {
+    setLoading(true);
+    loadData();
+  }, [loadData]);
+
+  // Exact real-time updates via Server-Sent Events (SSE) & BroadcastChannel
+  const { isLive } = useLiveTelemetry(loadData);
 
   // Rank models based on active metric
   const sortedUsedModels = useMemo(() => {
@@ -497,6 +492,35 @@ export default function OverviewPage() {
             <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
               Usage summary
             </h2>
+
+            {/* Exact Live Stream Indicator */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 11,
+                color: isLive ? "#10b981" : "var(--text-tertiary)",
+                fontWeight: 600,
+                background: isLive ? "rgba(16, 185, 129, 0.08)" : "rgba(255, 255, 255, 0.04)",
+                border: isLive ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid var(--border-subtle)",
+                padding: "2.5px 8px",
+                borderRadius: 12,
+                userSelect: "none",
+              }}
+              title={isLive ? "Exact Real-Time Telemetry Stream Connected (SSE)" : "Connecting to real-time stream..."}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: isLive ? "#10b981" : "var(--text-tertiary)",
+                  boxShadow: isLive ? "0 0 6px #10b981" : "none",
+                }}
+              />
+              {isLive ? "Live" : "Connecting..."}
+            </div>
 
             {/* Range Selector Dropdown */}
             <div style={{ position: "relative" }}>

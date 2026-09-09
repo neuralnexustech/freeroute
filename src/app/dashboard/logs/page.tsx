@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useToast } from "@/components/Toast";
 import { getAppVisuals } from "@/lib/detect-app";
+import { useLiveTelemetry } from "@/hooks/useLiveTelemetry";
 
 interface LogRow {
   id: string;
@@ -274,9 +275,10 @@ export default function LogsPage() {
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 10000);
-    return () => clearInterval(timer);
   }, []);
+
+  // Exact real-time updates via SSE & BroadcastChannel
+  const { isLive } = useLiveTelemetry(load);
 
   // Live database logs directly from actual gateway traffic
   const allRows = useMemo(() => {
@@ -427,7 +429,34 @@ export default function LogsPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginLeft: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              fontSize: 11,
+              color: isLive ? "#10b981" : "var(--text-tertiary)",
+              fontWeight: 600,
+              background: isLive ? "rgba(16, 185, 129, 0.08)" : "rgba(255, 255, 255, 0.04)",
+              border: isLive ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid var(--border-subtle)",
+              padding: "3px 8px",
+              borderRadius: 12,
+              userSelect: "none",
+            }}
+            title={isLive ? "Exact Live Request Log Stream Connected" : "Connecting..."}
+          >
+            <span
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: "50%",
+                background: isLive ? "#10b981" : "var(--text-tertiary)",
+                boxShadow: isLive ? "0 0 5px #10b981" : "none",
+              }}
+            />
+            {isLive ? "Live Stream" : "Connecting..."}
+          </div>
           <button
             className="btn sm"
             onClick={() => {
