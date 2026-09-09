@@ -123,20 +123,26 @@ function cToF(c: number): number {
 // Live Real-Time Weather Grounding via Open-Meteo & Radar
 async function fetchLiveWeather(query: string, clientTz?: string) {
   try {
-    let location = query
-      .replace(
-        /\b(?:what(?:'s|\s+is)?|how(?:'s|\s+is)?|tell\s+me|show\s+me|give\s+me|the|tomorrow(?:'s)?|today(?:'s)?|yesterday(?:'s)?|forecast|temperature|temp|climate|weather|current|condition|conditions|in|at|for|of|please|will|it|be|raining|rain)\b/gi,
-        " "
-      )
-      .replace(/[?!.,]/g, " ")
-      .trim()
-      .replace(/\s+/g, " ");
+    let location = "";
+    const prep = query.match(/(?:in|at|for|around|of)\s+([A-Za-z\s\-]+?)(?:\s+(?:with|today|tomorrow|this|next|and|7-day|hourly|weekly|\d+)|$|[,\.?!])/i);
+    if (prep && prep[1].trim().length > 1) {
+      location = prep[1].trim();
+    } else {
+      location = query
+        .replace(
+          /\b(?:what(?:'s|\s+is)?|how(?:'s|\s+is)?|tell\s+me|show\s+me|give\s+me|the|tomorrow(?:'s)?|today(?:'s)?|yesterday(?:'s)?|forecast|temperature|temp|climate|weather|current|condition|conditions|in|at|for|of|please|will|it|be|raining|rain|live|report|radar|satellite|7-day|daily|weekly|hourly|with|and)\b/gi,
+          " "
+        )
+        .replace(/[?!.,]/g, " ")
+        .trim()
+        .replace(/\s+/g, " ");
+    }
 
     if (!location || location.length < 2) {
       if (clientTz && clientTz.includes("/")) {
         location = clientTz.split("/")[1].replace(/_/g, " ");
       } else {
-        location = "Bidar";
+        location = "Tokyo";
       }
     }
 
@@ -359,11 +365,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const isWeatherQuery = /(?:wea?th[ea]?r|weqat?her|wethr|forecast|temperature|temper?|climate|rain|precip|snow|cloudy|sunny|humid)/i.test(lastUserMsg);
+
   // 3. Tool: Web Search & Weather Grounding
-  if (tools.web_search) {
+  if (tools.web_search || isWeatherQuery) {
     const searchDepth = toolConfigs.web_search?.depth || "medium";
     const searchMode = toolConfigs.web_search?.mode || "auto";
-    const isWeatherQuery = /(?:wea?th[ea]?r|weqat?her|wethr|forecast|temperature|temper?|climate|rain|precip|snow|cloudy|sunny|humid)/i.test(lastUserMsg);
     const needsSearch =
       searchMode === "always" ||
       isWeatherQuery ||
@@ -495,7 +502,8 @@ export async function POST(req: NextRequest) {
   let directGeneratedImage: string | null = null;
   if (tools.image_gen) {
     const imgPromptMatch =
-      lastUserMsg.match(/(?:generate|create|draw|paint|picture of|image of|photo of|illustration of)\s+([^,\.\n]+)/i) ||
+      lastUserMsg.match(/(?:draw|paint|picture\s+of|image\s+of|photo\s+of|illustration\s+of)\s+([^,\.\n]+)/i) ||
+      lastUserMsg.match(/(?:generate|create)\s+(?:an?\s+)?(?:image|photo|picture|illustration|drawing|artwork|logo|portrait|banner|wallpaper)\s+(?:of\s+)?([^,\.\n]+)/i) ||
       lastUserMsg.match(/^\/image\s+(.+)/i);
 
     if (imgPromptMatch) {

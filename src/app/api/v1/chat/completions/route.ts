@@ -284,11 +284,38 @@ export async function POST(req: NextRequest) {
 
   // 2. Standard single model routing
   const modelSlug: string = rawModel;
-  const candidates = await prisma.model.findMany({
+  let candidates = await prisma.model.findMany({
     where: { slug: modelSlug, enabled: true },
     include: { provider: true },
     orderBy: { provider: { name: "asc" } },
   });
+
+  // Fuzzy match if exact slug wasn't found (e.g. "ling-3.0-flash" -> "inclusionai/ling-3.0-flash-fin:free")
+  if (candidates.length === 0) {
+    candidates = await prisma.model.findMany({
+      where: {
+        enabled: true,
+        OR: [
+          { slug: { contains: modelSlug } },
+          { displayName: { contains: modelSlug } },
+        ],
+      },
+      include: { provider: true },
+      orderBy: { provider: { name: "asc" } },
+    });
+  }
+
+  // Fallback to smart-coding-fallback if model not found
+  if (candidates.length === 0 && (modelSlug.includes("ling") || modelSlug.includes("flash") || modelSlug.includes("smart") || modelSlug.includes("auto"))) {
+    const fallbackModel = await prisma.model.findFirst({
+      where: { enabled: true, provider: { connected: true, apiKey: { not: "" } } },
+      include: { provider: true },
+    });
+    if (fallbackModel) {
+      candidates = [fallbackModel];
+    }
+  }
+
   const usable = candidates.filter((m) => m.provider.connected && m.provider.apiKey);
   if (usable.length === 0) {
     const notAvailMsg =

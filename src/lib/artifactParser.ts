@@ -114,19 +114,27 @@ export function parseArtifactProject(
     }
   }
 
-  // 3. If no files were parsed, treat raw content as HTML or create default index.html
+  // 3. If no files were found from fences or HTML recovery, check if text has full HTML tags
   if (files.length === 0) {
-    primaryHtml = text.trim();
-    files.push({
-      name: "index.html",
-      path: "index.html",
-      language: "html",
-      content: primaryHtml,
-    });
+    const trimmed = text.trim();
+    if (
+      (trimmed.startsWith("<!DOCTYPE html") || trimmed.startsWith("<html") || (trimmed.includes("<div") && trimmed.includes("</div>"))) &&
+      trimmed.length > MIN_HTML_LENGTH
+    ) {
+      primaryHtml = trimmed;
+      files.push({
+        name: "index.html",
+        path: "index.html",
+        language: "html",
+        content: primaryHtml,
+      });
+    } else {
+      return { files: [], primaryHtml: "" };
+    }
   }
 
   // Ensure companion package.json and styling files exist for code inspection
-  if (!files.some((f) => f.name === "package.json")) {
+  if (files.length > 0 && !files.some((f) => f.name === "package.json")) {
     files.push({
       name: "package.json",
       path: "package.json",
