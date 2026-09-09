@@ -4729,27 +4729,45 @@ table.table-center td:first-child {
 .od-cap-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 11px;
-  border-radius: 8px;
-  font-size: 12px;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: 9px;
+  font-size: 12.5px;
   font-weight: 500;
   background: var(--od-card-bg);
   border: 1px solid var(--od-border);
   color: var(--od-text-muted);
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(8px);
 }
 .od-cap-btn:hover {
   background: var(--od-hover-bg);
   color: var(--od-text);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
 }
 .od-cap-btn.active {
-  background: rgba(194, 83, 45, 0.1);
+  background: rgba(224, 99, 56, 0.12);
   border-color: var(--od-accent);
   color: var(--od-accent);
   font-weight: 600;
+  box-shadow: 0 0 16px rgba(224, 99, 56, 0.15);
+}
+
+.od-multi-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(224, 99, 56, 0.12);
+  border: 1px solid rgba(224, 99, 56, 0.35);
+  color: var(--od-accent);
+  animation: pgFadeIn 0.25s ease-out;
 }
 
 /* ── Start with a Template Section ── */
@@ -4766,11 +4784,12 @@ table.table-center td:first-child {
   font-weight: 600;
   color: var(--od-text-muted);
   text-align: center;
+  letter-spacing: -0.01em;
 }
 
 .od-templates-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 @media (max-width: 700px) {
@@ -4782,19 +4801,20 @@ table.table-center td:first-child {
 .od-template-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 16px 14px;
+  gap: 10px;
+  padding: 16px;
   background: var(--od-card-bg);
   border: 1px solid var(--od-border);
-  border-radius: 12px;
+  border-radius: 14px;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   text-align: left;
+  backdrop-filter: blur(10px);
 }
 .od-template-card:hover {
-  border-color: var(--od-accent);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 14px rgba(31, 27, 22, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
 }
 
 .od-template-icon-wrap {

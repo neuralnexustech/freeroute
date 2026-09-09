@@ -3,8 +3,69 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useTheme } from "@/components/ThemeProvider";
-import { buildSrcdoc, sanitizeTitle } from "@/lib/srcdoc";
+import { buildSrcdoc } from "@/lib/srcdoc";
 import { parseArtifactProject, recoverStandaloneHtmlDocument, WorkspaceFile } from "@/lib/artifactParser";
+import {
+  Sparkles,
+  Code2,
+  Globe,
+  Image as ImageIcon,
+  Cloud,
+  Table,
+  FileSpreadsheet,
+  FileCode2,
+  Monitor,
+  Smartphone,
+  Send,
+  Eye,
+  Download,
+  Copy,
+  Check,
+  X,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Clock,
+  Settings,
+  Sun,
+  Moon,
+  Star,
+  ThumbsUp,
+  ThumbsDown,
+  GitBranch,
+  Wand2,
+  Zap,
+  Plus,
+  Folder,
+  Layers,
+  LayoutGrid,
+  MapPin,
+  Droplets,
+  BatteryMedium,
+  User,
+  ExternalLink,
+  Bot,
+  RefreshCw,
+  Search,
+  Sliders,
+  Terminal,
+  Paperclip,
+  CheckCircle2,
+  Home,
+} from "lucide-react";
+
+// ── File Type Icons ──────────────────────────────────────────────────────────
+function getFileIcon(filename: string) {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return <Globe size={13} className="text-amber-400 inline" />;
+  if (lower.endsWith(".css")) return <Layers size={13} className="text-sky-400 inline" />;
+  if (lower.endsWith(".tsx") || lower.endsWith(".jsx")) return <Code2 size={13} className="text-indigo-400 inline" />;
+  if (lower.endsWith(".ts") || lower.endsWith(".js")) return <FileCode2 size={13} className="text-yellow-400 inline" />;
+  if (lower.endsWith(".json")) return <Settings size={13} className="text-slate-400 inline" />;
+  if (lower.endsWith(".md")) return <FileCode2 size={13} className="text-emerald-400 inline" />;
+  if (lower.endsWith(".csv") || lower.endsWith(".xlsx")) return <Table size={13} className="text-emerald-500 inline" />;
+  return <FileCode2 size={13} className="text-slate-400 inline" />;
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface ToolCallResult {
@@ -78,63 +139,57 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-// ── Template Cards (Matching od-home.webp EXACTLY) ──────────────────────────
+// ── Template Cards ────────────────────────────────────────────────────────────
 const openDesignTemplates = [
   {
     id: "tpl_slide_deck",
     title: "Slide deck",
     desc: "Presentations & pitch decks",
-    icon: "📑",
+    icon: <Layers size={18} />,
+    color: "#6366f1",
     prompt: "Create a modern 6-slide investor pitch deck with cinematic typography, dark aesthetic, problem-solution narrative, and metrics slide.",
   },
   {
     id: "tpl_prototype",
     title: "Prototype",
     desc: "Interactive app mockups",
-    icon: "💻",
+    icon: <Code2 size={18} />,
+    color: "#10b981",
     prompt: "Build a modern interactive SaaS Analytics Dashboard prototype with revenue charts, conversion funnel, and interactive user table.",
   },
   {
     id: "tpl_wireframe",
     title: "Wireframe",
     desc: "Lo-fi screens & flows",
-    icon: "📐",
+    icon: <LayoutGrid size={18} />,
+    color: "#f59e0b",
     prompt: "Generate a clean high-conversion landing page wireframe with hero section, 3-column feature grid, social proof, and pricing table.",
   },
   {
     id: "tpl_mobile_app",
     title: "Mobile app",
     desc: "iOS & Android screens",
-    icon: "📱",
+    icon: <Smartphone size={18} />,
+    color: "#ec4899",
     prompt: "Design a photorealistic mobile banking and wallet app with card swipe carousel, recent transactions, quick transfer flow, and iPhone bezel.",
   },
   {
     id: "tpl_weather",
     title: "Weather & Radar",
     desc: "Live forecast & satellite",
-    icon: "⛅",
+    icon: <Cloud size={18} />,
+    color: "#0ea5e9",
     prompt: "Show me the live weather report for Tokyo with 7-day forecast and hourly rainfall radar.",
   },
   {
     id: "tpl_sheet",
     title: "Spreadsheet",
     desc: "Interactive Excel grid",
-    icon: "📊",
+    icon: <FileSpreadsheet size={18} />,
+    color: "#22c55e",
     prompt: "Create an interactive financial Excel spreadsheet table for Q3 2026 budget with revenue, expenses, profit margin, and export to CSV.",
   },
 ];
-
-function getFileIcon(filename: string) {
-  const lower = filename.toLowerCase();
-  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "🌐";
-  if (lower.endsWith(".css")) return "🎨";
-  if (lower.endsWith(".tsx") || lower.endsWith(".jsx")) return "⚛️";
-  if (lower.endsWith(".ts") || lower.endsWith(".js")) return "📜";
-  if (lower.endsWith(".json")) return "🔧";
-  if (lower.endsWith(".md")) return "📝";
-  if (lower.endsWith(".csv") || lower.endsWith(".xlsx")) return "📊";
-  return "📄";
-}
 
 // ── Built-in Weather Widget Card ───────────────────────────────────────────
 function WeatherCard({ weather }: { weather: any }) {
@@ -147,7 +202,7 @@ function WeatherCard({ weather }: { weather: any }) {
     <div className="pg-weather-card">
       <div className="pg-weather-header">
         <div className="pg-weather-loc">
-          <span className="pg-weather-pin">📍</span>
+          <span className="pg-weather-pin"><MapPin size={15} className="text-emerald-500" /></span>
           <div>
             <div className="pg-weather-city">{location}</div>
             <div className="pg-weather-status">Live Radar & Satellite Grounding</div>
@@ -192,7 +247,7 @@ function WeatherCard({ weather }: { weather: any }) {
             <span className="pg-tomorrow-temps">
               High: {unit === "C" ? `${tomorrow.maxC}°C` : `${tomorrow.maxF}°F`} · Low: {unit === "C" ? `${tomorrow.minC}°C` : `${tomorrow.minF}°F`}
             </span>
-            <span className="pg-tomorrow-rain">💧 {tomorrow.rainProb}% rain chance</span>
+            <span className="pg-tomorrow-rain" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Droplets size={12} className="text-sky-400" /> {tomorrow.rainProb}% rain chance</span>
           </div>
         </div>
       )}
@@ -286,13 +341,15 @@ function SmartTableView({
             className={`pg-table-view-btn ${!isExcelView ? "active" : ""}`}
             onClick={() => setIsExcelView(false)}
           >
-            📊 Grid Table
+            <Table size={13} className="inline mr-1.5" />
+            <span>Grid Table</span>
           </button>
           <button
             className={`pg-table-view-btn ${isExcelView ? "active" : ""}`}
             onClick={() => setIsExcelView(true)}
           >
-            📗 Excel Sheet
+            <FileSpreadsheet size={13} className="inline mr-1.5" />
+            <span>Excel Sheet</span>
           </button>
           <span className="pg-table-badge">
             {filteredRows.length} {filteredRows.length === 1 ? "row" : "rows"}
@@ -312,14 +369,22 @@ function SmartTableView({
             onClick={handleCopyTsv}
             title="Copy for Excel"
           >
-            {copied ? "✓ Copied" : "Copy for Excel"}
+            {copied ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <Check size={12} className="text-emerald-400" /> Copied
+              </span>
+            ) : (
+              "Copy for Excel"
+            )}
           </button>
           <button
             className="pg-table-action-btn"
             onClick={handleDownloadCsv}
             title="Download CSV"
           >
-            ⬇ CSV
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <Download size={12} /> CSV
+            </span>
           </button>
         </div>
       </div>
@@ -390,12 +455,26 @@ function ToolCallsViewer({ toolCalls }: { toolCalls: ToolCallResult[] }) {
               onClick={() => setExpanded((prev) => ({ ...prev, [idx]: !prev[idx] }))}
             >
               <div className="pg-tool-call-pill-left">
-                <span className="pg-tool-call-icon">{tc.icon}</span>
+                <span className="pg-tool-call-icon">
+                  {tc.icon === "globe" || tc.tool === "web_search" ? (
+                    <Globe size={13} className="text-sky-400 inline" />
+                  ) : tc.icon === "image" || tc.tool === "image_gen" ? (
+                    <ImageIcon size={13} className="text-purple-400 inline" />
+                  ) : tc.tool === "weather" ? (
+                    <Cloud size={13} className="text-emerald-400 inline" />
+                  ) : (
+                    <Terminal size={13} className="text-slate-400 inline" />
+                  )}
+                </span>
                 <span className="pg-tool-call-name">{tc.name}</span>
                 <span className="pg-tool-call-summary">{tc.summary}</span>
               </div>
               <button className="pg-tool-call-toggle-btn">
-                {isExp ? "Hide ▲" : "Inspect ▼"}
+                {isExp ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>Hide <ChevronUp size={11} /></span>
+                ) : (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>Inspect <ChevronDown size={11} /></span>
+                )}
               </button>
             </div>
             {isExp && tc.details && (
@@ -447,6 +526,7 @@ function ArenaAgentCard({
   onNextStep?: (prompt: string) => void;
 }) {
   const [showMore, setShowMore] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const cleanNarrative = useMemo(() => {
     const raw = message.content || "";
@@ -476,11 +556,8 @@ function ArenaAgentCard({
   return (
     <div className="pg-arena-agent-card">
       {/* Thought Duration */}
-      <div className="pg-arena-thought-bar">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2">
-          <circle cx="12" cy="10" r="8" />
-          <polyline points="12 6 12 10 15 12" />
-        </svg>
+      <div className="pg-arena-thought-bar" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <Clock size={13} className="text-slate-400" />
         <span>Thought for {durationText}</span>
       </div>
 
@@ -561,8 +638,8 @@ function ArenaAgentCard({
           onClick={() => setShowMore((v) => !v)}
           title="Toggle execution activity log"
         >
-          <div className="pg-arena-activity-summary">
-            <span className="pg-arena-chevron">{showMore ? "▼" : "▶"}</span>
+          <div className="pg-arena-activity-summary" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span className="pg-arena-chevron">{showMore ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
             <span>
               Explored {projectFiles.length} files, {completedSteps.length} build actions
             </span>
@@ -574,7 +651,11 @@ function ArenaAgentCard({
               setShowMore((v) => !v);
             }}
           >
-            {showMore ? "Show Less ∧" : "Show More ⌵"}
+            {showMore ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>Show Less <ChevronUp size={11} /></span>
+            ) : (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>Show More <ChevronDown size={11} /></span>
+            )}
           </button>
         </div>
 
@@ -582,7 +663,7 @@ function ArenaAgentCard({
           <div className="pg-arena-activity-details">
             {completedSteps.map((st, idx) => (
               <div key={idx} className="pg-arena-step-row">
-                <span className="pg-arena-step-check">✓</span>
+                <span className="pg-arena-step-check"><Check size={11} strokeWidth={2.5} /></span>
                 <span>{st}</span>
               </div>
             ))}
@@ -594,41 +675,32 @@ function ArenaAgentCard({
       <div className="pg-arena-action-row">
         <div className="pg-arena-action-left">
           <button className="pg-arena-action-btn" title="Good response">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
-            </svg>
+            <ThumbsUp size={13} />
           </button>
           <button className="pg-arena-action-btn" title="Bad response">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
-            </svg>
+            <ThumbsDown size={13} />
           </button>
           <button
             className="pg-arena-action-btn"
             title="Copy narrative"
             onClick={() => {
               navigator.clipboard.writeText(cleanNarrative);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
             }}
           >
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="9" y="9" width="13" height="13" rx="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
+            {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
           </button>
           <button
             className="pg-arena-action-btn"
             title="Branch / Fork version"
             onClick={() => {
               navigator.clipboard.writeText(message.content);
-              alert("Branch copied to clipboard!");
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
             }}
           >
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="6" y1="3" x2="6" y2="15" />
-              <circle cx="18" cy="6" r="3" />
-              <circle cx="6" cy="18" r="3" />
-              <path d="M18 9a9 9 0 0 1-9 9" />
-            </svg>
+            <GitBranch size={13} />
           </button>
         </div>
         <button
@@ -636,7 +708,7 @@ function ArenaAgentCard({
           onClick={onMakeBetter}
           title="Improve this design"
         >
-          <span>make better</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Sparkles size={12} /> make better</span>
         </button>
       </div>
 
@@ -653,7 +725,7 @@ function ArenaAgentCard({
               onNextStep?.("Match next step: Refine interactive state, add data persistence, and responsive layout polish")
             }
           >
-            ✦ Match next step &gt;
+            <Sparkles size={11} className="inline mr-1 text-amber-400" /> Match next step &gt;
           </button>
           <button
             className="pg-next-step-chip"
@@ -661,7 +733,7 @@ function ArenaAgentCard({
               onNextStep?.("Design polish: Elevate typography, subtle micro-interactions, and dark mode support")
             }
           >
-            ✦ Design polish / ready to ship &gt;
+            <Wand2 size={11} className="inline mr-1 text-indigo-400" /> Design polish / ready to ship &gt;
           </button>
           <button
             className="pg-next-step-chip"
@@ -669,7 +741,7 @@ function ArenaAgentCard({
               onNextStep?.("Add mobile navigation bar with gesture animations and clean drawer")
             }
           >
-            ✦ Add mobile nav &gt;
+            <Smartphone size={11} className="inline mr-1 text-pink-400" /> Add mobile nav &gt;
           </button>
         </div>
       </div>
@@ -823,12 +895,7 @@ function WorkspaceIDE({
             onClick={() => setShowFilesExplorer((v) => !v)}
             title="Toggle Design Files Explorer"
           >
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="7" height="7" rx="1" />
-              <rect x="14" y="3" width="7" height="7" rx="1" />
-              <rect x="3" y="14" width="7" height="7" rx="1" />
-              <rect x="14" y="14" width="7" height="7" rx="1" />
-            </svg>
+            <LayoutGrid size={12} />
             <span>Design Files</span>
           </button>
 
@@ -858,7 +925,7 @@ function WorkspaceIDE({
                       }
                     }}
                   >
-                    ✕
+                    <X size={11} />
                   </button>
                 )}
               </div>
@@ -872,14 +939,16 @@ function WorkspaceIDE({
             onClick={() => setTab("preview")}
             title="Preview"
           >
-            👁 Preview
+            <Eye size={13} className="inline mr-1.5" />
+            <span>Preview</span>
           </button>
           <button
             className={`pg-ws-toggle-btn ${tab === "code" ? "active" : ""}`}
             onClick={() => setTab("code")}
             title="Code"
           >
-            &lt;/&gt; Code
+            <Code2 size={13} className="inline mr-1.5" />
+            <span>Code</span>
           </button>
 
           <div className="pg-ws-viewport-btns">
@@ -887,22 +956,25 @@ function WorkspaceIDE({
               className={`pg-ws-viewport-btn ${device === "desktop" ? "active" : ""}`}
               onClick={() => setDevice("desktop")}
             >
-              Desktop
+              <Monitor size={12} className="inline mr-1" />
+              <span>Desktop</span>
             </button>
             <button
               className={`pg-ws-viewport-btn ${device === "mobile" ? "active" : ""}`}
               onClick={() => setDevice("mobile")}
             >
-              Mobile
+              <Smartphone size={12} className="inline mr-1" />
+              <span>Mobile</span>
             </button>
           </div>
 
           <button className="od-stage-download-pill" onClick={handleDownload} title="Download">
-            ⬇ Download
+            <Download size={12} className="inline mr-1" />
+            <span>Download</span>
           </button>
 
           <button className="od-chrome-icon-btn" onClick={onClose} title="Close Stage">
-            ✕
+            <X size={16} />
           </button>
         </div>
       </div>
@@ -916,7 +988,7 @@ function WorkspaceIDE({
                 <span className="pg-ws-mobile-time">9:41</span>
                 <div className="pg-ws-device-pill" />
                 <div className="pg-ws-mobile-icons">
-                  <span style={{ fontSize: 11 }}>🔋</span>
+                  <BatteryMedium size={14} className="text-slate-400" />
                 </div>
               </div>
             )}
@@ -957,7 +1029,15 @@ function WorkspaceIDE({
                 <span>{activeFile.name}</span>
               </div>
               <button className="pg-ws-icon-btn" onClick={handleCopy} style={{ marginLeft: "auto" }}>
-                {copied ? "✓ Copied" : "Copy"}
+                {copied ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <Check size={12} className="text-emerald-400" /> Copied
+                  </span>
+                ) : (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <Copy size={12} /> Copy
+                  </span>
+                )}
               </button>
             </div>
             <div className="pg-ws-editor-body">
@@ -1040,8 +1120,8 @@ export default function PlaygroundPage() {
 
   // Server tools (toggled via capability pills or auto-detected)
   const [serverTools, setServerTools] = useState<ServerTool[]>([
-    { id: "web_search", name: "Web Search", desc: "Search web", sub: "Auto", icon: "🌐", enabled: false },
-    { id: "image_gen", name: "Image Gen", desc: "Generate image", sub: "Auto", icon: "🖼️", enabled: false },
+    { id: "web_search", name: "Web Search", desc: "Search web", sub: "Auto", icon: "globe", enabled: false },
+    { id: "image_gen", name: "Image Gen", desc: "Generate image", sub: "Auto", icon: "image", enabled: false },
   ]);
 
   const toggleTool = (id: string) => {
@@ -1067,7 +1147,7 @@ export default function PlaygroundPage() {
             provider: {
               slug: m.id.split("/")[0] || "freeroute",
               name: m.id.split("/")[0] || "Freeroute",
-              icon: "☲",
+              icon: "freeroute",
             },
             isCombo: m.id.includes("combo") || m.id.includes("fallback"),
           }));
@@ -1146,17 +1226,17 @@ export default function PlaygroundPage() {
         timestamp: new Date(),
       };
 
-      const userWantsExcelOrTable = /(?:excel|\.xlsx|spreadsheet|csv|\bsheet\b|table|grid)/i.test(text);
-      const userWantsWeather = /(?:weather|forecast|temperature|rain|radar)/i.test(text);
-      const isExplicitImageReq = /(?:draw|paint|picture\s+of|image\s+of|photo\s+of|illustration\s+of|generate\s+image)/i.test(text);
+      const userWantsExcelOrTable = !activeModes.includes("web_dev") && /(?:excel|\.xlsx|spreadsheet|csv|\bsheet\b|table|grid)/i.test(text);
+      const userWantsWeather = !activeModes.includes("web_dev") && /(?:weather|forecast|temperature|rain|radar)/i.test(text);
+      const isExplicitImageReq = activeModes.includes("image_gen") || /(?:draw|paint|picture\s+of|image\s+of|photo\s+of|illustration\s+of|generate\s+image)/i.test(text);
 
       const isWebDevIntent =
-        !userWantsExcelOrTable &&
-        !userWantsWeather &&
-        !isExplicitImageReq &&
-        (activeModes.includes("web_dev") ||
-          /(?:website|web\s*app|landing\s*page|prototype|mockup|ui\s*design|dashboard|frontend|react\s*component|html\s*page)\b/i.test(text) ||
-          /(?:build|develop|design)\s+(?:a|an)\s+(?:app|site|page|dashboard|interface|view|screen)/i.test(text));
+        activeModes.includes("web_dev") ||
+        (!userWantsExcelOrTable &&
+          !userWantsWeather &&
+          !isExplicitImageReq &&
+          (/(?:website|web\s*app|landing\s*page|prototype|mockup|ui\s*design|dashboard|frontend|react\s*component|html\s*page)\b/i.test(text) ||
+            /(?:build|develop|design)\s+(?:a|an)\s+(?:app|site|page|dashboard|interface|view|screen)/i.test(text)));
 
       const assistantId1 = uid();
       const assistantId2 = isDualModel && secondaryModel !== selectedModel ? uid() : null;
@@ -1217,13 +1297,23 @@ export default function PlaygroundPage() {
         .filter((m) => !m.isGenerating && m.content)
         .slice(-20);
 
+      const isSearchActive =
+        activeModes.includes("web_search") ||
+        Boolean(serverTools.find((t) => t.id === "web_search")?.enabled) ||
+        userWantsWeather;
+      const isImageActive =
+        activeModes.includes("image_gen") ||
+        Boolean(serverTools.find((t) => t.id === "image_gen")?.enabled) ||
+        isExplicitImageReq;
+
       const basePayload = {
         messages: historyToSend.map((m) => ({ role: m.role, content: m.content })),
         tools: {
           ...Object.fromEntries(serverTools.map((t) => [t.id, t.enabled])),
-          ...(isExplicitImageReq ? { image_gen: true } : {}),
-          ...(userWantsWeather ? { web_search: true } : {}),
+          web_search: isSearchActive,
+          image_gen: isImageActive,
         },
+        activeModes,
         clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       };
 
@@ -1297,7 +1387,7 @@ export default function PlaygroundPage() {
                 msg.id === assistantId1
                   ? {
                       ...msg,
-                      content: `⚠️ **Routing Notice**: ${err?.error?.message || "Failed to reach model"}`,
+                      content: `**Routing Notice**: ${err?.error?.message || "Failed to reach model"}`,
                       isGenerating: false,
                     }
                   : msg
@@ -1312,7 +1402,7 @@ export default function PlaygroundPage() {
               msg.id === assistantId1
                 ? {
                     ...msg,
-                    content: `⚠️ **Connection Error**: ${e.message}`,
+                    content: `**Connection Error**: ${e.message}`,
                     isGenerating: false,
                   }
                 : msg
@@ -1372,7 +1462,7 @@ export default function PlaygroundPage() {
                     msg.id === assistantId2
                       ? {
                           ...msg,
-                          content: `⚠️ Routing Error: ${err?.error?.message || "HTTP Error"}`,
+                          content: `**Routing Error**: ${err?.error?.message || "HTTP Error"}`,
                           isGenerating: false,
                         }
                       : msg
@@ -1387,7 +1477,7 @@ export default function PlaygroundPage() {
                   msg.id === assistantId2
                     ? {
                         ...msg,
-                        content: `⚠️ Connection Failed: ${e.message}`,
+                        content: `**Connection Failed**: ${e.message}`,
                         isGenerating: false,
                       }
                     : msg
@@ -1426,16 +1516,21 @@ export default function PlaygroundPage() {
 
   return (
     <div className="od-root" data-theme={theme}>
-      {toastMsg && <div className="pg-toast">✓ {toastMsg}</div>}
+      {toastMsg && (
+        <div className="pg-toast" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Check size={14} className="text-emerald-400" />
+          <span>{toastMsg}</span>
+        </div>
+      )}
 
-      {/* ── 1. LEFT THIN ICON NAV RAIL (Matching od-home-sidebar.webp) ── */}
+      {/* ── 1. LEFT THIN ICON NAV RAIL ── */}
       <nav className="od-nav-rail">
         <div className="od-rail-logo" title="freeroute gateway" onClick={() => setActiveArtifact(null)}>
-          ☲
+          <Layers size={18} className="text-indigo-400" />
         </div>
 
-        <button className="od-rail-btn" onClick={createRoom} title="New Chat / Project (+)">
-          +
+        <button className="od-rail-btn" onClick={createRoom} title="New Chat">
+          <Plus size={16} />
         </button>
 
         <button
@@ -1446,23 +1541,18 @@ export default function PlaygroundPage() {
           }}
           title="Home"
         >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-            <polyline points="9 22 9 12 15 12 15 22" />
-          </svg>
+          <Home size={16} />
         </button>
 
         <button
           className="od-rail-btn"
           onClick={() => {
             const list = rooms.map((r) => r.title).join("\n• ");
-            alert(`Active Projects / Chats:\n• ${list}`);
+            alert(`Projects:\n• ${list}`);
           }}
-          title="Projects / History"
+          title="Projects"
         >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-          </svg>
+          <Folder size={16} />
         </button>
 
         <button
@@ -1473,27 +1563,17 @@ export default function PlaygroundPage() {
           }}
           title="Design Systems"
         >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="13.5" cy="6.5" r=".5" />
-            <circle cx="17.5" cy="10.5" r=".5" />
-            <circle cx="8.5" cy="7.5" r=".5" />
-            <circle cx="6.5" cy="12.5" r=".5" />
-            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
-          </svg>
+          <Layers size={16} />
         </button>
 
         <div className="od-rail-bottom">
-          <Link href="/dashboard" className="od-rail-btn" title="Gateway Overview">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
-            </svg>
+          <Link href="/dashboard" className="od-rail-btn" title="Dashboard">
+            <LayoutGrid size={16} />
           </Link>
-          <div className="od-avatar-circle" title="User">
-            F
-          </div>
+          <Link href="/dashboard/settings" className="od-rail-btn" title="Settings">
+            <Settings size={16} />
+          </Link>
+          <div className="od-avatar-circle" title="User">F</div>
         </div>
       </nav>
 
@@ -1504,22 +1584,28 @@ export default function PlaygroundPage() {
           <div className="od-chrome-tabs-left">
             <div
               className={`od-chrome-tab ${isHomeView ? "active" : ""}`}
-              onClick={() => {
-                createRoom();
-                setActiveArtifact(null);
-              }}
+              onClick={() => { createRoom(); setActiveArtifact(null); }}
             >
-              <span>🏠 Home</span>
+              <Home size={13} className="inline mr-1" />
+              <span>Home</span>
             </div>
 
             {!isHomeView && (
               <div className="od-chrome-tab active">
-                <span>📁 {rooms.find((r) => r.id === activeRoom)?.title || "Project"}</span>
+                <Zap size={13} className="text-amber-400 inline mr-1" />
+                <span style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {rooms.find((r) => r.id === activeRoom)?.title || "Project"}
+                </span>
               </div>
             )}
 
-            <button className="od-chrome-plus-btn" onClick={createRoom} title="New chat">
-              +
+            <button
+              className="od-chrome-plus-btn"
+              onClick={createRoom}
+              title="New chat"
+              style={{ width: 26, height: 26, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--od-border-subtle)", background: "transparent", cursor: "pointer", color: "var(--od-text-muted)" }}
+            >
+              <Plus size={13} />
             </button>
           </div>
 
@@ -1531,17 +1617,18 @@ export default function PlaygroundPage() {
               className="od-github-star-pill"
               title="GitHub Star"
             >
-              <span>⭐ Star</span>
-              <span style={{ opacity: 0.6 }}>·</span>
-              <span>71.3K</span>
+              <Star size={12} className="text-amber-400" fill="currentColor" />
+              <span>Star</span>
+              <span style={{ opacity: 0.4 }}>·</span>
+              <span style={{ fontWeight: 700 }}>71.3K</span>
             </a>
 
             <button className="od-chrome-icon-btn" onClick={toggle} title="Toggle Theme">
-              {theme === "dark" ? "☀️" : "🌙"}
+              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
             </button>
 
-            <Link href="/dashboard/settings" className="od-chrome-icon-btn" title="Gateway Settings">
-              ⚙️
+            <Link href="/dashboard/settings" className="od-chrome-icon-btn" title="Settings">
+              <Settings size={15} />
             </Link>
           </div>
         </header>
@@ -1550,8 +1637,8 @@ export default function PlaygroundPage() {
         {isHomeView ? (
           <div className="od-home-scroll-pane">
             <div className="od-home-brand-badge">
-              <span style={{ color: "var(--od-accent)", fontSize: 16 }}>☲</span>
-              <span>freeroute</span>
+              <Sparkles size={15} className="text-indigo-400" />
+              <span>freeroute · AI Gateway & Design Studio</span>
             </div>
 
             <h1 className="od-home-title">What will you design today?</h1>
@@ -1615,7 +1702,9 @@ export default function PlaygroundPage() {
                       showToast(activeModes.includes("web_dev") ? "Default mode" : "Web Dev Studio active");
                     }}
                   >
-                    <span>✦ Design ▾</span>
+                    <Sparkles size={12} className="text-amber-400" />
+                    <span>Design</span>
+                    <ChevronDown size={11} />
                   </button>
 
                   {/* Primary Model Pill */}
@@ -1626,7 +1715,7 @@ export default function PlaygroundPage() {
                   >
                     <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10b981", display: "inline-block" }} />
                     <span>{activeModelObj.displayName}</span>
-                    <span>▾</span>
+                    <ChevronDown size={11} />
                   </button>
 
                   {/* Dual Model Toggle Pill */}
@@ -1643,8 +1732,9 @@ export default function PlaygroundPage() {
                           e.stopPropagation();
                           setIsDualModel(false);
                         }}
+                        style={{ display: "inline-flex", alignItems: "center", marginLeft: 4 }}
                       >
-                        ✕
+                        <X size={11} />
                       </span>
                     </button>
                   ) : (
@@ -1653,7 +1743,8 @@ export default function PlaygroundPage() {
                       onClick={() => setIsDualModel(true)}
                       title="Run 2 models at the same time"
                     >
-                      + 2nd Model
+                      <Plus size={11} />
+                      <span>2nd Model</span>
                     </button>
                   )}
 
@@ -1663,7 +1754,8 @@ export default function PlaygroundPage() {
                     onClick={() => sendMessage()}
                     disabled={loading || !input.trim()}
                   >
-                    <span>✈ Send</span>
+                    <Send size={13} />
+                    <span>Send</span>
                   </button>
                 </div>
               </div>
@@ -1683,7 +1775,7 @@ export default function PlaygroundPage() {
                         }}
                       >
                         <span>{m.displayName}</span>
-                        {m.id === selectedModel && <span>✓</span>}
+                        {m.id === selectedModel && <Check size={13} className="text-emerald-400" />}
                       </div>
                     ))}
                   </div>
@@ -1705,7 +1797,7 @@ export default function PlaygroundPage() {
                         }}
                       >
                         <span>{m.displayName}</span>
-                        {m.id === secondaryModel && <span>✓</span>}
+                        {m.id === secondaryModel && <Check size={13} className="text-emerald-400" />}
                       </div>
                     ))}
                   </div>
@@ -1722,7 +1814,9 @@ export default function PlaygroundPage() {
                     showToast("Clean normal chat mode");
                   }}
                 >
-                  <span>💭 No design system ▾</span>
+                  <Wand2 size={12} className="text-slate-400" />
+                  <span>No design system</span>
+                  <ChevronDown size={11} />
                 </button>
                 <button
                   className="od-pill-btn"
@@ -1730,12 +1824,14 @@ export default function PlaygroundPage() {
                     showToast("Sandbox directory active");
                   }}
                 >
-                  <span>📁 Select working directory ▾</span>
+                  <Folder size={12} className="text-slate-400" />
+                  <span>Select directory</span>
+                  <ChevronDown size={11} />
                 </button>
               </div>
             </div>
 
-            {/* Capability Modes Row */}
+            {/* Capability Modes Row (Simultaneous Multi-Mode) */}
             <div className="od-capability-modes-row">
               <button
                 className={`od-cap-btn ${activeModes.includes("web_dev") ? "active" : ""}`}
@@ -1744,59 +1840,97 @@ export default function PlaygroundPage() {
                     prev.includes("web_dev") ? prev.filter((m) => m !== "web_dev") : [...prev, "web_dev"]
                   );
                 }}
+                title="Build live interactive web prototypes & React components"
               >
-                <span>&lt;/&gt;</span>
+                <Code2 size={13} />
                 <span>Web Dev</span>
               </button>
 
               <button
-                className={`od-cap-btn ${serverTools.find((t) => t.id === "web_search")?.enabled ? "active" : ""}`}
-                onClick={() => toggleTool("web_search")}
+                className={`od-cap-btn ${activeModes.includes("web_search") || serverTools.find((t) => t.id === "web_search")?.enabled ? "active" : ""}`}
+                onClick={() => {
+                  setActiveModes((prev) =>
+                    prev.includes("web_search") ? prev.filter((m) => m !== "web_search") : [...prev, "web_search"]
+                  );
+                  toggleTool("web_search");
+                }}
+                title="Real-time web research & citation grounding"
               >
-                <span>🌐</span>
-                <span>Web Research</span>
+                <Globe size={13} />
+                <span>Web Search</span>
               </button>
 
               <button
-                className={`od-cap-btn ${serverTools.find((t) => t.id === "image_gen")?.enabled ? "active" : ""}`}
-                onClick={() => toggleTool("image_gen")}
+                className={`od-cap-btn ${activeModes.includes("image_gen") || serverTools.find((t) => t.id === "image_gen")?.enabled ? "active" : ""}`}
+                onClick={() => {
+                  setActiveModes((prev) =>
+                    prev.includes("image_gen") ? prev.filter((m) => m !== "image_gen") : [...prev, "image_gen"]
+                  );
+                  toggleTool("image_gen");
+                }}
+                title="AI Image & asset generation"
               >
-                <span>🖼️</span>
+                <ImageIcon size={13} />
                 <span>Image Gen</span>
               </button>
 
               <button
-                className="od-cap-btn"
+                className={`od-cap-btn ${activeModes.includes("weather") ? "active" : ""}`}
                 onClick={() => {
-                  setInput("Show me the live weather report and 7-day forecast for San Francisco with humidity and wind");
-                  textareaRef.current?.focus();
+                  setActiveModes((prev) =>
+                    prev.includes("weather") ? prev.filter((m) => m !== "weather") : [...prev, "weather"]
+                  );
+                  if (!input.trim()) {
+                    setInput("Show me the live weather report and 7-day forecast for San Francisco with humidity and wind");
+                  }
                 }}
+                title="Live Weather radar & forecast"
               >
-                <span>⛅</span>
+                <Cloud size={13} />
                 <span>Weather</span>
               </button>
 
               <button
-                className="od-cap-btn"
+                className={`od-cap-btn ${activeModes.includes("table") ? "active" : ""}`}
                 onClick={() => {
-                  setInput("Create an interactive table comparing LLM models by speed, cost per 1M tokens, latency, and context window");
-                  textareaRef.current?.focus();
+                  setActiveModes((prev) =>
+                    prev.includes("table") ? prev.filter((m) => m !== "table") : [...prev, "table"]
+                  );
+                  if (!input.trim()) {
+                    setInput("Create an interactive table comparing LLM models by speed, cost per 1M tokens, latency, and context window");
+                  }
                 }}
+                title="Interactive Table with search and export"
               >
-                <span>📊</span>
-                <span>Interactive Table</span>
+                <Table size={13} />
+                <span>Table</span>
               </button>
 
               <button
-                className="od-cap-btn"
+                className={`od-cap-btn ${activeModes.includes("sheet") ? "active" : ""}`}
                 onClick={() => {
-                  setInput("Generate a financial Excel spreadsheet model with Q1-Q4 revenue, COGS, EBITDA, and exportable CSV format");
-                  textareaRef.current?.focus();
+                  setActiveModes((prev) =>
+                    prev.includes("sheet") ? prev.filter((m) => m !== "sheet") : [...prev, "sheet"]
+                  );
+                  if (!input.trim()) {
+                    setInput("Generate a financial Excel spreadsheet model with Q1-Q4 revenue, COGS, EBITDA, and exportable CSV format");
+                  }
                 }}
+                title="Excel spreadsheet model with CSV export"
               >
-                <span>📗</span>
-                <span>Excel data</span>
+                <FileSpreadsheet size={13} />
+                <span>Spreadsheet</span>
               </button>
+
+              {activeModes.length >= 2 && (
+                <div
+                  className="od-pill-btn"
+                  style={{ borderColor: "rgba(194, 83, 45, 0.4)", color: "var(--od-accent)", fontWeight: 600, background: "rgba(194, 83, 45, 0.08)" }}
+                >
+                  <Zap size={11} />
+                  <span>{activeModes.length} modes active simultaneously</span>
+                </div>
+              )}
             </div>
 
             {/* Start with a Template Section (Matching od-home.webp EXACTLY) */}
@@ -1813,7 +1947,12 @@ export default function PlaygroundPage() {
                       textareaRef.current?.focus();
                     }}
                   >
-                    <div className="od-template-icon-wrap">{tpl.icon}</div>
+                    <div
+                      className="od-template-icon-wrap"
+                      style={{ color: tpl.color, background: `${tpl.color}18`, border: `1px solid ${tpl.color}30` }}
+                    >
+                      {tpl.icon}
+                    </div>
                     <div className="od-template-card-title">{tpl.title}</div>
                     <div className="od-template-card-desc">{tpl.desc}</div>
                   </div>
@@ -1843,7 +1982,9 @@ export default function PlaygroundPage() {
                       <div key={msg.id} className="pg-user-message-wrap">
                         <div className="pg-user-message-row">
                           <div className="pg-user-bubble">{msg.content}</div>
-                          <div className="pg-user-avatar-circle">👤</div>
+                          <div className="pg-user-avatar-circle">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1929,14 +2070,20 @@ export default function PlaygroundPage() {
                       onClick={() => setModelDropdownOpen((v) => !v)}
                       title="Change model"
                     >
-                      <span>{activeModelObj.displayName} ▾</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        <span>{activeModelObj.displayName}</span>
+                        <ChevronDown size={11} />
+                      </span>
                     </button>
                     <button
                       className="od-send-btn"
                       onClick={() => sendMessage()}
                       disabled={loading || !input.trim()}
                     >
-                      <span>Send</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        <Send size={12} />
+                        <span>Send</span>
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -1949,8 +2096,12 @@ export default function PlaygroundPage() {
             ) : (
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#0e1017", color: "#64748b" }}>
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>⚡</div>
-                  <p>Send a design or build prompt to mount the live preview studio.</p>
+                  <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
+                    <Zap size={36} className="text-amber-400" />
+                  </div>
+                  <p style={{ fontSize: 13, color: "var(--od-text-muted)" }}>
+                    Send a design or build prompt to mount the live preview studio.
+                  </p>
                 </div>
               </div>
             )}
