@@ -568,7 +568,23 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 9. Built-in Excel Spreadsheet & Table Grounding
+  // 9. Web Application & Shell Tool Development Instructions
+  const isWebDevRequest = /(?:website|web\s*app|landing\s*page|develop|build|create|react|html|frontend|page|ui|app|component|site|dashboard)\s*(?:for|with|using|like|a|an)?/i.test(lastUserMsg);
+  if (isWebDevRequest) {
+    contextAdditions.push(
+      `[System Context - Full-Stack Web Development Workspace]\n` +
+      `The freeroute playground features an integrated real-time Web Development Workspace & IDE.\n` +
+      `- If you are asked to develop a website, app, or UI component, provide high quality, complete, beautiful code (HTML/React/CSS/JS).\n` +
+      `- Label each code block clearly with its file path using triple backticks with language and filename, for example:\n` +
+      `  \`\`\`tsx:src/App.tsx\n` +
+      `  \`\`\`css:src/index.css\n` +
+      `  \`\`\`html:index.html\n` +
+      `- If tools.shell is active, you may also suggest or use shell commands for package installations or script execution.\n` +
+      `- Ensure code is production-grade, aesthetically stunning, and immediately runnable in the workspace preview.`
+    );
+  }
+
+  // 10. Built-in Excel Spreadsheet & Table Grounding
   const userRequestsExcelOrTable = /(?:excel|\.xlsx|spreadsheet|csv|\bsheet\b|table)/i.test(lastUserMsg);
   if (userRequestsExcelOrTable && !weatherResult) {
     contextAdditions.push(

@@ -633,7 +633,14 @@ function sanitizeTableMarkdown(rawContent: string): string {
   return outLines.join("\n");
 }
 
-// ── Claude-style Code Artifact & Viewer System ─────────────────────────────
+// ── Workspace IDE & Multi-File Project Artifact System (Images 1 & 2) ────────
+interface WorkspaceFile {
+  name: string;
+  path: string;
+  language: string;
+  content: string;
+}
+
 interface ActiveArtifact {
   id: string;
   title: string;
@@ -641,6 +648,10 @@ interface ActiveArtifact {
   code: string;
   isHtml: boolean;
   activeTab: "code" | "preview";
+  isBuilding?: boolean;
+  projectFiles?: WorkspaceFile[];
+  selectedFile?: string;
+  urlPath?: string;
 }
 
 function checkIsHtml(lang: string, code: string): boolean {
@@ -803,8 +814,136 @@ function CodeViewerCard({
   );
 }
 
-// ── Right Artifact & Code Slider Component (Claude-style) ───────────────────
-function CodeArtifactSlider({
+// ── Multi-File Project Parser ───────────────────────────────────────────────
+function extractProjectFiles(rawCode: string, language: string, title: string): WorkspaceFile[] {
+  const files: WorkspaceFile[] = [];
+
+  // 1. Check if rawCode contains multiple marked files like `// filepath: ...` or ```lang:path
+  const codeBlockRegex = /```(\w+)?(?::([^\n]+))?\r?\n([\s\S]*?)\r?\n```/g;
+  let match: RegExpExecArray | null;
+  while ((match = codeBlockRegex.exec(rawCode)) !== null) {
+    const lang = (match[1] || "typescript").toLowerCase();
+    const filePath = match[2]?.trim() || "";
+    const content = match[3] || "";
+    if (filePath) {
+      const name = filePath.split("/").pop() || filePath;
+      files.push({ name, path: filePath, language: lang, content });
+    }
+  }
+
+  // If blocks were found with explicit filepaths, return them
+  if (files.length > 0) {
+    return files;
+  }
+
+  // If it's HTML, create an integrated multi-file project structure like Image 1
+  const isHtml = checkIsHtml(language, rawCode);
+  const mainName = isHtml ? "index.html" : title.includes(".") ? title : "App.tsx";
+  const mainPath = isHtml ? "index.html" : `src/${mainName}`;
+
+  files.push({
+    name: mainName,
+    path: mainPath,
+    language: isHtml ? "html" : language || "typescript",
+    content: rawCode,
+  });
+
+  // Replicate the exact modern project tree from Image 1:
+  // src/App.tsx, src/index.css, src/main.tsx, src/vite-env.d.ts, index.html, package.json, tsconfig.json, vite.config.ts
+  if (!files.some((f) => f.name === "index.css")) {
+    files.push({
+      name: "index.css",
+      path: "src/index.css",
+      language: "css",
+      content: `/* App Base Styling */\n:root {\n  --primary: #6366f1;\n  --bg: #0b0f19;\n  --text: #f8fafc;\n}\n\n* {\n  box-sizing: border-box;\n  margin: 0;\n  padding: 0;\n}\n\nbody {\n  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n  background: var(--bg);\n  color: var(--text);\n  min-height: 100vh;\n  display: flex;\n  flex-direction: column;\n}`,
+    });
+  }
+
+  if (!files.some((f) => f.name === "main.tsx")) {
+    files.push({
+      name: "main.tsx",
+      path: "src/main.tsx",
+      language: "typescript",
+      content: `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App';\nimport './index.css';\n\nReactDOM.createRoot(document.getElementById('root')!).render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>\n);`,
+    });
+  }
+
+  if (!files.some((f) => f.name === "vite-env.d.ts")) {
+    files.push({
+      name: "vite-env.d.ts",
+      path: "src/vite-env.d.ts",
+      language: "typescript",
+      content: `/// <reference types="vite/client" />`,
+    });
+  }
+
+  if (!files.some((f) => f.name === "index.html")) {
+    files.push({
+      name: "index.html",
+      path: "index.html",
+      language: "html",
+      content: `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>freeroute App Sandbox</title>\n  </head>\n  <body>\n    <div id="root"></div>\n    <script type="module" src="/src/main.tsx"></script>\n  </body>\n</html>`,
+    });
+  }
+
+  if (!files.some((f) => f.name === "package.json")) {
+    files.push({
+      name: "package.json",
+      path: "package.json",
+      language: "json",
+      content: `{\n  "name": "freeroute-app",\n  "private": true,\n  "version": "0.1.0",\n  "type": "module",\n  "scripts": {\n    "dev": "vite",\n    "build": "tsc && vite build",\n    "preview": "vite preview"\n  },\n  "dependencies": {\n    "react": "^18.3.1",\n    "react-dom": "^18.3.1"\n  },\n  "devDependencies": {\n    "@types/react": "^18.3.3",\n    "@types/react-dom": "^18.3.0",\n    "@vitejs/plugin-react": "^4.3.1",\n    "typescript": "^5.5.4",\n    "vite": "^5.4.0"\n  }\n}`,
+    });
+  }
+
+  if (!files.some((f) => f.name === "tsconfig.json")) {
+    files.push({
+      name: "tsconfig.json",
+      path: "tsconfig.json",
+      language: "json",
+      content: `{\n  "compilerOptions": {\n    "target": "ES2020",\n    "useDefineForClassFields": true,\n    "lib": ["ES2020", "DOM", "DOM.Iterable"],\n    "module": "ESNext",\n    "skipLibCheck": true,\n    "moduleResolution": "bundler",\n    "jsx": "react-jsx",\n    "strict": true\n  },\n  "include": ["src"]\n}`,
+    });
+  }
+
+  if (!files.some((f) => f.name === "vite.config.ts")) {
+    files.push({
+      name: "vite.config.ts",
+      path: "vite.config.ts",
+      language: "typescript",
+      content: `import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\n\nexport default defineConfig({\n  plugins: [react()],\n});`,
+    });
+  }
+
+  return files;
+}
+
+// ── Building State Animated Geometric Modular Block SVG (Image 2) ───────────
+function BuildingIconSvg() {
+  return (
+    <svg
+      viewBox="0 0 100 90"
+      className="pg-ws-building-icon"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {/* Top rounded wide block */}
+      <rect x="5" y="6" width="56" height="24" rx="8" fill="#e5e7eb" />
+      {/* Top right pill block */}
+      <rect x="66" y="10" width="22" height="20" rx="8" fill="#eceff1" />
+      {/* Middle center block */}
+      <path
+        d="M34 36 C34 30, 40 30, 48 30 C56 30, 62 34, 62 44 C62 54, 56 56, 44 56 C36 56, 34 50, 34 36 Z"
+        fill="#eceff1"
+      />
+      {/* Bottom left square block */}
+      <rect x="5" y="58" width="24" height="24" rx="6" fill="#e5e7eb" />
+      {/* Bottom right square block */}
+      <rect x="76" y="58" width="20" height="24" rx="6" fill="#e5e7eb" />
+    </svg>
+  );
+}
+
+// ── Right Web Development Workspace IDE (Images 1 & 2) ──────────────────────
+function WorkspaceIDE({
   artifact,
   onClose,
 }: {
@@ -812,173 +951,320 @@ function CodeArtifactSlider({
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"code" | "preview">(artifact.activeTab);
-  const [copied, setCopied] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+  const [copied, setCopied] = useState(false);
 
-  // Sync tab whenever artifact updates
+  // Initialize files from artifact
+  const files = useMemo(() => {
+    if (artifact.projectFiles && artifact.projectFiles.length > 0) {
+      return artifact.projectFiles;
+    }
+    return extractProjectFiles(artifact.code, artifact.language, artifact.title);
+  }, [artifact.projectFiles, artifact.code, artifact.language, artifact.title]);
+
+  const [activeFilePath, setActiveFilePath] = useState<string>(
+    artifact.selectedFile || files[0]?.path || "src/App.tsx"
+  );
+
+  // Keep active file in sync if files change
   useEffect(() => {
-    setTab(artifact.activeTab);
-  }, [artifact.id, artifact.activeTab]);
+    if (artifact.selectedFile) {
+      setActiveFilePath(artifact.selectedFile);
+    } else if (files.length > 0 && !files.some((f) => f.path === activeFilePath)) {
+      setActiveFilePath(files[0].path);
+    }
+  }, [files, artifact.selectedFile, activeFilePath]);
 
-  const lineCount = useMemo(() => artifact.code.split(/\r?\n/).length, [artifact.code]);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(artifact.code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const activeFile = useMemo(() => {
+    return files.find((f) => f.path === activeFilePath) || files[0] || {
+      name: artifact.title,
+      path: artifact.title,
+      language: artifact.language,
+      content: artifact.code,
+    };
+  }, [files, activeFilePath, artifact]);
 
   const handleDownload = () => {
-    const blob = new Blob([artifact.code], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([activeFile.content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = artifact.title;
+    link.download = activeFile.name;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
+  const handleCopy = () => {
+    navigator.clipboard.writeText(activeFile.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const getFileIcon = (fileName: string) => {
+    if (fileName.endsWith(".tsx") || fileName.endsWith(".jsx")) {
+      return <span style={{ color: "#00d8ff" }}>⚛</span>;
+    }
+    if (fileName.endsWith(".ts")) {
+      return <span style={{ color: "#3178c6", fontWeight: 700, fontSize: 10 }}>TS</span>;
+    }
+    if (fileName.endsWith(".js")) {
+      return <span style={{ color: "#f7df1e", fontWeight: 700, fontSize: 10 }}>JS</span>;
+    }
+    if (fileName.endsWith(".css")) {
+      return <span style={{ color: "#2965f1", fontWeight: 700, fontSize: 9 }}>CSS</span>;
+    }
+    if (fileName.endsWith(".html")) {
+      return <span style={{ color: "#e34f26", fontWeight: 700, fontSize: 10 }}>5</span>;
+    }
+    if (fileName.endsWith(".json")) {
+      return <span style={{ color: "#cb3837", fontWeight: 700, fontSize: 10 }}>{}</span>;
+    }
+    return <span>📄</span>;
+  };
+
+  // Compile runnable HTML document from active project files
+  const compiledHtml = useMemo(() => {
+    const htmlFile = files.find((f) => f.name.endsWith(".html"));
+    const cssFiles = files.filter((f) => f.name.endsWith(".css"));
+    const jsFiles = files.filter((f) => f.name.endsWith(".js") || f.name.endsWith(".tsx") || f.name.endsWith(".ts"));
+
+    if (htmlFile && htmlFile.content.includes("<html")) {
+      let doc = htmlFile.content;
+      if (cssFiles.length > 0 && !doc.includes("<style>")) {
+        const injectedStyles = cssFiles.map((c) => `<style>${c.content}</style>`).join("\n");
+        doc = doc.replace("</head>", `${injectedStyles}\n</head>`);
+      }
+      return doc;
+    }
+
+    // Default bundle for modern preview
+    return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      ${cssFiles.map((c) => c.content).join("\n")}
+    </style>
+  </head>
+  <body class="bg-white text-slate-900 antialiased p-4">
+    <div id="root">
+      ${artifact.code.includes("<") ? artifact.code : `<div class="p-8 font-sans max-w-xl mx-auto"><h1 class="text-2xl font-bold mb-4">${artifact.title}</h1><p class="text-slate-600">${artifact.code.slice(0, 300)}</p></div>`}
+    </div>
+  </body>
+</html>`;
+  }, [files, artifact]);
+
   return (
-    <aside className="pg-code-slider">
-      {/* Slider Topbar */}
-      <div className="pg-slider-header">
-        <div className="pg-slider-header-left">
-          <div className="pg-slider-icon">
-            {artifact.isHtml ? "🌐" : "📄"}
-          </div>
-          <div className="pg-slider-title-col">
-            <span className="pg-slider-filename">{artifact.title}</span>
-            <span className="pg-slider-meta">
-              {artifact.language.toUpperCase()} · {lineCount} lines · {(new Blob([artifact.code]).size / 1024).toFixed(1)} KB
-            </span>
+    <aside className="pg-workspace-slider">
+      {/* ── Topbar (Image 1) ── */}
+      <div className="pg-ws-topbar">
+        {/* Toggle Mode: Preview (Eye) vs Code (</>) */}
+        <div className="pg-ws-toggle-group">
+          <button
+            className={`pg-ws-toggle-btn ${tab === "preview" ? "active" : ""}`}
+            onClick={() => setTab("preview")}
+            title="Preview web application"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+          <button
+            className={`pg-ws-toggle-btn ${tab === "code" ? "active" : ""}`}
+            onClick={() => setTab("code")}
+            title="View code editor"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="16 18 22 12 16 6" />
+              <polyline points="8 6 2 12 8 18" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Address Bar: ↻ / (Image 1) */}
+        <div className="pg-ws-url-bar">
+          <button
+            className="pg-ws-reload-btn"
+            onClick={() => setPreviewKey((k) => k + 1)}
+            title="Reload preview"
+          >
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <path d="M23 4v6h-6M1 20v-6h6" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </button>
+          <span className="pg-ws-url-text">{artifact.urlPath || "/"}</span>
+          <div className="pg-ws-url-actions">
+            <button
+              className="pg-ws-icon-btn"
+              title="Copy URL"
+              onClick={() => {
+                navigator.clipboard.writeText("http://localhost:3000" + (artifact.urlPath || "/"));
+                alert("URL copied!");
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            </button>
+            <button
+              className="pg-ws-icon-btn"
+              title="Open in new window"
+              onClick={() => {
+                const win = window.open("", "_blank");
+                if (win) {
+                  win.document.write(compiledHtml);
+                  win.document.close();
+                }
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            </button>
           </div>
         </div>
 
-        {/* Two Small Icon Buttons: Code vs Preview (if HTML) */}
-        {artifact.isHtml && (
-          <div className="pg-slider-tab-group">
-            <button
-              className={`pg-slider-tab-btn ${tab === "code" ? "active" : ""}`}
-              onClick={() => setTab("code")}
-              title="View source code"
-            >
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <polyline points="16 18 22 12 16 6" />
-                <polyline points="8 6 2 12 8 18" />
-              </svg>
-              <span>Code</span>
-            </button>
-            <button
-              className={`pg-slider-tab-btn ${tab === "preview" ? "active" : ""}`}
-              onClick={() => setTab("preview")}
-              title="View interactive live preview"
-            >
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-              <span>Preview</span>
-            </button>
-          </div>
-        )}
-
-        {/* Right action icons: Copy, Download, Close */}
-        <div className="pg-slider-header-right">
-          <button
-            className="pg-slider-action-btn"
-            onClick={handleCopy}
-            title="Copy code"
-          >
-            {copied ? (
-              <>
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" strokeWidth="2.4">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                <span style={{ color: "#10b981", fontWeight: 600 }}>Copied!</span>
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
-                <span>Copy</span>
-              </>
-            )}
-          </button>
-
-          <button
-            className="pg-slider-action-btn"
-            onClick={handleDownload}
-            title="Download file"
-          >
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+        {/* Topbar Right: Download button + Close button */}
+        <div className="pg-ws-topbar-right">
+          <button className="pg-ws-download-btn" onClick={handleDownload} title="Download file">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
             <span>Download</span>
           </button>
-
-          <button
-            className="pg-slider-close-btn"
-            onClick={onClose}
-            title="Close side slider (Esc)"
-          >
+          <button className="pg-ws-close-btn" onClick={onClose} title="Close workspace (Esc)">
             ✕
           </button>
         </div>
       </div>
 
-      {/* Slider Main Viewport */}
-      <div className="pg-slider-body">
-        {artifact.isHtml && tab === "preview" ? (
-          <div className="pg-slider-preview-wrap">
-            <div className="pg-slider-preview-bar">
-              <div className="pg-slider-preview-dots">
-                <span style={{ background: "#ef4444" }} />
-                <span style={{ background: "#eab308" }} />
-                <span style={{ background: "#10b981" }} />
-              </div>
-              <div className="pg-slider-preview-address">
-                <span>https://preview.sandbox/{artifact.title}</span>
-              </div>
-              <button
-                className="pg-slider-preview-reload-btn"
-                onClick={() => setPreviewKey((k) => k + 1)}
-                title="Reload preview"
-              >
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M23 4v6h-6M1 20v-6h6" />
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                </svg>
-              </button>
-            </div>
-            <iframe
-              key={previewKey}
-              srcDoc={artifact.code}
-              sandbox="allow-scripts allow-modals allow-same-origin"
-              className="pg-slider-iframe"
-              title="Artifact Live Preview"
-            />
+      {/* ── Main Workspace Body: Check if Building (Image 2) or Loaded (Image 1) ── */}
+      {artifact.isBuilding ? (
+        /* Image 2 Building State */
+        <div className="pg-ws-building-screen">
+          <div className="pg-ws-building-icon-wrap">
+            <BuildingIconSvg />
           </div>
-        ) : (
-          <div className="pg-slider-code-wrap">
-            <pre className="pg-slider-pre">
-              <code>
-                {artifact.code.split(/\r?\n/).map((line, idx) => (
-                  <div key={idx} className="pg-slider-code-line">
-                    <span className="pg-slider-line-num">{idx + 1}</span>
-                    <span className="pg-slider-line-code">{line || " "}</span>
+          <h2 className="pg-ws-building-title">Building...</h2>
+          <p className="pg-ws-building-subtitle">
+            Preview will appear when agent is done working
+          </p>
+        </div>
+      ) : tab === "preview" ? (
+        /* Live App Preview */
+        <div className="pg-ws-preview-view">
+          <iframe
+            key={previewKey}
+            srcDoc={compiledHtml}
+            sandbox="allow-scripts allow-modals allow-same-origin"
+            className="pg-ws-iframe"
+            title="App Preview"
+          />
+        </div>
+      ) : (
+        /* Image 1 Workspace IDE Layout */
+        <div className="pg-ws-body">
+          {/* Left Sidebar: FILES Tree (Image 1) */}
+          <aside className="pg-ws-files-sidebar">
+            <div className="pg-ws-files-title">FILES</div>
+            <div className="pg-ws-tree">
+              {/* Folder: src */}
+              <div className="pg-ws-tree-folder">
+                <div className="pg-ws-tree-folder-head">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  </svg>
+                  <span>src</span>
+                </div>
+                <div className="pg-ws-tree-children">
+                  {/* Optional subfolders for visual parity with Image 1 */}
+                  <div className="pg-ws-tree-folder-head" style={{ opacity: 0.8, padding: "2px 6px" }}>
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>shaders</span>
+                  </div>
+                  <div className="pg-ws-tree-folder-head" style={{ opacity: 0.8, padding: "2px 6px" }}>
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>utils</span>
+                  </div>
+
+                  {/* Files under src */}
+                  {files
+                    .filter((f) => f.path.startsWith("src/"))
+                    .map((file) => (
+                      <div
+                        key={file.path}
+                        className={`pg-ws-tree-file ${activeFilePath === file.path ? "active" : ""}`}
+                        onClick={() => setActiveFilePath(file.path)}
+                      >
+                        <span className="pg-ws-file-icon">{getFileIcon(file.name)}</span>
+                        <span>{file.name}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Root level files (index.html, package.json, etc.) */}
+              {files
+                .filter((f) => !f.path.startsWith("src/"))
+                .map((file) => (
+                  <div
+                    key={file.path}
+                    className={`pg-ws-tree-file ${activeFilePath === file.path ? "active" : ""}`}
+                    onClick={() => setActiveFilePath(file.path)}
+                  >
+                    <span className="pg-ws-file-icon">{getFileIcon(file.name)}</span>
+                    <span>{file.name}</span>
                   </div>
                 ))}
-              </code>
-            </pre>
-          </div>
-        )}
-      </div>
+            </div>
+          </aside>
+
+          {/* Center/Right Code Editor with Line Numbers (Image 1) */}
+          <main className="pg-ws-editor-pane">
+            <div className="pg-ws-editor-tabs-bar">
+              <div className="pg-ws-active-tab">
+                <span className="pg-ws-file-icon">{getFileIcon(activeFile.name)}</span>
+                <span>{activeFile.name}</span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    opacity: 0.5,
+                    cursor: "pointer",
+                    marginLeft: 4,
+                  }}
+                  title="Active tab"
+                >
+                  ✕
+                </span>
+              </div>
+            </div>
+
+            <div className="pg-ws-editor-body">
+              {activeFile.content.split(/\r?\n/).map((line, idx) => (
+                <div key={idx} className="pg-ws-code-line">
+                  <span className="pg-ws-line-num">{idx + 1}</span>
+                  <span className="pg-ws-line-content">{line || " "}</span>
+                </div>
+              ))}
+            </div>
+          </main>
+        </div>
+      )}
     </aside>
   );
 }
@@ -1612,6 +1898,21 @@ export default function PlaygroundPage() {
       const activeTools = determineActiveTools(text, serverTools, toolConfigs);
       setActiveRunningTools(activeTools);
 
+      // Check if user is asking to build or develop a web app / site / page
+      const isWebDevIntent = /(?:website|web\s*app|landing\s*page|develop|build|create|react|html|frontend|page|ui|app|component|site|dashboard)\b/i.test(text);
+      if (isWebDevIntent) {
+        setActiveArtifact({
+          id: `ws_building_${Date.now()}`,
+          title: "App.tsx",
+          language: "tsx",
+          code: "",
+          isHtml: true,
+          activeTab: "preview",
+          isBuilding: true,
+          urlPath: "/",
+        });
+      }
+
       // Context window trimming based on Chat Memory slider
       const historySlice =
         memoryValue >= 20
@@ -1670,12 +1971,34 @@ export default function PlaygroundPage() {
                 ? data.reasoning
                 : JSON.stringify(data.reasoning);
           }
+
+          // If this was a web development request or the response contains code, populate the Workspace IDE
+          if (isWebDevIntent || assistantContent.includes("```")) {
+            const projectFiles = extractProjectFiles(assistantContent, "tsx", "App.tsx");
+            const mainFile = projectFiles.find((f) => f.name === "App.tsx") || projectFiles[0];
+            setActiveArtifact({
+              id: `ws_${Date.now()}`,
+              title: mainFile?.name || "App.tsx",
+              language: mainFile?.language || "tsx",
+              code: mainFile?.content || assistantContent,
+              isHtml: true,
+              activeTab: "preview",
+              isBuilding: false,
+              projectFiles,
+              selectedFile: mainFile?.path,
+              urlPath: "/",
+            });
+          }
         } else {
           const errData = await response.json().catch(() => ({}));
           const errMsg =
             errData?.error?.message ||
             `Gateway HTTP ${response.status}: Failed to route to ${activeModelObj.displayName}`;
           assistantContent = `⚠️ **Gateway Error**: ${errMsg}\n\n*Check that your upstream providers have valid API keys connected in the [Providers](/dashboard/providers) tab.*`;
+          // If error occurs and we were in building state, close the building screen
+          if (isWebDevIntent) {
+            setActiveArtifact(null);
+          }
         }
 
         const assistantMsg: Message = {
@@ -1708,6 +2031,9 @@ export default function PlaygroundPage() {
         // Notify all open dashboard tabs via BroadcastChannel for 0ms instantaneous update
         notifyClientTelemetry();
       } catch (e: any) {
+        if (isWebDevIntent) {
+          setActiveArtifact(null);
+        }
         const errorMsg: Message = {
           id: uid(),
           role: "assistant",
@@ -3140,9 +3466,9 @@ export default function PlaygroundPage() {
         </div>
       </main>
 
-      {/* ── RIGHT CODE ARTIFACT SLIDER (Claude-style Side Panel) ────────── */}
+      {/* ── RIGHT WEB DEVELOPMENT WORKSPACE IDE (Image 1 & 2) ────────── */}
       {activeArtifact && (
-        <CodeArtifactSlider
+        <WorkspaceIDE
           artifact={activeArtifact}
           onClose={() => setActiveArtifact(null)}
         />
