@@ -194,6 +194,152 @@ function WeatherCard({ weather }: { weather: any }) {
   );
 }
 
+// ── Executed Tool Calls & Shell Command Inspector (Never hidden after execution) ──
+function ToolCallsViewer({ toolCalls }: { toolCalls: ToolCallResult[] }) {
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  if (!toolCalls || toolCalls.length === 0) return null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "10px 0 14px 0" }}>
+      {toolCalls.map((tc, idx) => {
+        const isExpanded = expandedIndex === idx;
+        const isShell = tc.tool === "shell";
+
+        return (
+          <div
+            key={idx}
+            style={{
+              borderRadius: 10,
+              border: "1px solid var(--pg-card-border, rgba(255,255,255,0.12))",
+              background: isShell ? "rgba(15, 23, 42, 0.7)" : "var(--pg-code-bg, rgba(255,255,255,0.03))",
+              overflow: "hidden",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {/* Header / Summary Bar */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 12px",
+                cursor: "pointer",
+                userSelect: "none",
+                gap: 10,
+                background: isExpanded ? "rgba(255, 255, 255, 0.04)" : "transparent",
+              }}
+              onClick={() => setExpandedIndex(isExpanded ? null : idx)}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+                <span style={{ fontSize: 14 }}>{tc.icon || "🛠️"}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--pg-text, #fff)", flexShrink: 0 }}>
+                  {tc.name}
+                </span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontFamily: isShell ? "var(--font-mono, monospace)" : "inherit",
+                    color: "var(--pg-text-secondary, #94a3b8)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                  title={tc.summary}
+                >
+                  {tc.summary}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                {isShell && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: "#10b981",
+                      background: "rgba(16, 185, 129, 0.12)",
+                      border: "1px solid rgba(16, 185, 129, 0.25)",
+                      borderRadius: 6,
+                      padding: "2px 6px",
+                      fontFamily: "var(--font-mono, monospace)",
+                    }}
+                  >
+                    Executed
+                  </span>
+                )}
+                <span style={{ fontSize: 11, color: "var(--pg-text-tertiary, #64748b)" }}>
+                  {isExpanded ? "Hide ▲" : "Inspect ▼"}
+                </span>
+              </div>
+            </div>
+
+            {/* Expanded Details Output */}
+            {isExpanded && (
+              <div
+                style={{
+                  borderTop: "1px solid var(--pg-card-border, rgba(255,255,255,0.1))",
+                  padding: "10px 14px",
+                  background: "#080c14",
+                  fontSize: 12,
+                  fontFamily: "var(--font-mono, monospace)",
+                  color: "#e2e8f0",
+                  lineHeight: 1.5,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {isShell ? "Shell Execution Output" : "Tool Execution Details"}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigator.clipboard.writeText(tc.details || tc.summary);
+                      setCopiedIndex(idx);
+                      setTimeout(() => setCopiedIndex(null), 1800);
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      background: "rgba(255, 255, 255, 0.08)",
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                      color: copiedIndex === idx ? "#10b981" : "#cbd5e1",
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      borderRadius: 5,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {copiedIndex === idx ? "✓ Copied" : "Copy Output"}
+                  </button>
+                </div>
+                <pre
+                  style={{
+                    margin: 0,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-all",
+                    maxHeight: 260,
+                    overflowY: "auto",
+                    color: "#f1f5f9",
+                    background: "rgba(0, 0, 0, 0.4)",
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                  }}
+                >
+                  {tc.details || tc.summary}
+                </pre>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Built-in Smart Table & Excel Spreadsheet Viewer ──────────────────────────
 function SmartTableView({
   headers,
@@ -2258,6 +2404,11 @@ export default function PlaygroundPage() {
 
                   {/* Built-in Weather Widget Card */}
                   {msg.weather && <WeatherCard weather={msg.weather} />}
+
+                  {/* Executed Tools & Command Output (Persisted and inspected after execution) */}
+                  {msg.toolCalls && msg.toolCalls.length > 0 && (
+                    <ToolCallsViewer toolCalls={msg.toolCalls} />
+                  )}
 
                   {/* Card content text */}
                   <div className="pg-card-body">
