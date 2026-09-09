@@ -41,7 +41,7 @@ Group multiple models into smart virtual endpoints with failover, round-robin, w
 Visual priority tiers: if Tier 1 times out or errors (e.g. rate limit, 5xx), Freeroute seamlessly fails over to Tier 2 in milliseconds.
 ![Combo Modal](assets/screenshots/combo-modal.png)
 
-### 4. Curated Providers Catalog
+### 4. Providers Catalog
 Connect industry-standard AI providers with a single API key: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, and APInex.
 ![Providers Catalog](assets/screenshots/providers.png)
 
@@ -95,16 +95,6 @@ Interactive chat interface matching OpenRouter with multi-room history, context 
   - Promptfoo
   - Bolt.diy
   - Ollama
-- **🏢 Curated AI Providers**:
-  - [Groq](https://groq.com)
-  - [Experiential Labs](https://platform.experientiallabs.ai/)
-  - [Google Gemini](https://ai.google.dev/)
-  - [NVIDIA NIM](https://build.nvidia.com)
-  - [Ollama Cloud](https://ollama.ai)
-  - [OpenRouter](https://openrouter.ai)
-  - [KiosAPI](https://kiosapi.com/v1/) ([Docs](https://kiosapi.mintlify.app/))
-  - [OrcaRouter](https://www.orcarouter.ai/) (`https://api.orcarouter.ai/v1`)
-  - [APInex](https://apinex.bond/) (`https://api.apinex.bond/v1`)
 - **🔒 Persistent User Storage**: Stored outside project source code in `~/.freeroute/freeroute.db` (`C:\Users\<user>\.freeroute\freeroute.db` on Windows).
 - **💾 1-Click Backup & Restore**: Export your full database state (keys, providers, combos, settings) to a portable JSON backup and restore it anywhere.
 - **📊 Real-Time Activity Telemetry**: Monitor latency, TTFT, token throughput, live costs, and request status in the **Activitys** dashboard.
