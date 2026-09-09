@@ -72,6 +72,8 @@ Interactive chat interface matching OpenRouter with multi-room history, context 
 - **Subagent**: Modular task decomposition delegated to high-speed worker models (North Mini, Gemma 2).
 - **Shell**: Sandboxed container execution environment with 30s timeout.
 
+![AI Playground Conversation](assets/screenshots/playground.png)
+
 ---
 
 ## 🚀 Key Features
