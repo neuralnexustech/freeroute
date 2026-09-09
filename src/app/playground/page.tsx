@@ -1822,11 +1822,11 @@ function ArenaAgentCard({
         )}
       </div>
 
-      {/* 4. Arena Action Bar with Feedback Icons and 'make better' button (Matching Image 2) */}
+      {/* 4. Arena Action Bar with thumbs up/down, copy, and 'make better' button (Matching Image 2) */}
       <div className="pg-arena-action-row">
         <div className="pg-arena-action-left">
           <button
-            className="pg-msg-action-icon"
+            className="pg-arena-action-btn"
             title="Good response"
             onClick={() => {}}
           >
@@ -1835,7 +1835,7 @@ function ArenaAgentCard({
             </svg>
           </button>
           <button
-            className="pg-msg-action-icon"
+            className="pg-arena-action-btn"
             title="Bad response"
             onClick={() => {}}
           >
@@ -1844,8 +1844,8 @@ function ArenaAgentCard({
             </svg>
           </button>
           <button
-            className="pg-msg-action-icon"
-            title="Copy response"
+            className="pg-arena-action-btn"
+            title="Copy narrative"
             onClick={() => {
               navigator.clipboard.writeText(cleanNarrative);
             }}

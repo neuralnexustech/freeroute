@@ -4018,6 +4018,27 @@ table.table-center td:first-child {
   gap: 4px;
 }
 
+.pg-arena-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--pg-text-tertiary, #9ca3af);
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.pg-arena-action-btn:hover {
+  color: var(--pg-text, #111827);
+  background: rgba(0, 0, 0, 0.05);
+}
+[data-theme="dark"] .pg-arena-action-btn:hover {
+  color: #f3f4f6;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .pg-arena-make-better-btn {
   display: inline-flex;
   align-items: center;
