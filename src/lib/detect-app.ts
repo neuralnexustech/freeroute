@@ -136,7 +136,7 @@ export function detectApp(req: Request, apiKeyName?: string, bodySample?: any): 
   if (ua.includes("open-webui") || ua.includes("openwebui")) return "Open WebUI";
   if (ua.includes("nextchat") || ua.includes("chatgpt-next-web")) return "NextChat";
 
-  // 18. Dashboard Internal Test / Playground
+  // 18. Dashboard Internal Test / Designer
   const host = headers.get("host") || "";
   const envPort = process.env.PORT || "";
   if (
