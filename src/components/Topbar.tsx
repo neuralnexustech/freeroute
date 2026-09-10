@@ -42,23 +42,24 @@ export function Topbar() {
         </div>
 
         <Link
-          href="/playground"
+          href="/designer"
           className="btn sm"
           style={{
             gap: 6,
             fontWeight: 600,
             color: "var(--primary)",
-            borderColor: "rgba(16,185,129,0.3)",
+            borderColor: "rgba(139,124,248,0.35)",
             background: "var(--bg-accent-soft)",
           }}
-          title="Open AI Playground"
+          title="Open Web Designer"
         >
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2">
-            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-            <path d="M2 17l10 5 10-5" />
-            <path d="M2 12l10 5 10-5" />
+            <path d="M12 19l7-7 3 3-7 7-3-3z" />
+            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+            <path d="M2 2l7.586 7.586" />
+            <circle cx="11" cy="11" r="2" />
           </svg>
-          Playground
+          Designer
         </Link>
 
         <button className="theme-toggle-btn" title="Toggle Light/Dark Theme" aria-label="Toggle dark/light theme" onClick={() => { toggle(); toast.show(`Switched to ${theme === "dark" ? "light" : "dark"} theme`); }}>

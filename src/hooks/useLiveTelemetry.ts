@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 /**
  * useLiveTelemetry hook provides EXACT real-time updates via:
  * 1. Server-Sent Events (SSE) stream from `/api/telemetry/stream` (instant push on every gateway request)
- * 2. Cross-tab BroadcastChannel for 0ms instantaneous notification across playground / dashboard tabs
+ * 2. Cross-tab BroadcastChannel for 0ms instantaneous notification across designer / dashboard tabs
  * 3. Fallback fast re-check on tab focus / document visibility change
  */
 export function useLiveTelemetry(onUpdate: () => void, debounceMs: number = 100) {
@@ -103,7 +103,7 @@ export function useLiveTelemetry(onUpdate: () => void, debounceMs: number = 100)
 }
 
 /**
- * Broadcast from client (e.g. playground finished a prompt)
+ * Broadcast from client (e.g. designer finished a prompt)
  */
 export function notifyClientTelemetry() {
   try {

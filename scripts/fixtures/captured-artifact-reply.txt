@@ -1,0 +1,170 @@
+Our design takes a minimalist, coffee‑centric approach—clean typography, generous white space, and a subtle color palette that shifts gracefully between light and dark. I’ll build a compact landing page that highlights the subscription benefits with real‑world data, a functional monthly/yearly toggle, and smooth hover animations for an engaging yet lightweight experience. The result is a production‑ready, responsive page that instantly conveys quality and invites visitors to start their daily brew.
+
+<artifact identifier="design-1" type="html" title="Bean & Brew Landing Page">
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bean & Brew — Your Coffee Subscription</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --primary: #4b2e2e; --accent: #c49a6c; --bg-light: #fefdfb; --bg-dark: #1a1310; }
+    body { font-family: 'Inter', sans-serif; background-color: var(--bg-light); color: #333; transition: background-color .3s, color .3s; }
+    .dark body { background-color: var(--bg-dark); color: #e0d6cc; }
+    .section { @apply py-16 px-4 md:px-12 max-w-6xl mx-auto; }
+    .card { @apply bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1; }
+    .dark .card { @apply bg-gray-900; }
+    .btn { @apply inline-block px-6 py-3 bg-accent text-white font-semibold rounded-full hover:bg-opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent; }
+    .toggle-switch { @apply relative w-12 h-6 rounded-full bg-gray-300 dark:bg-gray-700 transition-colors duration-300; }
+    .toggle-switch.active { @apply bg-accent; }
+    .toggle-thumb { @apply absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform duration-300; }
+    .toggle-switch.active .toggle-thumb { @apply transform translate-x-6; }
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body class="antialiased">
+
+  <!-- Navigation -->
+  <nav class="section py-4 flex justify-between items-center max-w-6xl mx-auto">
+    <a href="#" class="text-2xl font-bold text-primary dark:text-accent">Bean & Brew</a>
+    <button id="themeToggle" class="p-2 rounded-md focus-visible:ring-2 ring-primary">
+      <span class="sr-only">Toggle dark mode</span>
+      <svg id="iconSun" class="w-6 h-6 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-12.66l-.71.71M4.05 19.95l-.71.71M20 12h1M3 12h1m15.66 4.34l-.71-.71M4.05 4.05l-.71-.71"></svg>
+      <svg id="iconMoon" class="w-6 h-6 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1110.21 3a7 7 0 009.79 9.79z"></svg>
+    </button>
+  </nav>
+
+  <!-- Hero -->
+  <section class="section flex flex-col md:flex-row items-center gap-8">
+    <div class="flex-1">
+      <h1 class="text-4xl md:text-5xl font-bold mb-4 text-primary dark:text-accent">Crafted Coffee Delivered to Your Door</h1>
+      <p class="text-lg mb-6">Founded in 2023, Bean & Brew sources single‑origin beans from Ethiopian Yirgacheffe, Colombian Supremo, and Sumatra Dark Roast. Enjoy free shipping, skip or pause anytime, and taste perfection with every cup.</p>
+      <a href="#pricing" class="btn">Start Your Subscription</a>
+    </div>
+    <div class="flex-1">
+      <div class="aspect-square bg-cover bg-center rounded-2xl shadow-lg" style="background-image: url('https://images.unsplash.com/photo-1495474472470-8da71c770a56?auto=format&fit=crop&w=800&q=60');">
+        <img src="https://images.unsplash.com/photo-1495474472470-8da71c770c56?auto=format&fit=crop&w=800&q=60" alt="Freshly brewed coffee in a ceramic mug" class="rounded-2xl w-full h-full object-cover">
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="section bg-gray-50 dark:bg-gray-800/30 rounded-2xl">
+    <h2 class="text-3xl font-bold text-center mb-8 text-primary dark:text-accent">How It Works</h2>
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="card p-6 text-center">
+        <div class="w-12 h-12 mx-auto mb-4 bg-accent/10 text-accent rounded-full flex items-center justify-center text-xl font-bold">1</div>
+        <h3 class="text-xl font-semibold mb-2">Choose Your Plan</h3>
+        <p class="text-sm">Select monthly or annual billing and pick your preferred roast profile.</p>
+      </div>
+      <div class="card p-6 text-center">
+        <div class="w-12 h-12 mx-auto mb-4 bg-accent/10 text-accent rounded-full flex items-center justify-center text-xl font-bold">2</div>
+        <h3 class="text-xl font-semibold mb-2">We Brew & Ship</h3>
+        <p class="text-sm">Your beans are freshly roasted and shipped within 2‑3 business days.</p>
+      </div>
+      <div class="card p-6 text-center">
+        <div class="w-12 h-12 mx-auto mb-4 bg-accent/10 text-accent rounded-full flex items-center justify-center text-xl font-bold">3</div>
+        <h3 class="text-xl font-semibold mb-2">Enjoy Everyday</h3>
+        <p class="text-sm">Receive a new bag every month and savor the perfect cup at home.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="pricing" class="section">
+    <h2 class="text-3xl font-bold text-center mb-4 text-primary dark:text-accent">Simple Pricing</h2>
+    <p class="text-center text-sm mb-8 text-gray-600 dark:text-gray-400">5,000+ happy subscribers. No hidden fees.</p>
+
+    <div class="flex justify-center mb-8">
+      <div id="billingToggle" class="toggle-switch flex items-center cursor-pointer">
+        <span class="mr-3 text-sm font-medium">Monthly</span>
+        <div class="toggle-thumb"></div>
+        <span class="ml-3 text-sm font-medium">Annual (save 20%)</span>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+      <!-- Monthly Card -->
+      <div id="cardMonthly" class="card p-8">
+        <h3 class="text-2xl font-bold mb-2">Monthly</h3>
+        <p class="text-4xl font-extrabold mb-4">$12<span class="text-lg font-normal text-gray-500 dark:text-gray-400">/month</span></p>
+        <ul class="space-y-3 mb-6">
+          <li class="flex items-center"><svg class="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></svg> Free shipping</li>
+          <li class="flex items-center"><svg class="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></svg> Skip or pause anytime</li>
+          <li class="flex items-center"><svg class="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></svg> 3‑bean rotation</li>
+        </ul>
+        <a href="#" class="btn w-full text-center">Subscribe Now</a>
+      </div>
+
+      <!-- Annual Card -->
+      <div id="cardAnnual" class="card p-8 relative hidden">
+        <div class="absolute top-0 right-0 bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-lg">Best Value</div>
+        <h3 class="text-2xl font-bold mb-2">Annual</h3>
+        <p class="text-4xl font-extrabold mb-4">$96<span class="text-lg font-normal text-gray-500 dark:text-gray-400">/year</span></p>
+        <ul class="space-y-3 mb-6">
+          <li class="flex items-center"><svg class="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></svg> Everything in Monthly, plus</li>
+          <li class="flex items-center"><svg class="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></svg> 2 free seasonal beans</li>
+          <li class="flex items-center"><svg class="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></svg> 15% extra discount</li>
+        </ul>
+        <a href="#" class="btn w-full text-center">Subscribe Annually</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="section border-t border-gray-200 dark:border-gray-700 text-center text-sm text-gray-500 dark:text-gray-400">
+    © 2023‑2024 Bean & Brew. All rights reserved. Made with ☕ in Paris.
+  </footer>
+
+  <script>
+    // Theme toggle
+    const html = document.documentElement;
+    const btn = document.getElementById('themeToggle');
+    const sun = document.getElementById('iconSun');
+    const moon = document.getElementById('iconMoon');
+
+    const stored = localStorage.getItem('theme');
+    if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      html.classList.add('dark');
+      sun.classList.remove('hidden');
+      moon.classList.add('hidden');
+    }
+
+    btn.addEventListener('click', () => {
+      const isDark = html.classList.contains('dark');
+      if (isDark) {
+        html.classList.remove('dark');
+        sun.classList.add('hidden');
+        moon.classList.remove('hidden');
+        localStorage.setItem('theme', 'light');
+      } else {
+        html.classList.add('dark');
+        sun.classList.remove('hidden');
+        moon.classList.add('hidden');
+        localStorage.setItem('theme', 'dark');
+      }
+    });
+
+    // Billing toggle
+    const toggle = document.getElementById('billingToggle');
+    const cardM = document.getElementById('cardMonthly');
+    const cardA = document.getElementById('cardAnnual');
+
+    toggle.addEventListener('click', () => {
+      toggle.classList.toggle('active');
+      if (toggle.classList.contains('active')) {
+        cardM.classList.add('hidden');
+        cardA.classList.remove('hidden');
+      } else {
+        cardM.classList.remove('hidden');
+        cardA.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
+</artifact>
