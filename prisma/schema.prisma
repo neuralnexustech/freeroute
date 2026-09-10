@@ -94,6 +94,8 @@ model RequestLog {
   completionTokens Int     @default(0)
   cost           Float     @default(0)
   latencyMs      Int       @default(0)
+  app            String    @default("Unknown") // detected client app (kept in sync with runtime ALTER in lib/db.ts)
+  errorMessage   String    @default("")
   createdAt      DateTime  @default(now())
 }
 
@@ -101,4 +103,26 @@ model Setting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+model DesignerRoom {
+  id        String            @id @default(cuid())
+  title     String            @default("New chat")
+  model     String            @default("")
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  messages  DesignerMessage[]
+}
+
+model DesignerMessage {
+  id        String       @id @default(cuid())
+  roomId    String
+  room      DesignerRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  role      String // user | assistant
+  content   String
+  model     String       @default("")
+  tokens    Int          @default(0)
+  cost      Float        @default(0)
+  latencyMs Int          @default(0)
+  createdAt DateTime     @default(now())
 }

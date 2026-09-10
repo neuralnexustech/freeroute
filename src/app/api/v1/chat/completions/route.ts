@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateApiKey } from "@/lib/auth";
-import { getProvider, openAIToAnthropic } from "@/lib/providers";
+import { getProvider, openAIToAnthropic, anthropicToOpenAIChunk } from "@/lib/providers";
 import {
   pickTargets,
   checkFallbackError,
@@ -45,6 +45,198 @@ async function saveLogWithApp(
   return log;
 }
 
+interface SsePumpStats {
+  text: string;
+  promptTokens: number;
+  completionTokens: number;
+  ttftMs: number | null;
+  totalMs: number;
+}
+
+/**
+ * Pipes an upstream SSE (or buffered JSON) response to the client as an
+ * OpenAI-compatible text/event-stream, while accumulating the full text and
+ * token usage so the gateway can still log the request when the stream ends.
+ */
+function createSseResponse(opts: {
+  upstream: Response;
+  isAnthropic: boolean;
+  model: string;
+  started: number;
+  onFinish: (stats: SsePumpStats) => Promise<void> | void;
+}): Response {
+  const { upstream, isAnthropic, model, started, onFinish } = opts;
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let text = "";
+      let ttftMs: number | null = null;
+      let promptTokens = 0;
+      let completionTokens = 0;
+      let sseBuffer = "";
+      let jsonBuffer = "";
+      let closed = false;
+
+      const sendFrame = (payload: string) => {
+        if (closed) return;
+        controller.enqueue(encoder.encode(payload));
+      };
+
+      const sendChunk = (deltaContent: string) => {
+        if (!deltaContent || closed) return;
+        sendFrame(
+          `data: ${JSON.stringify({
+            id: `chatcmpl-${Date.now()}`,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model,
+            choices: [{ index: 0, delta: { content: deltaContent }, finish_reason: null }],
+          })}\n\n`,
+        );
+      };
+
+      const handleSseEvent = (rawEvent: string) => {
+        const dataLines = rawEvent
+          .split("\n")
+          .filter((l) => l.startsWith("data:"))
+          .map((l) => l.slice(5).trim())
+          .filter(Boolean);
+        if (dataLines.length === 0) return;
+        const dataStr = dataLines.join("\n");
+        if (dataStr === "[DONE]") return;
+
+        let evt: any = null;
+        try {
+          evt = JSON.parse(dataStr);
+        } catch {
+          return;
+        }
+
+        if (isAnthropic) {
+          if (evt?.type === "message_start") {
+            const u = evt?.message?.usage ?? {};
+            promptTokens = u.input_tokens ?? u.prompt_tokens ?? promptTokens;
+            return;
+          }
+          if (evt?.type === "message_delta") {
+            const u = evt?.usage ?? {};
+            completionTokens = u.output_tokens ?? completionTokens;
+            return;
+          }
+          if (evt?.type === "message_stop") return;
+          const chunk: any = anthropicToOpenAIChunk(evt, model);
+          const delta = chunk?.choices?.[0]?.delta?.content;
+          if (delta) {
+            text += delta;
+            sendChunk(delta);
+          }
+          return;
+        }
+
+        // OpenAI-compatible chunk passthrough (plus usage capture)
+        const u = evt?.usage;
+        if (u) {
+          promptTokens = u.prompt_tokens ?? u.input_tokens ?? promptTokens;
+          completionTokens = u.completion_tokens ?? u.output_tokens ?? completionTokens;
+        }
+        const delta = evt?.choices?.[0]?.delta?.content ?? evt?.choices?.[0]?.text ?? "";
+        if (delta) {
+          text += delta;
+        }
+        sendFrame(`data: ${JSON.stringify(evt)}\n\n`);
+      };
+
+      try {
+        const contentType = upstream.headers.get("content-type") || "";
+        const reader = upstream.body!.getReader();
+        const isSse = contentType.includes("text/event-stream");
+
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (ttftMs === null) ttftMs = Date.now() - started;
+          const chunkText = decoder.decode(value, { stream: true });
+
+          if (!isSse) {
+            // Upstream ignored stream:true and returned a JSON body — emit it as one delta.
+            jsonBuffer += chunkText;
+            continue;
+          }
+          sseBuffer += chunkText;
+          let nl: number;
+          while ((nl = sseBuffer.indexOf("\n")) !== -1) {
+            const line = sseBuffer.slice(0, nl).replace(/\r$/, "");
+            sseBuffer = sseBuffer.slice(nl + 1);
+            if (line === "") continue;
+            if (line.startsWith("data:")) {
+              handleSseEvent(line);
+            }
+          }
+          // Keep only the trailing partial line in the buffer
+          if (sseBuffer && !sseBuffer.includes("\n")) {
+            // partial line — leave for next chunk
+          }
+        }
+        sseBuffer += decoder.decode();
+        if (sseBuffer.startsWith("data:")) handleSseEvent(sseBuffer);
+
+        if (!isSse && jsonBuffer) {
+          let data: any = null;
+          try {
+            data = JSON.parse(jsonBuffer);
+          } catch {}
+          const content = data?.choices?.[0]?.message?.content ?? "";
+          const u = data?.usage ?? {};
+          promptTokens = u.prompt_tokens ?? u.input_tokens ?? 0;
+          completionTokens = u.completion_tokens ?? u.output_tokens ?? 0;
+          if (content) {
+            text += content;
+            sendChunk(content);
+          }
+        }
+
+        sendFrame("data: [DONE]\n\n");
+        closed = true;
+        controller.close();
+      } catch (e: any) {
+        const msg = e?.message ?? "stream interrupted";
+        if (!closed) {
+          sendFrame(
+            `data: ${JSON.stringify({
+              error: { message: msg, type: "gateway_stream_error" },
+            })}\n\n`,
+          );
+          sendFrame("data: [DONE]\n\n");
+          closed = true;
+          try {
+            controller.close();
+          } catch {}
+        }
+      }
+
+      // Rough estimates when the provider didn't report usage on the stream
+      if (completionTokens === 0 && text) completionTokens = Math.ceil(text.length / 4);
+
+      const totalMs = Date.now() - started;
+      try {
+        await onFinish({ text, promptTokens, completionTokens, ttftMs, totalMs });
+      } catch {}
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+      "x-accel-buffering": "no",
+    },
+  });
+}
+
 export async function POST(req: NextRequest) {
   const key = await validateApiKey(req.headers.get("authorization"));
   if (!key) {
@@ -63,6 +255,7 @@ export async function POST(req: NextRequest) {
   }
 
   const detectedApp = detectApp(req, key.name, body);
+  const wantsStream = body?.stream === true;
 
   const rawModel: string = body.model;
   const cleanModelName = rawModel.startsWith("combo:")
@@ -189,6 +382,59 @@ export async function POST(req: NextRequest) {
           return new Response(errText, {
             status: upstreamRes.status,
             headers: { "content-type": "application/json" },
+          });
+        }
+
+        // Streaming combo request: commit to this target and pipe SSE deltas.
+        if (wantsStream) {
+          const servedModel = m;
+          return createSseResponse({
+            upstream: upstreamRes,
+            isAnthropic,
+            model: m.slug,
+            started,
+            onFinish: async (stats) => {
+              const pt = stats.promptTokens;
+              const ct = stats.completionTokens;
+              const cost = estimateCost(servedModel, pt, ct);
+              const toksPerSec =
+                ct > 0 && stats.totalMs > 0
+                  ? Math.round((ct / stats.totalMs) * 100000) / 100
+                  : null;
+              await saveLogWithApp(
+                {
+                  apiKeyId: key.id,
+                  modelId: servedModel.id,
+                  providerId: servedModel.provider.id,
+                  modelSlug: servedModel.slug,
+                  route: `combo:${combo.name}`,
+                  status: 200,
+                  promptTokens: pt,
+                  completionTokens: ct,
+                  cost,
+                  latencyMs: stats.totalMs,
+                },
+                detectedApp,
+              );
+              await prisma.apiKey.update({
+                where: { id: key.id },
+                data: { lastUsedAt: new Date() },
+              }).catch(() => {});
+              await prisma.model
+                .update({
+                  where: { id: servedModel.id },
+                  data: {
+                    status: "ok",
+                    latencyMs: stats.totalMs,
+                    ...(stats.ttftMs != null ? { ttftMs: stats.ttftMs } : {}),
+                    ...(toksPerSec != null ? { toksPerSec } : {}),
+                  },
+                })
+                .catch(() => {});
+              await prisma.$executeRaw`UPDATE "Model" SET "httpStatus" = 200 WHERE "id" = ${servedModel.id}`.catch(
+                () => {},
+              );
+            },
           });
         }
 
@@ -370,6 +616,62 @@ export async function POST(req: NextRequest) {
       if (!upstream.ok) {
         lastError = `upstream ${upstream.status}`;
         continue; // failover to next candidate
+      }
+
+      // Streaming direct-model request: pipe SSE deltas and log on finish.
+      if (wantsStream) {
+        const servedModel = m;
+        return createSseResponse({
+          upstream,
+          isAnthropic: m.provider.slug === "anthropic",
+          model: m.slug,
+          started,
+          onFinish: async (stats) => {
+            const pt = stats.promptTokens;
+            const ct = stats.completionTokens;
+            const cost = estimateCost(servedModel, pt, ct);
+            const toksPerSec =
+              ct > 0 && stats.totalMs > 0
+                ? Math.round((ct / stats.totalMs) * 100000) / 100
+                : null;
+            await saveLogWithApp(
+              {
+                apiKeyId: key.id,
+                modelId: servedModel.id,
+                providerId: servedModel.provider.id,
+                modelSlug,
+                route: "openai-compatible",
+                status: 200,
+                promptTokens: pt,
+                completionTokens: ct,
+                cost,
+                latencyMs: stats.totalMs,
+              },
+              detectedApp,
+            );
+            await prisma.apiKey.update({
+              where: { id: key.id },
+              data: { lastUsedAt: new Date() },
+            }).catch(() => {});
+            await prisma.model
+              .update({
+                where: { id: servedModel.id },
+                data: {
+                  status: "ok",
+                  latencyMs: stats.totalMs,
+                  ...(stats.ttftMs != null ? { ttftMs: stats.ttftMs } : {}),
+                  ...(toksPerSec != null ? { toksPerSec } : {}),
+                },
+              })
+              .catch(() => {});
+            await prisma.$executeRaw`UPDATE "Model" SET "ttftMs" = ${stats.ttftMs} WHERE "id" = ${servedModel.id}`.catch(
+              () => {},
+            );
+            await prisma.$executeRaw`UPDATE "Model" SET "httpStatus" = 200 WHERE "id" = ${servedModel.id}`.catch(
+              () => {},
+            );
+          },
+        });
       }
 
       const latencyMs = Date.now() - started;

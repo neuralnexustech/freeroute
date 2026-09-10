@@ -29,6 +29,7 @@ prisma/*.db-journal
 
 # Logs & scratch test scripts
 npm-debug.log*
+scratch/
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*

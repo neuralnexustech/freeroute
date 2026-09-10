@@ -13,16 +13,16 @@ export function newRawKey(prefix = "xpl_") {
 export async function validateApiKey(raw?: string | null) {
   if (!raw) return null;
   const token = raw.startsWith("Bearer ") ? raw.slice(7) : raw;
-  if (token === "freeroute-playground") {
+  if (token === "freeroute-designer") {
     const existing = await prisma.apiKey.findFirst({ where: { revoked: false } });
     if (existing) return existing;
     return await prisma.apiKey.upsert({
-      where: { keyHash: hashKey("freeroute-playground") },
+      where: { keyHash: hashKey("freeroute-designer") },
       update: {},
       create: {
-        name: "Playground Internal Key",
-        prefix: "xpl_playg",
-        keyHash: hashKey("freeroute-playground"),
+        name: "Designer Internal Key",
+        prefix: "xpl_design",
+        keyHash: hashKey("freeroute-designer"),
       },
     });
   }
