@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { PROVIDERS, getProvider } from "@/lib/providers";
 
-const ALLOWED_SLUGS = ["groq", "experiential", "google", "nvidia", "ollama", "openrouter", "kiosapi", "orcarouter", "apinex"];
+const ALLOWED_SLUGS = ["groq", "experiential", "google", "nvidia", "ollama", "openrouter", "kiosapi", "orcarouter"];
 
 async function ensureProviders() {
   // Remove any providers that are not in the allowed providers list
