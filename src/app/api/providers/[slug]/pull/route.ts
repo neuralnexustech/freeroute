@@ -16,19 +16,18 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     return NextResponse.json({ error: "Provider not found" }, { status: 404 });
   }
 
-  const forceDefaults = req.nextUrl?.searchParams?.get("defaults") === "1";
-
   const isNoAuth = def?.authType === "none";
-  if (!isNoAuth && !forceDefaults && (!provider.apiKey || provider.apiKey.trim().length === 0)) {
+  if (!isNoAuth && (!provider.apiKey || provider.apiKey.trim().length === 0)) {
     return NextResponse.json({ error: "Save a provider API key first" }, { status: 400 });
   }
 
   let list: any[] = [];
+  let url = "";
 
-  if (!forceDefaults && def?.modelsPath) {
+  if (def?.modelsPath) {
     const rawBase = (provider.baseUrl?.trim() || def?.baseUrl || "").replace(/\/+$/, "");
     const modelsPath = def.modelsPath.startsWith("/") ? def.modelsPath : `/${def.modelsPath}`;
-    let url = `${rawBase}${modelsPath}`;
+    url = `${rawBase}${modelsPath}`;
     if (provider.slug === "google") {
       url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(provider.apiKey)}&pageSize=1000`;
     }
@@ -56,7 +55,6 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
             error: `${def?.name || provider.name} error (${upstream.status}): ${errMsg}`,
             upstreamStatus: upstream.status,
             upstreamError: errJson,
-            canSeedDefaults: Boolean(def?.defaultModels && def.defaultModels.length > 0),
           },
           { status: 400 }
         );
@@ -65,20 +63,18 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
       return NextResponse.json(
         {
           error: `Network error connecting to ${def?.name || provider.name} (${url}): ${err?.message || "Unreachable or timed out"}`,
-          canSeedDefaults: Boolean(def?.defaultModels && def.defaultModels.length > 0),
         },
         { status: 504 }
       );
     }
   }
 
-  // Fallback to default catalog models if list is empty or forceDefaults requested
+  // If no models were returned by the provider's API endpoint, return error (no hardcoded defaults)
   if (!Array.isArray(list) || list.length === 0) {
-    if (def?.defaultModels && def.defaultModels.length > 0) {
-      list = def.defaultModels.map((m) => ({ id: m.id, displayName: m.name }));
-    } else {
-      return NextResponse.json({ error: "No models available from provider endpoint or catalog" }, { status: 502 });
-    }
+    return NextResponse.json(
+      { error: `No models returned from ${def?.name || provider.name} endpoint (${url})` },
+      { status: 502 }
+    );
   }
 
   let count = 0;

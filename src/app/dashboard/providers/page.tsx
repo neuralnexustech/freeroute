@@ -13,7 +13,6 @@ interface Provider {
   logoUrl: string;
   connected: boolean;
   modelCount: number;
-  defaultModelCount?: number;
   serviceKinds?: string[];
 }
 
@@ -170,8 +169,6 @@ export default function ProvidersPage() {
                   ? `Connected · ${p.modelCount} models`
                   : p.modelCount > 0
                   ? `${p.modelCount} models available`
-                  : p.defaultModelCount && p.defaultModelCount > 0
-                  ? `${p.defaultModelCount} catalog models`
                   : "Click to configure"}
               </div>
             </div>

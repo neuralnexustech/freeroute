@@ -86,7 +86,6 @@ export async function GET() {
         logoUrl: logos[p.id] || `/providers/${p.slug}.png`,
         connected: p.connected,
         modelCount: p._count.models,
-        defaultModelCount: def?.defaultModels?.length || 0,
         serviceKinds: def?.serviceKinds || ["llm"],
       };
     }),

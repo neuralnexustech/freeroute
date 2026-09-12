@@ -26,10 +26,6 @@ export interface ProviderDef {
     label: string;
     placeholder: string;
   }[];
-  defaultModels?: {
-    id: string;
-    name: string;
-  }[];
 }
 
 function makeAuthHeader(authType: string): (apiKey: string) => Record<string, string> {
@@ -66,13 +62,6 @@ export const RAW_PROVIDERS_DATA = [
     authType: "bearer" as const,
     serviceKinds: ["llm"],
     thinkingConfig: null,
-    defaultModels: [
-      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile" },
-      { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant" },
-      { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
-      { id: "gemma2-9b-it", name: "Gemma 2 9B IT" },
-      { id: "deepseek-r1-distill-llama-70b", name: "DeepSeek R1 Distill 70B" },
-    ],
   },
   {
     slug: "experiential",
@@ -88,11 +77,6 @@ export const RAW_PROVIDERS_DATA = [
     authType: "bearer" as const,
     serviceKinds: ["llm"],
     thinkingConfig: null,
-    defaultModels: [
-      { id: "experiential-fast", name: "Experiential Fast (Low Latency)" },
-      { id: "experiential-reasoning", name: "Experiential Reasoning (Deep Thinking)" },
-      { id: "experiential-code", name: "Experiential Code Agent" },
-    ],
   },
   {
     slug: "google",
@@ -113,12 +97,6 @@ export const RAW_PROVIDERS_DATA = [
       options: ["low", "medium", "high"],
       defaultMode: "high",
     },
-    defaultModels: [
-      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
-      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
-      { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite" },
-      { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview" },
-    ],
   },
   {
     slug: "nvidia",
@@ -135,12 +113,6 @@ export const RAW_PROVIDERS_DATA = [
     authType: "bearer" as const,
     serviceKinds: ["llm"],
     thinkingConfig: null,
-    defaultModels: [
-      { id: "meta/llama-3.3-70b-instruct", name: "Llama 3.3 70B Instruct" },
-      { id: "meta/llama-3.1-405b-instruct", name: "Llama 3.1 405B Instruct" },
-      { id: "nvidia/llama-3.1-nemotron-70b-instruct", name: "Nemotron 70B Instruct" },
-      { id: "deepseek-ai/deepseek-r1", name: "DeepSeek R1 (NVIDIA NIM)" },
-    ],
   },
   {
     slug: "ollama",
@@ -156,12 +128,6 @@ export const RAW_PROVIDERS_DATA = [
     authType: "none" as const,
     serviceKinds: ["llm"],
     thinkingConfig: null,
-    defaultModels: [
-      { id: "llama3.3", name: "Llama 3.3" },
-      { id: "qwen2.5-coder", name: "Qwen 2.5 Coder" },
-      { id: "deepseek-r1", name: "DeepSeek R1" },
-      { id: "mistral", name: "Mistral" },
-    ],
   },
   {
     slug: "openrouter",
@@ -178,13 +144,6 @@ export const RAW_PROVIDERS_DATA = [
     authType: "bearer" as const,
     serviceKinds: ["llm"],
     thinkingConfig: null,
-    defaultModels: [
-      { id: "anthropic/claude-3.7-sonnet", name: "Claude 3.7 Sonnet" },
-      { id: "openai/gpt-4.5-preview", name: "GPT-4.5 Preview" },
-      { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro" },
-      { id: "meta-llama/llama-3.3-70b-instruct", name: "Llama 3.3 70B Instruct" },
-      { id: "deepseek/deepseek-r1", name: "DeepSeek R1" },
-    ],
   },
   {
     slug: "kiosapi",
@@ -201,20 +160,6 @@ export const RAW_PROVIDERS_DATA = [
     authType: "bearer" as const,
     serviceKinds: ["llm"],
     thinkingConfig: null,
-    defaultModels: [
-      { id: "gpt-4o", name: "GPT-4o" },
-      { id: "gpt-4o-mini", name: "GPT-4o mini" },
-      { id: "gpt-4.5-preview", name: "GPT-4.5 Preview" },
-      { id: "claude-3-7-sonnet", name: "Claude 3.7 Sonnet" },
-      { id: "claude-3-5-sonnet", name: "Claude 3.5 Sonnet" },
-      { id: "claude-3-5-haiku", name: "Claude 3.5 Haiku" },
-      { id: "deepseek-r1", name: "DeepSeek R1" },
-      { id: "deepseek-v3", name: "DeepSeek V3" },
-      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
-      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
-      { id: "o1", name: "OpenAI o1" },
-      { id: "o3-mini", name: "OpenAI o3-mini" },
-    ],
   },
   {
     slug: "orcarouter",
@@ -231,14 +176,6 @@ export const RAW_PROVIDERS_DATA = [
     authType: "bearer" as const,
     serviceKinds: ["llm"],
     thinkingConfig: null,
-    defaultModels: [
-      { id: "orcarouter/auto", name: "OrcaRouter Auto" },
-      { id: "openai/gpt-4o", name: "GPT-4o" },
-      { id: "openai/gpt-4o-mini", name: "GPT-4o mini" },
-      { id: "anthropic/claude-3.7-sonnet", name: "Claude 3.7 Sonnet" },
-      { id: "deepseek/deepseek-r1", name: "DeepSeek R1" },
-      { id: "deepseek/deepseek-v3", name: "DeepSeek V3" },
-    ],
   },
   {
     slug: "apinex",
@@ -255,13 +192,6 @@ export const RAW_PROVIDERS_DATA = [
     authType: "bearer" as const,
     serviceKinds: ["llm"],
     thinkingConfig: null,
-    defaultModels: [
-      { id: "gpt-4o", name: "GPT-4o" },
-      { id: "claude-3-7-sonnet", name: "Claude 3.7 Sonnet" },
-      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
-      { id: "deepseek-r1", name: "DeepSeek R1" },
-      { id: "deepseek-v3", name: "DeepSeek V3" },
-    ],
   },
 ];
 
