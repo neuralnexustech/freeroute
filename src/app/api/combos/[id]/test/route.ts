@@ -119,10 +119,12 @@ export async function POST(
 
       const hopStart = Date.now();
       try {
+        const rawBase = (m.provider.baseUrl || def.baseUrl || "").replace(/\/+$/, "");
+        const chatPath = def.chatPath.startsWith("/") ? def.chatPath : `/${def.chatPath}`;
         const url =
           m.provider.slug === "azure" && m.provider.baseUrl
-            ? `${m.provider.baseUrl}${def.chatPath.replace("{model}", m.slug)}`
-            : `${def.baseUrl || m.provider.baseUrl}${def.chatPath}`;
+            ? `${rawBase}${chatPath.replace("{model}", m.slug)}`
+            : `${rawBase}${chatPath}`;
 
         const isAnthropic = m.provider.slug === "anthropic";
         const upstreamBody = isAnthropic

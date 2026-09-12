@@ -143,10 +143,12 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     return new Response(JSON.stringify({ error: "No enabled models to test" }), { status: 400, headers: { "Content-Type": "application/json" } });
   }
 
+  const rawBase = (provider.baseUrl || def?.baseUrl || "").replace(/\/+$/, "");
+  const chatPath = (def?.chatPath || "/chat/completions").startsWith("/") ? def.chatPath : `/${def.chatPath}`;
   const url =
     provider.slug === "azure" && provider.baseUrl
-      ? `${provider.baseUrl}${def.chatPath}`
-      : `${def.baseUrl || provider.baseUrl}${def.chatPath}`;
+      ? `${provider.baseUrl}${chatPath}`
+      : `${rawBase}${chatPath}`;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({

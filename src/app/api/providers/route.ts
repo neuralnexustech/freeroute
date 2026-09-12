@@ -14,7 +14,7 @@ async function ensureProviders() {
     },
   });
 
-  const existing = await prisma.provider.findMany({ select: { slug: true } });
+  const existing = await prisma.provider.findMany({ select: { slug: true, baseUrl: true } });
   const existingSlugs = new Set(existing.map((e) => e.slug));
   const missing = PROVIDERS.filter((p) => ALLOWED_SLUGS.includes(p.slug) && !existingSlugs.has(p.slug));
 
@@ -32,15 +32,21 @@ async function ensureProviders() {
     }
   }
 
-  // Update names and baseUrls if needed
+  // Update names, icons, and fix outdated baseUrls
   for (const def of PROVIDERS) {
     if (ALLOWED_SLUGS.includes(def.slug)) {
+      const current = existing.find((p) => p.slug === def.slug);
+      const isOutdatedBase =
+        !current?.baseUrl ||
+        current.baseUrl === "https://kiosapi.com/v1" ||
+        current.baseUrl === "https://kiosapi.com/v1/";
+
       await prisma.provider.updateMany({
         where: { slug: def.slug },
         data: {
           name: def.name,
           icon: def.icon,
-          baseUrl: def.baseUrl,
+          ...(isOutdatedBase && def.baseUrl ? { baseUrl: def.baseUrl } : {}),
         },
       }).catch(() => {});
     }

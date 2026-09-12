@@ -38,3 +38,4 @@ scripts/audit_gateway.mjs
 # OS metadata
 .DS_Store
 Thumbs.db
+.backboard/

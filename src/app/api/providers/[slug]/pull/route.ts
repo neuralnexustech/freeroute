@@ -9,22 +9,26 @@ function fmtContext(tokens: number): string {
   return `${tokens}`;
 }
 
-export async function POST(_req: NextRequest, { params }: { params: { slug: string } }) {
+export async function POST(req: NextRequest, { params }: { params: { slug: string } }) {
   const provider = await prisma.provider.findUnique({ where: { slug: params.slug } });
   const def = getProvider(params.slug);
   if (!provider) {
     return NextResponse.json({ error: "Provider not found" }, { status: 404 });
   }
 
+  const forceDefaults = req.nextUrl?.searchParams?.get("defaults") === "1";
+
   const isNoAuth = def?.authType === "none";
-  if (!isNoAuth && (!provider.apiKey || provider.apiKey.trim().length === 0)) {
+  if (!isNoAuth && !forceDefaults && (!provider.apiKey || provider.apiKey.trim().length === 0)) {
     return NextResponse.json({ error: "Save a provider API key first" }, { status: 400 });
   }
 
   let list: any[] = [];
 
-  if (def?.modelsPath) {
-    let url = `${def.baseUrl || provider.baseUrl}${def.modelsPath}`;
+  if (!forceDefaults && def?.modelsPath) {
+    const rawBase = (provider.baseUrl?.trim() || def?.baseUrl || "").replace(/\/+$/, "");
+    const modelsPath = def.modelsPath.startsWith("/") ? def.modelsPath : `/${def.modelsPath}`;
+    let url = `${rawBase}${modelsPath}`;
     if (provider.slug === "google") {
       url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(provider.apiKey)}&pageSize=1000`;
     }
@@ -39,11 +43,36 @@ export async function POST(_req: NextRequest, { params }: { params: { slug: stri
       if (upstream.ok) {
         const data = await upstream.json().catch(() => null);
         list = data?.data ?? data?.models ?? data ?? [];
+      } else {
+        const errJson = await upstream.json().catch(() => null);
+        const errMsg =
+          errJson?.error?.message ||
+          errJson?.message ||
+          (typeof errJson?.error === "string" ? errJson.error : "") ||
+          `HTTP ${upstream.status} ${upstream.statusText}`;
+
+        return NextResponse.json(
+          {
+            error: `${def?.name || provider.name} error (${upstream.status}): ${errMsg}`,
+            upstreamStatus: upstream.status,
+            upstreamError: errJson,
+            canSeedDefaults: Boolean(def?.defaultModels && def.defaultModels.length > 0),
+          },
+          { status: 400 }
+        );
       }
-    } catch { /* network or timeout */ }
+    } catch (err: any) {
+      return NextResponse.json(
+        {
+          error: `Network error connecting to ${def?.name || provider.name} (${url}): ${err?.message || "Unreachable or timed out"}`,
+          canSeedDefaults: Boolean(def?.defaultModels && def.defaultModels.length > 0),
+        },
+        { status: 504 }
+      );
+    }
   }
 
-  // Fallback to default catalog models if list is empty
+  // Fallback to default catalog models if list is empty or forceDefaults requested
   if (!Array.isArray(list) || list.length === 0) {
     if (def?.defaultModels && def.defaultModels.length > 0) {
       list = def.defaultModels.map((m) => ({ id: m.id, displayName: m.name }));
