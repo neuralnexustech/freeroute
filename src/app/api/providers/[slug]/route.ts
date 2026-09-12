@@ -65,7 +65,6 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
       serviceKinds: def?.serviceKinds || ["llm"],
       thinkingConfig: def?.thinkingConfig || null,
       providerSpecificFields: def?.providerSpecificFields || [],
-      defaultModels: def?.defaultModels || [],
     },
     models: models.map((m) => ({ ...m, ttftMs: bench[m.id]?.ttftMs ?? null, httpStatus: bench[m.id]?.httpStatus ?? null })),
   });
