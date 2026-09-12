@@ -1,4 +1,4 @@
-// Curated Provider Registry: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, and APInex
+// Curated Provider Registry: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, and OrcaRouter
 
 export interface ProviderDef {
   slug: string;
@@ -173,22 +173,6 @@ export const RAW_PROVIDERS_DATA = [
     apiKeyUrl: "https://www.orcarouter.ai",
     website: "https://www.orcarouter.ai/",
     docUrl: "https://www.orcarouter.ai/docs",
-    authType: "bearer" as const,
-    serviceKinds: ["llm"],
-    thinkingConfig: null,
-  },
-  {
-    slug: "apinex",
-    name: "APInex",
-    category: "apikey" as const,
-    icon: "hub",
-    color: "#10B981",
-    baseUrl: "https://api.apinex.bond/v1",
-    chatPath: "/chat/completions",
-    modelsPath: "/models",
-    apiKeyUrl: "https://apinex.bond",
-    website: "https://apinex.bond/",
-    docUrl: "https://apinex.bond/docs",
     authType: "bearer" as const,
     serviceKinds: ["llm"],
     thinkingConfig: null,
