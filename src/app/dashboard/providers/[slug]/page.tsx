@@ -71,6 +71,7 @@ export default function ProviderDetailPage() {
   const [category, setCategory] = useState("apikey");
   const [authType, setAuthType] = useState("bearer");
   const [serviceKinds, setServiceKinds] = useState<string[]>(["llm"]);
+  const [defaultModels, setDefaultModels] = useState<{ id: string; name: string }[]>([]);
   const [models, setModels] = useState<ModelRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [pulling, setPulling] = useState(false);
@@ -112,6 +113,7 @@ export default function ProviderDetailPage() {
     setCategory(d.provider.category ?? "apikey");
     setAuthType(d.provider.authType ?? "bearer");
     setServiceKinds(d.provider.serviceKinds ?? ["llm"]);
+    setDefaultModels(d.provider.defaultModels ?? []);
 
     setModels(
       (d.models ?? []).map((m: any) => {
@@ -153,13 +155,13 @@ export default function ProviderDetailPage() {
     load();
   };
 
-  const pullModels = async () => {
+  const pullModels = async (forceDefaults = false) => {
     setPulling(true);
-    const r = await fetch(`/api/providers/${slug}/pull`, { method: "POST" });
+    const r = await fetch(`/api/providers/${slug}/pull${forceDefaults ? "?defaults=1" : ""}`, { method: "POST" });
     const d = await r.json().catch(() => ({}));
     setPulling(false);
     if (!r.ok) return toast.show(d.error ?? "Pull models failed");
-    toast.show(`Pulled and synced ${d.count ?? 0} models (${d.enriched ?? 0} enriched)`);
+    toast.show(forceDefaults ? `Seeded ${d.count ?? 0} catalog models` : `Pulled and synced ${d.count ?? 0} models (${d.enriched ?? 0} enriched)`);
     load();
   };
 
@@ -389,11 +391,40 @@ export default function ProviderDetailPage() {
               Get API Key ↗
             </a>
           )}
-          <button className="btn sm" onClick={pullModels} disabled={pulling}>
+          <button className="btn sm" onClick={() => pullModels(false)} disabled={pulling}>
             {pulling ? "Pulling Models…" : "Pull Models"}
           </button>
+          {defaultModels.length > 0 && (
+            <button className="btn sm" onClick={() => pullModels(true)} disabled={pulling} title="Populate curated models from catalog">
+              Seed Catalog Models
+            </button>
+          )}
         </div>
       </div>
+
+      {slug === "kiosapi" && (
+        <div style={{
+          marginBottom: 16,
+          padding: "14px 18px",
+          background: "rgba(59, 130, 246, 0.08)",
+          border: "1px solid rgba(59, 130, 246, 0.22)",
+          borderRadius: 10,
+          fontSize: 13,
+          color: "var(--text-secondary)",
+          lineHeight: 1.6,
+        }}>
+          <div style={{ fontWeight: 700, color: "#60a5fa", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+            <span>ℹ️</span> KiosAPI Endpoint &amp; Verification Guide
+          </div>
+          <div>
+            • <strong>Base URL:</strong> The official endpoint is <code style={{ color: "#93c5fd", background: "rgba(59, 130, 246, 0.15)", padding: "2px 6px", borderRadius: 4 }}>https://router.kiosapi.com/v1</code> (do not use <code>kiosapi.com/v1</code>).
+            <br />
+            • <strong>Telegram Verification:</strong> If Pull Models returns <code style={{ color: "#fca5a5" }}>telegram_verification_required</code>, log in to your <a href="https://kiosapi.com" target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", textDecoration: "underline" }}>KiosAPI Dashboard</a>, link your Telegram account, and join the required chat group to activate your free API key.
+            <br />
+            • Alternatively, click <strong>Seed Catalog Models</strong> to immediately populate all 12 verified KiosAPI models into freeroute.
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16, marginBottom: 20, maxWidth: 900 }}>
         {/* API Key Card */}
