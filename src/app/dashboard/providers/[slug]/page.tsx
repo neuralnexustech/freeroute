@@ -74,6 +74,7 @@ export default function ProviderDetailPage() {
   const [models, setModels] = useState<ModelRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [pulling, setPulling] = useState(false);
+  const [pullError, setPullError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
   const [testing, setTesting] = useState(false);
@@ -155,10 +156,16 @@ export default function ProviderDetailPage() {
 
   const pullModels = async () => {
     setPulling(true);
+    setPullError(null);
     const r = await fetch(`/api/providers/${slug}/pull`, { method: "POST" });
     const d = await r.json().catch(() => ({}));
     setPulling(false);
-    if (!r.ok) return toast.show(d.error ?? "Pull models failed");
+    if (!r.ok) {
+      const msg = d.error ?? "Pull models failed";
+      setPullError(msg);
+      return toast.show(msg);
+    }
+    setPullError(null);
     toast.show(`Pulled and synced ${d.count ?? 0} models (${d.enriched ?? 0} enriched)`);
     load();
   };
@@ -613,6 +620,33 @@ export default function ProviderDetailPage() {
           )}
         </div>
       </div>
+
+      {pullError && (
+        <div style={{
+          marginBottom: 16,
+          padding: "12px 16px",
+          background: "rgba(239, 68, 68, 0.08)",
+          border: "1px solid rgba(239, 68, 68, 0.25)",
+          borderRadius: 8,
+          fontSize: 13,
+          color: "#f87171",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10,
+        }}>
+          <div>
+            <strong>Pull Models Error:</strong> {pullError}
+          </div>
+          <button
+            type="button"
+            onClick={() => setPullError(null)}
+            style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: 14 }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="toolbar-row" style={{ marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
