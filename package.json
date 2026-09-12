@@ -1,6 +1,6 @@
 {
   "name": "freeroute",
-  "version": "0.4.9",
+  "version": "0.5.0",
   "private": true,
   "description": "freeroute — Open AI Gateway & LLMOps Routing Platform",
   "author": "neuralnexustech (https://github.com/neuralnexustech)",
@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.18.0",
+    "jszip": "^3.10.2",
     "lucide-react": "^1.43.0",
     "next": "14.2.5",
     "react": "18.3.1",
@@ -28,6 +29,7 @@
     "zustand": "^4.5.4"
   },
   "devDependencies": {
+    "@types/jszip": "^3.4.0",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",

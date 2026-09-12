@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-// GET /api/designer/rooms — list rooms (newest first) with message counts
+// GET /api/playground/rooms — list all chat/designer rooms (newest first)
 export async function GET() {
   try {
     const rooms = await prisma.designerRoom.findMany({
@@ -26,7 +26,7 @@ export async function GET() {
   }
 }
 
-// POST /api/designer/rooms — create a room (optionally with a first message that becomes the title)
+// POST /api/playground/rooms — create a new room
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
