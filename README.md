@@ -61,18 +61,19 @@ Full visibility into incoming requests, TTFT, tokens per second, status codes, a
 Inspect active SQLite storage (`~/.freeroute/freeroute.db`), monitor entity counts, and export/restore 1-click JSON backups.
 ![Database & Backup](assets/screenshots/database-backup.png)
 
-### 9. AI Playground & 8 Server Tools
-Interactive conversational playground with multi-room history, context memory slider, and 8 server tools:
-- **Web Search**: Real-time web search grounding with configurable depth (Low, Medium, High).
-- **Web Fetch**: Clean Markdown content extraction from mentioned URLs.
-- **Image Generation**: On-the-fly text-to-image rendering powered by FLUX.1 Schnell.
-- **Datetime**: Authoritative client date, time, and timezone injection.
-- **Fusion**: Multi-model deliberation running a 3-model panel in parallel with consensus analysis.
-- **Advisor**: Mid-generation consultation of stronger frontier reasoning models (Claude 3.7 Sonnet, DeepSeek R1).
-- **Subagent**: Modular task decomposition delegated to high-speed worker models (North Mini, Gemma 2).
-- **Shell**: Real shell command and script execution with 30s safety timeout.
+### 9. Unified AI Playground (Chat Mode & Designer Studio)
+Full-screen, dual-mode AI workspace integrating conversational intelligence, live code execution, interactive diffs, and rapid prototype designing:
+- **Chat Coding Agent**: Live Python 3.11 and Node.js execution with docked terminal console, exit code tracking, and zero conversational inline code dumps.
+- **LCS Diff Engine**: Accurate line-by-line diff tracking with additions and deletions (`+13 -2 changed`) and unified side-by-side comparison.
+- **Designer Studio**: Live sandboxed prototype previews with runtime multi-file bundling (`index.html`, `styles.css`, `app.js`), Tailwind CSS, and Google Fonts.
+- **Mouse Inspector (🎯)**: Click-to-inspect UI elements in the preview iframe to surgically direct AI component modifications.
+- **Cursor IDE Agent Engine**: Dynamic workspace context ingestion (`<active_workspace_file>`, `<inspected_component>`) and native slash commands (`/review`, `/taste`, `/emil`, `/d3`, `/brandkit`).
 
-![AI Playground Conversation](assets/screenshots/playground.png)
+#### Chat Mode & Live Code Execution (Python + Diff Viewer)
+![AI Playground Chat Mode](assets/screenshots/playground-chat.png)
+
+#### Designer Studio & Live Sandboxed Preview
+![AI Playground Designer Studio](assets/screenshots/playground-designer.png)
 
 ---
 
