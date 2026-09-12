@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 
 type Params = { params: { id: string } };
 
-// GET /api/designer/rooms/:id/messages — message history only
+// GET /api/playground/rooms/:id/messages — message history only
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const room = await prisma.designerRoom.findUnique({ where: { id: params.id } });

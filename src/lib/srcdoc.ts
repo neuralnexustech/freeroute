@@ -31,14 +31,14 @@ export function sanitizeTitle(text: string): string {
 const OBSERVABILITY_BRIDGE_SCRIPT = `
 <script>
   (function() {
+    // 1. Error Reporting Bridge
     window.addEventListener('error', function(e) {
-      // Prevent error from crashing parent window
       e.stopPropagation();
       var errorMsg = e.message || 'Script runtime exception';
       var filename = e.filename ? e.filename.split('/').pop() : '';
       var lineNo = e.lineno || '';
+      var stack = e.error ? (e.error.stack || '') : '';
       
-      // If error message is generic "Script error.", try to grab meaningful details
       if (errorMsg === 'Script error.') {
         errorMsg = 'External resource or syntax exception (Script error)';
       }
@@ -48,15 +48,18 @@ const OBSERVABILITY_BRIDGE_SCRIPT = `
         message: errorMsg,
         filename: filename,
         lineno: lineNo,
+        stack: stack,
         time: Date.now()
       }, '*');
     });
 
     window.addEventListener('unhandledrejection', function(e) {
       var reason = e.reason ? (e.reason.message || String(e.reason)) : 'Unhandled Promise Rejection';
+      var stack = e.reason && e.reason.stack ? e.reason.stack : '';
       window.parent.postMessage({
         type: 'freeroute:preview-error',
         message: reason,
+        stack: stack,
         time: Date.now()
       }, '*');
     });
@@ -69,6 +72,113 @@ const OBSERVABILITY_BRIDGE_SCRIPT = `
         time: Date.now()
       }, '*');
     });
+
+    // 2. Mouse Inspector Mode Bridge
+    var inspectorEnabled = false;
+    var overlay = null;
+    var badge = null;
+
+    function ensureInspectorUI() {
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.pointerEvents = 'none';
+        overlay.style.border = '2px solid #3b82f6';
+        overlay.style.backgroundColor = 'rgba(59, 130, 246, 0.15)';
+        overlay.style.borderRadius = '3px';
+        overlay.style.zIndex = '999999';
+        overlay.style.display = 'none';
+        overlay.style.transition = 'all 0.05s ease-out';
+        document.body.appendChild(overlay);
+
+        badge = document.createElement('div');
+        badge.style.position = 'absolute';
+        badge.style.bottom = '100%';
+        badge.style.left = '0';
+        badge.style.transform = 'translateY(-4px)';
+        badge.style.backgroundColor = '#1e40af';
+        badge.style.color = '#ffffff';
+        badge.style.padding = '2px 6px';
+        badge.style.fontSize = '11px';
+        badge.style.fontFamily = 'monospace';
+        badge.style.borderRadius = '3px';
+        badge.style.whiteSpace = 'nowrap';
+        badge.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+        overlay.appendChild(badge);
+      }
+    }
+
+    window.addEventListener('message', function(evt) {
+      if (!evt.data) return;
+      if (evt.data.type === 'freeroute:set-inspector') {
+        inspectorEnabled = !!evt.data.enabled;
+        ensureInspectorUI();
+        if (!inspectorEnabled && overlay) {
+          overlay.style.display = 'none';
+        }
+      }
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!inspectorEnabled) return;
+      ensureInspectorUI();
+      var target = e.target;
+      if (!target || target === overlay || target === badge || target === document.body || target === document.documentElement) {
+        overlay.style.display = 'none';
+        return;
+      }
+
+      var rect = target.getBoundingClientRect();
+      overlay.style.display = 'block';
+      overlay.style.top = rect.top + 'px';
+      overlay.style.left = rect.left + 'px';
+      overlay.style.width = rect.width + 'px';
+      overlay.style.height = rect.height + 'px';
+
+      var tag = target.tagName.toLowerCase();
+      var cls = target.className && typeof target.className === 'string' ? '.' + target.className.trim().split(/\\s+/).slice(0, 2).join('.') : '';
+      badge.textContent = '<' + tag + cls + '> ' + Math.round(rect.width) + '×' + Math.round(rect.height);
+    }, true);
+
+    document.addEventListener('click', function(e) {
+      if (!inspectorEnabled) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      var target = e.target;
+      if (!target || target === overlay || target === badge) return;
+
+      var tag = target.tagName.toLowerCase();
+      var cls = target.className && typeof target.className === 'string' ? target.className : '';
+      var outer = target.outerHTML || '';
+      // Truncate cleanly if massive
+      if (outer.length > 1200) {
+        outer = outer.slice(0, 1200) + '...';
+      }
+
+      window.parent.postMessage({
+        type: 'freeroute:element-selected',
+        tag: tag,
+        classes: cls,
+        snippet: outer,
+        text: (target.innerText || '').slice(0, 100),
+        time: Date.now()
+      }, '*');
+
+      // Flash feedback
+      if (overlay) {
+        overlay.style.backgroundColor = 'rgba(16, 185, 129, 0.3)';
+        overlay.style.borderColor = '#10b981';
+        badge.style.backgroundColor = '#065f46';
+        setTimeout(function() {
+          if (overlay) {
+            overlay.style.backgroundColor = 'rgba(59, 130, 246, 0.15)';
+            overlay.style.borderColor = '#3b82f6';
+            badge.style.backgroundColor = '#1e40af';
+          }
+        }, 400);
+      }
+    }, true);
   })();
 </script>
 `;
@@ -688,3 +798,5 @@ export function buildSrcdoc(rawContent: string, options: SrcdocOptions = {}): st
 </body>
 </html>`;
 }
+
+export const buildSandboxedSrcDoc = buildSrcdoc;

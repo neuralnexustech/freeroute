@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { Sidebar } from "@/components/Sidebar";
-import { Topbar } from "@/components/Topbar";
+import { AppShell } from "@/components/AppShell";
 import { Toast } from "@/components/Toast";
 
 export const metadata: Metadata = {
@@ -29,13 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <ThemeProvider>
-          <div className="app-layout">
-            <Sidebar />
-            <div className="main-wrapper">
-              <Topbar />
-              <main className="page-container">{children}</main>
-            </div>
-          </div>
+          <AppShell>{children}</AppShell>
           <Toast />
         </ThemeProvider>
       </body>

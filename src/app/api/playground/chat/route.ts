@@ -1,33 +1,14 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateApiKey } from "@/lib/auth";
+import { buildSystemPrompt } from "@/lib/agents/systemPrompt";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DESIGNER_SYSTEM_PROMPT = `You are the freeroute Web Designer — an expert product designer and front-end engineer that delivers complete, beautiful, production-grade web pages.
 
-DELIVERABLE CONTRACT (MANDATORY):
-- Whenever the user asks for a website, landing page, dashboard, UI, component, prototype, or any visual web deliverable, you MUST respond with:
-  1. A one-to-three sentence executive summary of your design approach. No raw code in this summary.
-  2. ONE complete artifact wrapped exactly in <artifact identifier="design-N" type="html" title="Short Title"> ... </artifact> tags containing a FULL self-contained HTML5 document (<!DOCTYPE html> ... </html>).
-- Never split the artifact across multiple blocks. Never wrap the artifact in markdown code fences.
-- The <artifact> tags must be written literally in your reply — the designer UI streams them into a live sandboxed preview.
-
-ARTIFACT QUALITY BAR:
-- Single HTML file with inline <style> and <script>. Use Tailwind via <script src="https://cdn.tailwindcss.com"></script>, Google Fonts (Inter or Plus Jakarta Sans), and vanilla JS for interactivity.
-- Every interactive element (tabs, filters, toggles, carousels, modals) must actually work with real state.
-- Include rich, realistic mock data — real-sounding names, prices, metrics, dates. NEVER lorem ipsum or placeholder text.
-- Modern aesthetic: generous spacing, consistent radii, subtle shadows, hover states, smooth transitions, tasteful keyframe animations. Light/dark friendly default palette.
-- Responsive: usable from 360px wide up to desktop. No horizontal scroll.
-- Accessibility basics: semantic landmarks, alt text, focus-visible styles, sufficient contrast.
-
-NON-DESIGN REQUESTS: If the user asks a plain question or asks for changes/explanations, answer conversationally in 1-4 sentences. Only emit an <artifact> when (re)generating a visual deliverable. When iterating ("make the hero bigger"), emit a COMPLETE updated artifact, not a diff.
-
-COST/AUTH/KEYS: Never include API keys, secrets, or real credentials in artifacts. Use mock data only.`;
 
 export async function POST(req: NextRequest) {
-  // Internal designer key — resolves (or provisions) the shared gateway key.
   const key = await validateApiKey("Bearer freeroute-designer");
   if (!key) {
     return new Response(JSON.stringify({ error: { message: "Unauthorized" } }), {
@@ -39,7 +20,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const roomId: string = body?.roomId;
   const message: string = typeof body?.message === "string" ? body.message.trim() : "";
-  const model: string = typeof body?.model === "string" && body.model ? body.model : "smart-coding-fallback";
+  const mode: "chat" | "designer" = body?.mode === "designer" ? "designer" : "chat";
+  const model: string = typeof body?.model === "string" && body.model ? body.model : "gemini-2.5-flash";
+  const inspectedElement = body?.inspectedElement; // { tag: string, snippet: string, classes: string }
+  const screenshot = body?.screenshot; // optional base64 image
+  const activeFile = body?.activeFile; // { name: string, content: string, language?: string }
 
   if (!roomId || !message) {
     return new Response(
@@ -56,20 +41,56 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Persist the user's message and derive a room title from the first prompt.
+  // Format user message with inspected element or screenshot context if provided
+  let augmentedUserMessage = message;
+  if (inspectedElement) {
+    augmentedUserMessage = `[Inspected Component: <${inspectedElement.tag}> | Classes: ${inspectedElement.classes || "none"}]\nCode Snippet:\n\`\`\`html\n${inspectedElement.snippet}\n\`\`\`\n\nUser Request: ${message}`;
+  }
+
+  // Persist the user's message
   await prisma.designerMessage.create({
-    data: { roomId, role: "user", content: message },
+    data: { roomId, role: "user", content: augmentedUserMessage },
   });
 
-  const history = await prisma.designerMessage.findMany({
+  // Fetch recent message history with context compacting
+  const rawHistory = await prisma.designerMessage.findMany({
     where: { roomId },
     orderBy: { createdAt: "asc" },
     take: 30,
   });
 
+  // Context compacting: if history is long, compact older messages
+  let formattedHistory: Array<{ role: string; content: string }> = [];
+  if (rawHistory.length > 16) {
+    const older = rawHistory.slice(0, rawHistory.length - 10);
+    const recent = rawHistory.slice(rawHistory.length - 10);
+
+    const compactedSummary = older
+      .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 150)}...`)
+      .join("\n");
+
+    formattedHistory = [
+      {
+        role: "system",
+        content: `[Previous conversation context summary]:\n${compactedSummary}`,
+      },
+      ...recent.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+    ];
+  } else {
+    formattedHistory = rawHistory.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+  }
+
+  // Update room title on first message
   if (room.title === "New chat") {
     const derived =
       message
+        .replace(/\[Inspected Component:.*?\]/gs, "")
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 48) || "New chat";
@@ -81,17 +102,38 @@ export async function POST(req: NextRequest) {
     await prisma.designerRoom.update({ where: { id: roomId }, data: { model } });
   }
 
+  // Build comprehensive agent system prompt (incorporating Cursor IDE & OpenDesign standards)
+  const systemPrompt = buildSystemPrompt({
+    mode,
+    model,
+    activeFile,
+    inspectedElement,
+    message,
+  });
   const started = Date.now();
 
-  // Ask the gateway for a streaming completion.
-  const gatewayBody = {
+  const gatewayBody: any = {
     model,
     stream: true,
     messages: [
-      { role: "system", content: DESIGNER_SYSTEM_PROMPT },
-      ...history.map((m) => ({ role: m.role, content: m.content })),
+      { role: "system", content: systemPrompt },
+      ...formattedHistory,
     ],
   };
+
+  // If screenshot is present and model supports images, we could pass multimodality
+  if (screenshot && typeof screenshot === "string" && screenshot.startsWith("data:image/")) {
+    const lastUserIdx = gatewayBody.messages.length - 1;
+    if (lastUserIdx >= 0 && gatewayBody.messages[lastUserIdx].role === "user") {
+      gatewayBody.messages[lastUserIdx] = {
+        role: "user",
+        content: [
+          { type: "text", text: augmentedUserMessage },
+          { type: "image_url", image_url: { url: screenshot } },
+        ],
+      };
+    }
+  }
 
   let upstream: Response;
   try {
@@ -123,15 +165,18 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Stream SSE deltas to the client; accumulate the final assistant message.
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let full = "";
+      let fullReasoning = "";
       let buffer = "";
       let closed = false;
+      let promptTokens = 0;
+      let completionTokens = 0;
+
       const push = (payload: string) => {
         if (!closed) {
           try {
@@ -163,26 +208,57 @@ export async function POST(req: NextRequest) {
                 emitJson({ error: evt.error });
                 continue;
               }
+
+              // Capture usage if provided by provider
+              if (evt?.usage) {
+                promptTokens = evt.usage.prompt_tokens || promptTokens;
+                completionTokens = evt.usage.completion_tokens || completionTokens;
+              }
+
+              // Extract reasoning content (DeepSeek / Claude thinking)
+              const reasoningDelta =
+                evt?.choices?.[0]?.delta?.reasoning_content ||
+                evt?.choices?.[0]?.delta?.reasoning ||
+                "";
+              if (reasoningDelta) {
+                fullReasoning += reasoningDelta;
+                emitJson({ reasoningDelta });
+              }
+
               const delta = evt?.choices?.[0]?.delta?.content ?? "";
               if (delta) {
                 full += delta;
                 emitJson({ delta });
               }
             } catch {
-              // ignore malformed frames
+              // ignore malformed frame
             }
           }
         }
 
         const latencyMs = Date.now() - started;
+        // Accurate prompt and completion token accounting (~3.8 chars per token if usage omitted)
+        const finalPromptTokens =
+          promptTokens || Math.max(1, Math.round(JSON.stringify(gatewayBody.messages).length / 3.8));
+        const finalCompletionTokens =
+          completionTokens || Math.max(1, Math.round((full.length + fullReasoning.length) / 3.8));
+        const totalEstimatedTokens = finalPromptTokens + finalCompletionTokens;
+        const tokPerSec = latencyMs > 0 ? Math.round((finalCompletionTokens / latencyMs) * 1000) : 0;
 
-        if (full) {
+        // If reasoning was captured separately, prepend as <think>...</think> for storage
+        const storedContent =
+          fullReasoning && !full.includes("<think>")
+            ? `<think>\n${fullReasoning.trim()}\n</think>\n\n${full}`
+            : full;
+
+        if (storedContent) {
           await prisma.designerMessage.create({
             data: {
               roomId,
               role: "assistant",
-              content: full,
+              content: storedContent,
               model,
+              tokens: totalEstimatedTokens,
               latencyMs,
             },
           });
@@ -192,16 +268,29 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        emitJson({ done: true, latencyMs });
+        emitJson({
+          done: true,
+          latencyMs,
+          tokens: totalEstimatedTokens,
+          promptTokens: finalPromptTokens,
+          completionTokens: finalCompletionTokens,
+          tokPerSec,
+          mode,
+        });
         push("data: [DONE]\n\n");
         closed = true;
         controller.close();
       } catch (err: any) {
-        // Persist whatever streamed before the failure so the user keeps partial work.
         if (full) {
           await prisma.designerMessage
             .create({
-              data: { roomId, role: "assistant", content: full, model, latencyMs: Date.now() - started },
+              data: {
+                roomId,
+                role: "assistant",
+                content: full,
+                model,
+                latencyMs: Date.now() - started,
+              },
             })
             .catch(() => {});
         }

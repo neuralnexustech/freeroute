@@ -115,14 +115,16 @@ model DesignerRoom {
 }
 
 model DesignerMessage {
-  id        String       @id @default(cuid())
-  roomId    String
-  room      DesignerRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  role      String // user | assistant
-  content   String
-  model     String       @default("")
-  tokens    Int          @default(0)
-  cost      Float        @default(0)
-  latencyMs Int          @default(0)
-  createdAt DateTime     @default(now())
+  id               String       @id @default(cuid())
+  roomId           String
+  room             DesignerRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  role             String // user | assistant
+  content          String
+  model            String       @default("")
+  tokens           Int          @default(0)
+  promptTokens     Int          @default(0)
+  completionTokens Int          @default(0)
+  cost             Float        @default(0)
+  latencyMs        Int          @default(0)
+  createdAt        DateTime     @default(now())
 }

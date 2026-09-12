@@ -22,6 +22,19 @@ export interface DesignerArtifact {
   done: boolean;
 }
 
+export interface ProjectFile {
+  path: string;
+  content: string;
+}
+
+export interface DesignerArtifactView {
+  title: string;
+  html: string;
+  streaming: boolean;
+  files?: ProjectFile[];
+  framework?: string;
+}
+
 export interface DesignerParseState {
   text: string;
   artifact: DesignerArtifact | null;
@@ -276,7 +289,44 @@ export function stripArtifactTags(content: string): string {
   return content
     .replace(/<artifact\s+[^>]*>[\s\S]*?<\/artifact>/gi, "")
     .replace(/<artifact\s+[^>]*>[\s\S]*$/i, "")
+    .replace(/<project\s+[^>]*>[\s\S]*?<\/project>/gi, "")
+    .replace(/<project\s+[^>]*>[\s\S]*$/i, "")
     .trim();
+}
+
+/**
+ * Extract a multi-file project from stored message content.
+ * Looks for <project identifier="..." title="..."> blocks containing
+ * <file path="..."> elements.
+ */
+export function extractProject(content: string): { title: string; files: { path: string; content: string }[] } | null {
+  const projectRe = /<project\s+[^>]*title="([^"]*)"[^>]*>([\s\S]*?)<\/project>/i;
+  const m = content.match(projectRe);
+  if (!m) return null;
+  const inner = m[2];
+  const fileRe = /<file\s+path="([^"]*)">([\s\S]*?)<\/file>/gi;
+  const files: { path: string; content: string }[] = [];
+  let fm: RegExpExecArray | null;
+  while ((fm = fileRe.exec(inner)) !== null) {
+    files.push({ path: fm[1], content: fm[2].trim() });
+  }
+  if (files.length === 0) return null;
+  return { title: m[1] || "Project", files };
+}
+
+/**
+ * Fenced-code fallback: unwrap any fence that directly contains a <project> tag.
+ */
+export function extractFencedProject(content: string): { title: string; files: { path: string; content: string }[] } | null {
+  const blocks = content.match(FENCED_BLOCK_RE);
+  if (!blocks) return null;
+  for (const block of blocks) {
+    if (!/<project[\s>]/i.test(block)) continue;
+    const inner = block.replace(/^```[^\n]*\n/, "").replace(/```\s*$/, "");
+    const found = extractProject(inner);
+    if (found) return found;
+  }
+  return null;
 }
 
 /**
@@ -295,4 +345,124 @@ export function stripFencedCode(source: string): { text: string; codeCount: numb
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return { text, codeCount };
+}
+
+export interface DiffLine {
+  type: "same" | "add" | "del";
+  line: string;
+  oldNo?: number;
+  newNo?: number;
+}
+
+/**
+ * Compute unified LCS diff between two file contents.
+ * Returns added lines count, deleted/edited lines count, and structured line objects.
+ */
+export function computeUnifiedDiff(
+  oldContent?: string,
+  newContent: string = ""
+): { additions: number; deletions: number; diffLines: DiffLine[] } {
+  const newLines = newContent.split("\n");
+  if (!oldContent) {
+    return {
+      additions: Math.max(1, newLines.length),
+      deletions: 0,
+      diffLines: newLines.map((line, idx) => ({ type: "add", line, newNo: idx + 1 })),
+    };
+  }
+
+  const oldLines = oldContent.split("\n");
+  const m = oldLines.length;
+  const n = newLines.length;
+
+  // Fallback for massive files to prevent high memory usage
+  if (m * n > 2000000) {
+    let additions = 0;
+    let deletions = 0;
+    const oldSet = new Set(oldLines.map((l) => l.trim()));
+    const newSet = new Set(newLines.map((l) => l.trim()));
+    for (const l of newLines) if (!oldSet.has(l.trim())) additions++;
+    for (const l of oldLines) if (!newSet.has(l.trim())) deletions++;
+    return {
+      additions: Math.max(1, additions),
+      deletions,
+      diffLines: newLines.map((line, idx) => ({
+        type: oldSet.has(line.trim()) ? "same" : "add",
+        line,
+        newNo: idx + 1,
+      })),
+    };
+  }
+
+  // Standard DP LCS matrix
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < n; j++) {
+      if (oldLines[i].trim() === newLines[j].trim() && oldLines[i].trim() !== "") {
+        dp[i + 1][j + 1] = dp[i][j] + 1;
+      } else if (oldLines[i] === newLines[j]) {
+        dp[i + 1][j + 1] = dp[i][j] + 1;
+      } else {
+        dp[i + 1][j + 1] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+  }
+
+  let i = m;
+  let j = n;
+  const reversed: DiffLine[] = [];
+  let additions = 0;
+  let deletions = 0;
+
+  while (i > 0 || j > 0) {
+    if (
+      i > 0 &&
+      j > 0 &&
+      (oldLines[i - 1] === newLines[j - 1] ||
+        (oldLines[i - 1].trim() === newLines[j - 1].trim() && oldLines[i - 1].trim() !== ""))
+    ) {
+      reversed.push({
+        type: "same",
+        line: newLines[j - 1],
+        oldNo: i,
+        newNo: j,
+      });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      reversed.push({
+        type: "add",
+        line: newLines[j - 1],
+        newNo: j,
+      });
+      additions++;
+      j--;
+    } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
+      reversed.push({
+        type: "del",
+        line: oldLines[i - 1],
+        oldNo: i,
+      });
+      deletions++;
+      i--;
+    }
+  }
+
+  return { additions, deletions, diffLines: reversed.reverse() };
+}
+
+/**
+ * Calculate accurate line additions and deletions between two file versions using LCS diff.
+ */
+export function calculateLineDiff(
+  oldContent?: string,
+  newContent: string = ""
+): { additions: number; deletions: number } {
+  if (!oldContent) {
+    const newLines = newContent.split("\n");
+    return { additions: Math.max(1, newLines.length), deletions: 0 };
+  }
+  const res = computeUnifiedDiff(oldContent, newContent);
+  return { additions: res.additions, deletions: res.deletions };
 }

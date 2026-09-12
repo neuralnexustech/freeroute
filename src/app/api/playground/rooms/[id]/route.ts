@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 
 type Params = { params: { id: string } };
 
-// GET /api/designer/rooms/:id — room + full message history
+// GET /api/playground/rooms/:id — room + full message history
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const room = await prisma.designerRoom.findUnique({
@@ -24,28 +24,31 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 }
 
-// PATCH /api/designer/rooms/:id — rename a room
+// PATCH /api/playground/rooms/:id — rename or update room
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const body = await req.json().catch(() => null);
-    const title = typeof body?.title === "string" ? body.title.trim().slice(0, 80) : "";
-    if (!title) {
-      return NextResponse.json({ error: { message: "title is required" } }, { status: 400 });
-    }
+    const title = typeof body?.title === "string" ? body.title.trim().slice(0, 80) : undefined;
+    const model = typeof body?.model === "string" ? body.model.slice(0, 120) : undefined;
+
+    const data: { title?: string; model?: string } = {};
+    if (title) data.title = title;
+    if (model !== undefined) data.model = model;
+
     const room = await prisma.designerRoom.update({
       where: { id: params.id },
-      data: { title },
+      data,
     });
     return NextResponse.json({ room });
   } catch (err: any) {
     return NextResponse.json(
-      { error: { message: err?.message || "Failed to rename room" } },
+      { error: { message: err?.message || "Failed to update room" } },
       { status: 500 },
     );
   }
 }
 
-// DELETE /api/designer/rooms/:id — delete a room (messages cascade)
+// DELETE /api/playground/rooms/:id — delete room
 export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
     await prisma.designerRoom.delete({ where: { id: params.id } });
