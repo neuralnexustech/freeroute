@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useLiveTelemetry } from "@/hooks/useLiveTelemetry";
+import { useTheme } from "@/components/ThemeProvider";
+import { MonoRoundedSankey } from "@/components/ui/mono-rounded-sankey";
 
 type Metric = "tokens" | "spend" | "requests";
 
@@ -327,6 +329,7 @@ function formatCleanTitle(slug: string, rawName?: string): string {
 }
 
 export default function OverviewPage() {
+  const { theme } = useTheme();
   const [metric, setMetric] = useState<Metric>("tokens");
   const [range, setRange] = useState("Last 7 Days");
   const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
@@ -965,6 +968,14 @@ export default function OverviewPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* MONO ROUNDED SANKEY FLOW (amicro) */}
+      <div style={{ display: "flex", justifyContent: "center", width: "100%", margin: "6px 0" }}>
+        <MonoRoundedSankey
+          theme={theme}
+          models={data?.usedModels && data.usedModels.length > 0 ? data.usedModels : data?.allModels}
+        />
       </div>
 
       {/* 2. ACTIVITY CARD (HEATMAP) */}
