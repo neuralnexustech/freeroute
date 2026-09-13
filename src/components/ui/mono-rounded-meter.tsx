@@ -28,7 +28,7 @@ export function MonoRoundedMeter({
     return Math.min(100, Math.max(0, value));
   }, [value, totalRequests, successfulRequests]);
 
-  const displayRate = rate >= 99.9 && rate < 100 ? "99.8" : rate.toFixed(1);
+  const displayRate = rate.toFixed(1);
 
   // Health label
   const statusLabel = rate >= 99 ? "Optimal Health" : rate >= 95 ? "Normal Load" : "Degraded";

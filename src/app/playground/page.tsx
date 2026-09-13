@@ -44,6 +44,8 @@ export default function PlaygroundPage() {
     artifact,
     selectedFile,
     setSelectedFile,
+    editMode,
+    setEditMode,
     activeToolResult,
     setActiveToolResult,
     workspaceFiles,
@@ -119,6 +121,8 @@ export default function PlaygroundPage() {
           onToggleRightPanel={() => setRightPanelOpen((prev) => !prev)}
           mode={mode}
           onToggleMode={() => setMode((m) => (m === "designer" ? "chat" : "designer"))}
+          editMode={editMode}
+          onToggleEditMode={() => setEditMode((m) => (m === "rewrite" ? "patch" : "rewrite"))}
           models={models}
           selectedModel={selectedModel}
           onSelectModel={setSelectedModel}
@@ -205,6 +209,20 @@ export default function PlaygroundPage() {
                     >
                       <FolderTree size={13} className="text-amber-500" />
                       <span>File Structure</span>
+                    </button>
+                    <button
+                      onClick={() => setInput("Explain this concept simply like I am five: How do distributed vector embeddings work?")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs font-medium hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors shadow-2xs"
+                    >
+                      <Sparkles size={13} className="text-purple-500" />
+                      <span>Explain Concept</span>
+                    </button>
+                    <button
+                      onClick={() => setInput("Write an ultra-robust regex pattern to validate email addresses matching RFC 5322")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs font-medium hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors shadow-2xs"
+                    >
+                      <Code2 size={13} className="text-cyan-500" />
+                      <span>Email Regex</span>
                     </button>
                   </>
                 )}

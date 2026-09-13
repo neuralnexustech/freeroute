@@ -36,11 +36,37 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient({
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-// Ensure RequestLog has 'app' and 'errorMessage' columns in SQLite
+// Ensure RequestLog has 'app', 'errorMessage', 'promptHash', 'cacheHit' columns in SQLite
 prisma
   .$executeRawUnsafe('ALTER TABLE "RequestLog" ADD COLUMN "app" TEXT DEFAULT \'Unknown\'')
   .catch(() => {});
 prisma
   .$executeRawUnsafe('ALTER TABLE "RequestLog" ADD COLUMN "errorMessage" TEXT DEFAULT \'\'')
+  .catch(() => {});
+prisma
+  .$executeRawUnsafe('ALTER TABLE "RequestLog" ADD COLUMN "promptHash" TEXT DEFAULT \'\'')
+  .catch(() => {});
+prisma
+  .$executeRawUnsafe('ALTER TABLE "RequestLog" ADD COLUMN "cacheHit" BOOLEAN DEFAULT 0')
+  .catch(() => {});
+
+// Ensure ApiKey has budget, rate limit, and webhook columns in SQLite
+prisma
+  .$executeRawUnsafe('ALTER TABLE "ApiKey" ADD COLUMN "rpmLimit" INTEGER')
+  .catch(() => {});
+prisma
+  .$executeRawUnsafe('ALTER TABLE "ApiKey" ADD COLUMN "tpmLimit" INTEGER')
+  .catch(() => {});
+prisma
+  .$executeRawUnsafe('ALTER TABLE "ApiKey" ADD COLUMN "dailyBudget" REAL')
+  .catch(() => {});
+prisma
+  .$executeRawUnsafe('ALTER TABLE "ApiKey" ADD COLUMN "monthlyBudget" REAL')
+  .catch(() => {});
+prisma
+  .$executeRawUnsafe('ALTER TABLE "ApiKey" ADD COLUMN "webhookUrl" TEXT')
+  .catch(() => {});
+prisma
+  .$executeRawUnsafe('ALTER TABLE "ApiKey" ADD COLUMN "webhookSecret" TEXT')
   .catch(() => {});
 

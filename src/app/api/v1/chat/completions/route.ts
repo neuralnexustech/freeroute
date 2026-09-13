@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { validateApiKey } from "@/lib/auth";
+import { validateApiKey, checkRateLimit } from "@/lib/auth";
 import { getProvider, openAIToAnthropic, anthropicToOpenAIChunk } from "@/lib/providers";
 import {
   pickTargets,
@@ -8,6 +8,7 @@ import {
   ComboCandidate,
   ComboStrategy,
 } from "@/lib/combo";
+import { loadComboCursor } from "@/lib/combo-server";
 import { detectApp } from "@/lib/detect-app";
 import { broadcastTelemetry } from "@/lib/telemetryEvents";
 
@@ -24,6 +25,7 @@ async function saveLogWithApp(
   data: Parameters<typeof prisma.requestLog.create>[0]["data"],
   appName: string,
   errorMessage?: string,
+  keyObj?: any,
 ) {
   const log = await prisma.requestLog.create({ data });
   if (appName && appName !== "Unknown") {
@@ -42,6 +44,30 @@ async function saveLogWithApp(
     cost: log.cost,
     app: appName,
   });
+
+  // Phase 5.5: Webhook notifications on request complete
+  const webhookUrl = keyObj?.webhookUrl;
+  if (webhookUrl && typeof webhookUrl === "string" && webhookUrl.startsWith("http")) {
+    fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-freeroute-event": "request.complete",
+      },
+      body: JSON.stringify({
+        event: "request.complete",
+        requestId: log.id,
+        model: log.modelSlug,
+        tokens: (log.promptTokens || 0) + (log.completionTokens || 0),
+        cost: log.cost,
+        latencyMs: log.latencyMs,
+        status: log.status,
+        timestamp: new Date().toISOString(),
+      }),
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => {});
+  }
+
   return log;
 }
 
@@ -62,10 +88,14 @@ function createSseResponse(opts: {
   upstream: Response;
   isAnthropic: boolean;
   model: string;
+  providerSlug: string;
   started: number;
+  requestId: string;
+  comboHops?: string;
+  comboStrategy?: string;
   onFinish: (stats: SsePumpStats) => Promise<void> | void;
 }): Response {
-  const { upstream, isAnthropic, model, started, onFinish } = opts;
+  const { upstream, isAnthropic, model, providerSlug, started, requestId, comboHops, comboStrategy, onFinish } = opts;
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
@@ -241,6 +271,11 @@ function createSseResponse(opts: {
       "cache-control": "no-cache, no-transform",
       connection: "keep-alive",
       "x-accel-buffering": "no",
+      "x-request-id": requestId,
+      "x-model-slug": model,
+      "x-provider": providerSlug,
+      ...(comboHops ? { "x-combo-hops": comboHops } : {}),
+      ...(comboStrategy ? { "x-combo-strategy": comboStrategy } : {}),
     },
   });
 }
@@ -254,6 +289,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Per-key rate limiting (RPM) — only enforced when rpmLimit is set on the key
+  const rpmLimit = (key as any).rpmLimit as number | null;
+  if (rpmLimit && !checkRateLimit(key.id, rpmLimit)) {
+    return NextResponse.json(
+      { error: { message: `Rate limit exceeded: ${rpmLimit} requests/minute`, type: "rate_limit_error" } },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": "60",
+          "x-ratelimit-limit-rpm": String(rpmLimit),
+        },
+      },
+    );
+  }
+
   const body = await req.json().catch(() => null);
   if (!body?.model || !body?.messages) {
     return NextResponse.json(
@@ -264,6 +314,7 @@ export async function POST(req: NextRequest) {
 
   const detectedApp = detectApp(req, key.name, body);
   const wantsStream = body?.stream === true;
+  const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
 
   const rawModel: string = body.model;
   const cleanModelName = rawModel.startsWith("combo:")
@@ -315,6 +366,7 @@ export async function POST(req: NextRequest) {
       };
     });
 
+    await loadComboCursor(combo.id);
     const orderedTargets = pickTargets(
       combo.id,
       combo.strategy as ComboStrategy,
@@ -368,6 +420,7 @@ export async function POST(req: NextRequest) {
         const isAnthropic = m.provider.slug === "anthropic";
         const upstreamHeaders: Record<string, string> = {
           "content-type": "application/json",
+          "x-request-id": requestId,
           ...def.authHeader(m.provider.apiKey),
         };
 
@@ -405,11 +458,19 @@ export async function POST(req: NextRequest) {
         // Streaming combo request: commit to this target and pipe SSE deltas.
         if (wantsStream) {
           const servedModel = m;
+          const comboHopsStr =
+            attemptedHops.length > 0
+              ? [...attemptedHops, `${m.slug} (served)`].join(" → ")
+              : m.slug;
           return createSseResponse({
             upstream: upstreamRes,
             isAnthropic,
             model: m.slug,
+            providerSlug: m.provider.slug,
             started,
+            requestId,
+            comboHops: comboHopsStr,
+            comboStrategy: combo.strategy,
             onFinish: async (stats) => {
               const pt = stats.promptTokens;
               const ct = stats.completionTokens;
@@ -432,6 +493,8 @@ export async function POST(req: NextRequest) {
                   latencyMs: stats.totalMs,
                 },
                 detectedApp,
+                undefined,
+                key,
               );
               await prisma.apiKey.update({
                 where: { id: key.id },
@@ -488,6 +551,8 @@ export async function POST(req: NextRequest) {
             latencyMs: totalMs,
           },
           detectedApp,
+          undefined,
+          key,
         );
         await prisma.apiKey.update({
           where: { id: key.id },
@@ -514,7 +579,16 @@ export async function POST(req: NextRequest) {
           () => {},
         );
 
-        return NextResponse.json(data);
+        return NextResponse.json(data, {
+          headers: {
+            "x-request-id": requestId,
+            "x-model-slug": m.slug,
+            "x-provider": m.provider.slug,
+            "openai-processing-ms": String(totalMs),
+            ...(attemptedHops.length > 0 ? { "x-combo-hops": [...attemptedHops, `${m.slug} (served)`].join(" → ") } : { "x-combo-hops": m.slug }),
+            "x-combo-strategy": combo.strategy,
+          },
+        });
       } catch (e: any) {
         lastError = `${m.slug} (${m.provider.name}) -> ${e?.message ?? "network error"}`;
         attemptedHops.push(lastError);
@@ -533,6 +607,7 @@ export async function POST(req: NextRequest) {
       },
       detectedApp,
       failoverMsg,
+      key,
     );
     return NextResponse.json(
       {
@@ -634,6 +709,7 @@ export async function POST(req: NextRequest) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-request-id": requestId,
           ...def.authHeader(m.provider.apiKey),
         },
         body: JSON.stringify(upstreamBody),
@@ -651,7 +727,9 @@ export async function POST(req: NextRequest) {
           upstream,
           isAnthropic: m.provider.slug === "anthropic",
           model: m.slug,
+          providerSlug: m.provider.slug,
           started,
+          requestId,
           onFinish: async (stats) => {
             const pt = stats.promptTokens;
             const ct = stats.completionTokens;
@@ -674,6 +752,8 @@ export async function POST(req: NextRequest) {
                 latencyMs: stats.totalMs,
               },
               detectedApp,
+              undefined,
+              key,
             );
             await prisma.apiKey.update({
               where: { id: key.id },
@@ -753,6 +833,8 @@ export async function POST(req: NextRequest) {
           latencyMs: totalMs,
         },
         detectedApp,
+        undefined,
+        key,
       );
       await prisma.apiKey.update({
         where: { id: key.id },
@@ -778,7 +860,14 @@ export async function POST(req: NextRequest) {
         () => {},
       );
 
-      return NextResponse.json(data);
+      return NextResponse.json(data, {
+        headers: {
+          "x-request-id": requestId,
+          "x-model-slug": m.slug,
+          "x-provider": m.provider.slug,
+          "openai-processing-ms": String(totalMs),
+        },
+      });
     } catch (e: any) {
       lastError = e?.message ?? "upstream error";
       continue;
@@ -794,6 +883,7 @@ export async function POST(req: NextRequest) {
     },
     detectedApp,
     lastError ? `All upstreams failed (${lastError})` : "All upstream connections failed.",
+    key,
   );
   return NextResponse.json(
     { error: { message: `All upstreams failed (${lastError})` } },

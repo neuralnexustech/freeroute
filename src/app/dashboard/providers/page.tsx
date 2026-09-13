@@ -22,12 +22,18 @@ export default function ProvidersPage() {
   const [rows, setRows] = useState<Provider[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [search, setSearch] = useState("");
+  const [pinging, setPinging] = useState(false);
+  const [pingResult, setPingResult] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadProviders = () => {
     fetch("/api/providers")
       .then((r) => r.json())
       .then((d) => setRows(d.providers ?? []))
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadProviders();
   }, []);
 
   const counts = useMemo(() => {
@@ -79,7 +85,48 @@ export default function ProvidersPage() {
             Connect your custom provider keys to route model calls directly across your core AI providers with zero markup.
           </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button
+            onClick={async () => {
+              setPinging(true);
+              setPingResult(null);
+              try {
+                const res = await fetch("/api/models/health-check", { method: "POST" });
+                const d = await res.json();
+                setPingResult(`Checked ${d.checked ?? 0} models`);
+                loadProviders();
+                setTimeout(() => setPingResult(null), 5000);
+              } catch {
+                setPingResult("Health check failed");
+                setTimeout(() => setPingResult(null), 4000);
+              } finally {
+                setPinging(false);
+              }
+            }}
+            disabled={pinging}
+            style={{
+              padding: "8px 14px",
+              borderRadius: "8px",
+              border: "1px solid var(--border-color, rgba(255,255,255,0.14))",
+              background: "var(--bg-surface, rgba(255,255,255,0.06))",
+              color: "inherit",
+              fontSize: "13px",
+              fontWeight: 500,
+              cursor: pinging ? "not-allowed" : "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              opacity: pinging ? 0.6 : 1,
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>{pinging ? "⚡ Checking..." : "⚡ Health Check"}</span>
+            {pingResult && (
+              <span style={{ color: "#10b981", fontSize: 11, fontWeight: 600 }}>
+                ({pingResult})
+              </span>
+            )}
+          </button>
           <input
             type="text"
             placeholder="Search providers..."

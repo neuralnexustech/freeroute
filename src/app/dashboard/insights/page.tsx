@@ -1,3 +1,3 @@
-import ActivitysPage from "../activitys/page";
+import ActivitiesPage from "../activities/page";
 
-export default ActivitysPage;
+export default ActivitiesPage;

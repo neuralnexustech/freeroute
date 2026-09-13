@@ -49,16 +49,22 @@ model Model {
 }
 
 model ApiKey {
-  id         String    @id @default(cuid())
-  name       String
-  keyHash    String    @unique
-  prefix     String
-  secretEnc  String    @default("") // AES-GCM vault for dashboard reveal; hash stays auth source
-  expiresAt  DateTime?
-  lastUsedAt DateTime?
-  revoked    Boolean   @default(false)
-  createdAt  DateTime  @default(now())
-  logs       RequestLog[]
+  id            String    @id @default(cuid())
+  name          String
+  keyHash       String    @unique
+  prefix        String
+  secretEnc     String    @default("") // AES-GCM vault for dashboard reveal; hash stays auth source
+  rpmLimit      Int?
+  tpmLimit      Int?
+  dailyBudget   Float?
+  monthlyBudget Float?
+  webhookUrl    String?
+  webhookSecret String?
+  expiresAt     DateTime?
+  lastUsedAt    DateTime?
+  revoked       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  logs          RequestLog[]
 }
 
 model Combo {
@@ -96,7 +102,15 @@ model RequestLog {
   latencyMs      Int       @default(0)
   app            String    @default("Unknown") // detected client app (kept in sync with runtime ALTER in lib/db.ts)
   errorMessage   String    @default("")
+  promptHash     String    @default("")
+  cacheHit       Boolean   @default(false)
   createdAt      DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([modelSlug])
+  @@index([apiKeyId, createdAt])
+  @@index([status, createdAt])
+  @@index([promptHash])
 }
 
 model Setting {

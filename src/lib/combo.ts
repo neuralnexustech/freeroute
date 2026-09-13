@@ -43,6 +43,21 @@ export const COMBO_STRATEGIES = [
 
 const rrCursor = new Map<string, number>();
 
+type CursorPersistListener = (comboId: string, cursor: number) => void;
+let cursorListener: CursorPersistListener | null = null;
+
+export function setComboCursorPersistListener(listener: CursorPersistListener | null) {
+  cursorListener = listener;
+}
+
+export function updateComboCursorInMemory(comboId: string, val: number) {
+  rrCursor.set(comboId, val);
+}
+
+export function getComboCursor(comboId: string): number {
+  return rrCursor.get(comboId) ?? 0;
+}
+
 export function resetComboRotation(comboId?: string) {
   if (comboId) rrCursor.delete(comboId);
   else rrCursor.clear();
@@ -139,14 +154,18 @@ export function pickTargets(
       const cur = rrCursor.get(comboId) ?? 0;
       const ordered = [...active].sort((a, b) => a.priority - b.priority);
       const rotated = [...ordered.slice(cur % ordered.length), ...ordered.slice(0, cur % ordered.length)];
-      rrCursor.set(comboId, cur + 1);
+      const next = cur + 1;
+      rrCursor.set(comboId, next);
+      cursorListener?.(comboId, next);
       return rotated;
     }
     case "weighted": {
       const expanded = active.flatMap((c) => Array(Math.max(1, c.weight)).fill(c));
       const cur = rrCursor.get(comboId) ?? 0;
       const rotated = [...expanded.slice(cur % expanded.length), ...expanded.slice(0, cur % expanded.length)];
-      rrCursor.set(comboId, cur + 1);
+      const next = cur + 1;
+      rrCursor.set(comboId, next);
+      cursorListener?.(comboId, next);
       const seen = new Set<string>();
       const ordered: ComboCandidate[] = [];
       for (const c of rotated) {

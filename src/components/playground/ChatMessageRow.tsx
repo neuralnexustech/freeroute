@@ -117,16 +117,16 @@ export function ChatMessageRow({
     return { thinkingContent: thinking.trim(), cleanContent: cleaned };
   }, [message.content, message.reasoning, isUser]);
 
-  // Parse inline <tool_call> tags if present in Chat Mode
+  // Parse inline tool calls (<tool_call>, <tool_output>, <function_call>) if present in Chat Mode
   const { parsedToolCalls, displayContent } = React.useMemo(() => {
     if (isUser) return { parsedToolCalls: [], displayContent: cleanContent };
 
     const toolCalls: Array<{ type: any; data: any }> = [];
     let textWithoutTools = cleanContent;
 
+    // 1. Check for standard <tool_call name="...">...</tool_call>
     const toolRegex = /<tool_call\s+name="([^"]+)"(?:\s+location="([^"]+)")?(?:\s+title="([^"]+)")?(?:\s+file="([^"]+)")?(?:\s+root="([^"]+)")?>([\s\S]*?)<\/tool_call>/gi;
     let match;
-
     while ((match = toolRegex.exec(cleanContent)) !== null) {
       const toolName = match[1];
       const innerJson = match[6]?.trim();
@@ -138,8 +138,55 @@ export function ChatMessageRow({
       }
     }
 
-    // Strip tool call tags from visible text
-    textWithoutTools = textWithoutTools.replace(/<tool_call[\s\S]*?<\/tool_call>/gi, "").trim();
+    // 2. Check for <tool_output>...</tool_output> (Gemini / Python / standard agent tools)
+    const toolOutputRegex = /<tool_output>([\s\S]*?)<\/tool_output>/gi;
+    let outMatch;
+    while ((outMatch = toolOutputRegex.exec(cleanContent)) !== null) {
+      const rawOutput = outMatch[1]?.trim();
+      if (rawOutput) {
+        try {
+          const parsed = JSON.parse(rawOutput);
+          let inferredType = "weather";
+          if (parsed.location || parsed.temperature || parsed.conditions || parsed.condition || parsed.forecast) {
+            inferredType = "weather";
+          } else if (parsed.headers && parsed.rows) {
+            inferredType = "table";
+          } else if (parsed.issues || parsed.summary || parsed.vulnerabilities) {
+            inferredType = "code_review";
+          } else if (parsed.tree || parsed.root) {
+            inferredType = "file_tree";
+          } else if (parsed.results) {
+            inferredType = "web_search";
+          }
+          toolCalls.push({ type: inferredType, data: parsed });
+        } catch {}
+      }
+    }
+
+    // 3. Check for <function_call name="...">...</function_call>
+    const fnRegex = /<function_call\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/function_call>/gi;
+    let fnMatch;
+    while ((fnMatch = fnRegex.exec(cleanContent)) !== null) {
+      const toolName = fnMatch[1];
+      try {
+        const parsed = JSON.parse(fnMatch[2]?.trim());
+        toolCalls.push({ type: toolName, data: parsed });
+      } catch {}
+    }
+
+    // Strip tool call tags, tool_code, and tool_output tags from visible text
+    textWithoutTools = textWithoutTools
+      .replace(/<tool_call[\s\S]*?<\/tool_call>/gi, "")
+      .replace(/<tool_call[\s\S]*$/i, "")
+      .replace(/<tool_code[\s\S]*?<\/tool_code>/gi, "")
+      .replace(/<tool_code[\s\S]*$/i, "")
+      .replace(/<tool_output[\s\S]*?<\/tool_output>/gi, "")
+      .replace(/<tool_output[\s\S]*$/i, "")
+      .replace(/<function_call[\s\S]*?<\/function_call>/gi, "")
+      .replace(/<function_call[\s\S]*$/i, "")
+      .replace(/<function_output[\s\S]*?<\/function_output>/gi, "")
+      .replace(/<function_output[\s\S]*$/i, "")
+      .trim();
 
     return { parsedToolCalls: toolCalls, displayContent: textWithoutTools };
   }, [cleanContent, isUser]);
@@ -150,9 +197,15 @@ export function ChatMessageRow({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Strip raw <artifact>, <project>, <file>, <agent_step>, and <suggestions> XML from displaying in chat text
+  // Strip raw <artifact>, <project>, <file>, <agent_step>, <tool_code>, <tool_output>, and <suggestions> XML from displaying in chat text
   const userFacingText = React.useMemo(() => {
     let text = displayContent
+      .replace(/<tool_code[\s\S]*?<\/tool_code>/gi, "")
+      .replace(/<tool_code[\s\S]*$/i, "")
+      .replace(/<tool_output[\s\S]*?<\/tool_output>/gi, "")
+      .replace(/<tool_output[\s\S]*$/i, "")
+      .replace(/<tool_call[\s\S]*?<\/tool_call>/gi, "")
+      .replace(/<tool_call[\s\S]*$/i, "")
       .replace(/<project[\s\S]*?<\/project>/gi, "")
       .replace(/<project[\s\S]*$/i, "")
       .replace(/<artifact[\s\S]*?<\/artifact>/gi, "")
@@ -240,7 +293,16 @@ export function ChatMessageRow({
           <AgentToolExecutionPanel steps={message.steps} isStreaming={message.streaming} />
         )}
 
-        {/* 3. ASSISTANT TEXT CONTENT */}
+        {/* 3. INLINE TOOL RESULTS (Weather, Table, Review, Tree) */}
+        {parsedToolCalls.length > 0 && (
+          <div className="space-y-3 py-1">
+            {parsedToolCalls.map((tc, idx) => (
+              <ToolResultWidget key={idx} type={tc.type} data={tc.data} />
+            ))}
+          </div>
+        )}
+
+        {/* 4. ASSISTANT TEXT CONTENT */}
         {userFacingText ? (
           <ReactMarkdownLite content={userFacingText} />
         ) : message.streaming && thinkingContent ? (
@@ -249,15 +311,6 @@ export function ChatMessageRow({
             Thinking...
           </div>
         ) : null}
-
-        {/* 4. INLINE TOOL RESULTS (Chat Mode) */}
-        {parsedToolCalls.length > 0 && (
-          <div className="space-y-3 pt-1">
-            {parsedToolCalls.map((tc, idx) => (
-              <ToolResultWidget key={idx} type={tc.type} data={tc.data} />
-            ))}
-          </div>
-        )}
 
         {/* 5. FILES FROM THIS TURN: Dedicated File Cards */}
         {message.files && message.files.length > 0 && (
