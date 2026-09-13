@@ -375,37 +375,23 @@ export function MonoRoundedSankey({
                   zIndex: 2,
                 }}
               >
-                <div
+                <img
+                  src="/logo.png"
+                  alt="freeroute logo"
                   style={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 5,
-                    background: isDark ? "#121212" : "#ffffff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    objectFit: "contain",
                   }}
-                >
-                  <div
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: "#10b981",
-                      boxShadow: "0 0 8px #10b981",
-                    }}
-                  />
-                </div>
+                />
               </div>
             </div>
 
             {/* Subtitle Information */}
             <div style={{ textAlign: "center", marginTop: 4 }}>
               <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em", color: textPrimary }}>
-                freeroute Gateway · Idle
-              </div>
-              <div style={{ fontSize: 11.5, color: textSecondary, marginTop: 2 }}>
-                Listening on :20129 · Waiting for model traffic
+                Gateway Idle
               </div>
             </div>
           </div>
@@ -577,29 +563,28 @@ export function MonoRoundedSankey({
                   cursor: "pointer",
                 }}
               >
-                {/* Gateway Core Indicator */}
-                <div
+                {/* freeroute Gateway Icon */}
+                <img
+                  src="/logo.png"
+                  alt="freeroute logo"
                   style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: 4,
-                    background: isDark ? "#121212" : "#ffffff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    width: 28,
+                    height: 28,
+                    borderRadius: 7,
+                    objectFit: "contain",
                   }}
-                >
+                />
+                {livePulseGateway && (
                   <div
                     style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: livePulseGateway ? "#3b82f6" : "#10b981",
-                      boxShadow: `0 0 6px ${livePulseGateway ? "#3b82f6" : "#10b981"}`,
-                      transition: "background 0.3s",
+                      position: "absolute",
+                      inset: -3,
+                      borderRadius: 18,
+                      border: "2px solid #3b82f6",
+                      animation: "ping 1s cubic-bezier(0,0,0.2,1) infinite",
                     }}
                   />
-                </div>
+                )}
               </div>
             </div>
           </>
