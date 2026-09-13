@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     return NextResponse.json({ error: "Provider not found" }, { status: 404 });
   }
 
-  const isNoAuth = def?.authType === "none";
+  const isNoAuth = def?.authType === "none" || provider.slug === "kilo";
   if (!isNoAuth && (!provider.apiKey || provider.apiKey.trim().length === 0)) {
     return NextResponse.json({ error: "Save a provider API key first" }, { status: 400 });
   }
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
 
   let count = 0;
   const slugs: string[] = [];
-  for (const m of list.slice(0, 300)) {
+  for (const m of list.slice(0, 800)) {
     const rawId: string = m.id ?? m.name ?? m.slug ?? "";
     if (!rawId || typeof rawId !== "string") continue;
     const slug = rawId.replace(/^models\//, "").trim();
@@ -92,13 +92,41 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
       if (!isChat) continue;
     }
 
-    const displayName = m.displayName && typeof m.displayName === "string" ? m.displayName : slug;
-    const initialContext = m.inputTokenLimit && typeof m.inputTokenLimit === "number" ? fmtContext(m.inputTokenLimit) : "128K";
+    const displayName = m.displayName && typeof m.displayName === "string" 
+      ? m.displayName 
+      : (typeof m.name === "string" && m.name ? m.name : slug);
+    const initialContext = typeof m.context_length === "number" && m.context_length > 0
+      ? fmtContext(m.context_length)
+      : (m.inputTokenLimit && typeof m.inputTokenLimit === "number" ? fmtContext(m.inputTokenLimit) : "128K");
+
+    let inputPrice = 0;
+    let outputPrice = 0;
+    if (m.pricing) {
+      const pIn = parseFloat(m.pricing.prompt);
+      const pOut = parseFloat(m.pricing.completion);
+      if (!isNaN(pIn) && pIn > 0) inputPrice = pIn >= 0.01 ? pIn : parseFloat((pIn * 1_000_000).toFixed(4));
+      if (!isNaN(pOut) && pOut > 0) outputPrice = pOut >= 0.01 ? pOut : parseFloat((pOut * 1_000_000).toFixed(4));
+    }
 
     await prisma.model.upsert({
       where: { providerId_slug: { providerId: provider.id, slug } },
-      update: { displayName, contextWindow: initialContext, enabled: true },
-      create: { providerId: provider.id, slug, displayName, contextWindow: initialContext, enabled: true, status: "pending" },
+      update: { 
+        displayName, 
+        contextWindow: initialContext, 
+        enabled: true,
+        ...(inputPrice > 0 ? { inputPrice } : {}),
+        ...(outputPrice > 0 ? { outputPrice } : {}),
+      },
+      create: { 
+        providerId: provider.id, 
+        slug, 
+        displayName, 
+        contextWindow: initialContext, 
+        enabled: true, 
+        status: "pending",
+        inputPrice,
+        outputPrice,
+      },
     });
     slugs.push(slug);
     count++;
