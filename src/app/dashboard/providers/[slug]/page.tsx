@@ -193,16 +193,6 @@ export default function ProviderDetailPage() {
     toast.show("Provider logo updated");
   };
 
-  const pullInfo = async () => {
-    setLoading(true);
-    const r = await fetch(`/api/providers/${slug}/pull-info`, { method: "POST" });
-    const d = await r.json().catch(() => ({}));
-    setLoading(false);
-    if (!r.ok) return toast.show(d.error ?? "Pull info failed");
-    toast.show(`Updated info for ${d.updated ?? d.count ?? 0} existing models`);
-    load();
-  };
-
 
   // Test ALL enabled models via SSE — shows each result live as it completes.
   const test = async () => {
@@ -650,8 +640,7 @@ export default function ProviderDetailPage() {
 
       <div className="toolbar-row" style={{ marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <button className="btn sm primary" onClick={pullInfo} disabled={loading || testing}>{loading ? "Updating Info…" : "⇩ Pull Info"}</button>
-          <button className="btn sm" onClick={test} disabled={testing}>{testing ? `Testing ${testDone}/${testTotal}…` : "▷ Test Models"}</button>
+          <button className="btn sm primary" onClick={test} disabled={testing}>{testing ? `Testing ${testDone}/${testTotal}…` : "▷ Test Models"}</button>
           <button className="btn sm danger" onClick={disableFailing} disabled={testing}>⦸ Disable Non-working Models</button>
           <button className="btn sm danger" onClick={disableAll} disabled={testing}>⦸ Disable All</button>
           <button className="btn sm" onClick={cycleFilter} disabled={testing}>{filterLabel} ▾</button>

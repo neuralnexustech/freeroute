@@ -17,6 +17,9 @@ interface ModelRow {
   toksPerSec: number | null;
   latencyMs: number | null;
   ttftMs: number | null;
+  spend?: number;
+  requests?: number;
+  tokens?: number;
 }
 
 function fmtTtft(ms: number | null): string {
@@ -149,6 +152,18 @@ export default function ModelsPage() {
   const [phase, setPhase] = useState("");
   const toast = useToast();
 
+  const [sortCol, setSortCol] = useState<"name" | "spend" | "inputPrice" | "outputPrice" | "toks" | "ttft">("name");
+  const [sortAsc, setSortAsc] = useState(true);
+
+  const toggleSort = (col: typeof sortCol) => {
+    if (sortCol === col) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortCol(col);
+      setSortAsc(col === "name");
+    }
+  };
+
   const load = () => {
     fetch("/api/v1/models").then((r) => r.json()).then((d) => setRows(d.data ?? [])).catch(() => toast.show("Failed to load models"));
   };
@@ -170,8 +185,23 @@ export default function ModelsPage() {
       (paramFilter === "All" || paramBucket(m.slug) === paramFilter) &&
       (ctxFilter === "All" || contextBucket(m.contextWindow) === ctxFilter) &&
       (priceFilter === "All" ||
-        (priceFilter === "Free" ? m.inputPrice === 0 && m.outputPrice === 0 : m.inputPrice > 0 || m.outputPrice > 0)),
+        (priceFilter === "Free"
+          ? m.inputPrice === 0 && m.outputPrice === 0
+          : priceFilter === "Spent"
+          ? (m.spend ?? 0) > 0
+          : m.inputPrice > 0 || m.outputPrice > 0)),
   );
+
+  const sorted = [...filtered].sort((a, b) => {
+    let diff = 0;
+    if (sortCol === "name") diff = a.displayName.localeCompare(b.displayName);
+    else if (sortCol === "spend") diff = (a.spend ?? 0) - (b.spend ?? 0);
+    else if (sortCol === "inputPrice") diff = a.inputPrice - b.inputPrice;
+    else if (sortCol === "outputPrice") diff = a.outputPrice - b.outputPrice;
+    else if (sortCol === "toks") diff = (a.toksPerSec ?? 0) - (b.toksPerSec ?? 0);
+    else if (sortCol === "ttft") diff = (a.ttftMs ?? 999999) - (b.ttftMs ?? 999999);
+    return sortAsc ? diff : -diff;
+  });
 
   // Pull info (Context, Input/Output pricing, Modalities) for all models already in database
   const pullInfo = async () => {
@@ -192,6 +222,8 @@ export default function ModelsPage() {
     setPhase("");
     setPulling(false);
   };
+
+  const totalSpend = rows.reduce((acc, m) => acc + (m.spend || 0), 0);
 
   return (
     <>
@@ -226,7 +258,25 @@ export default function ModelsPage() {
             {isLive ? "Live" : "Connecting..."}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 10px",
+              borderRadius: 8,
+              background: "var(--bg-surface-elevated)",
+              border: "1px solid var(--border-subtle)",
+              fontSize: 12,
+            }}
+            title="Total accumulated spend across all model requests"
+          >
+            <span style={{ color: "var(--text-secondary)" }}>Total Spent:</span>
+            <span className="mono" style={{ fontWeight: 700, color: totalSpend > 0 ? "var(--warning)" : "var(--text-primary)" }}>
+              ${totalSpend < 0.01 && totalSpend > 0 ? totalSpend.toFixed(5) : totalSpend.toFixed(4)}
+            </span>
+          </div>
           <button className="btn primary" onClick={pullInfo} disabled={pulling}>{pulling ? "Updating Info…" : "⇩ Pull Info"}</button>
           {pulling && phase ? (
             <span className="mono" style={{ fontSize: 12, color: "var(--primary)", display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -258,7 +308,7 @@ export default function ModelsPage() {
         <Dropdown label="Context" value={ctxFilter} onPick={setCtxFilter}
           options={["All", "≤ 32K", "≤ 128K", "> 128K", "Unknown"].map((x) => ({ value: x, label: x === "All" ? "Any context" : x }))} />
         <Dropdown label="Price" value={priceFilter} onPick={setPriceFilter}
-          options={[{ value: "All", label: "Any price" }, { value: "Free", label: "Free" }, { value: "Paid", label: "Paid" }]} />
+          options={[{ value: "All", label: "Any price" }, { value: "Free", label: "Free" }, { value: "Paid", label: "Paid" }, { value: "Spent", label: "Has Spend" }]} />
         {["Cache discount", "No BYOK"].map((f) => (
           <button key={f} className="btn sm" onClick={() => toast.show(`Filter: ${f} — no data yet`)}>{f}</button>
         ))}
@@ -269,19 +319,32 @@ export default function ModelsPage() {
           <table className="table-center">
             <thead>
               <tr>
-                <th>Model</th>
+                <th onClick={() => toggleSort("name")} style={{ cursor: "pointer", userSelect: "none" }}>
+                  Model {sortCol === "name" ? (sortAsc ? "▲" : "▼") : ""}
+                </th>
                 <th>Providers</th>
                 <th className="num">Context</th>
-                <th className="num">Input $/M</th>
-                <th className="num">Output $/M</th>
+                <th className="num" onClick={() => toggleSort("inputPrice")} style={{ cursor: "pointer", userSelect: "none" }}>
+                  Input $/M {sortCol === "inputPrice" ? (sortAsc ? "▲" : "▼") : ""}
+                </th>
+                <th className="num" onClick={() => toggleSort("outputPrice")} style={{ cursor: "pointer", userSelect: "none" }}>
+                  Output $/M {sortCol === "outputPrice" ? (sortAsc ? "▲" : "▼") : ""}
+                </th>
+                <th className="num" onClick={() => toggleSort("spend")} style={{ cursor: "pointer", userSelect: "none", color: "var(--warning)" }}>
+                  Spent {sortCol === "spend" ? (sortAsc ? "▲" : "▼") : ""}
+                </th>
                 <th>Modalities</th>
                 <th>Capabilities</th>
-                <th className="num">Tok/s</th>
-                <th className="num">TTFT</th>
+                <th className="num" onClick={() => toggleSort("toks")} style={{ cursor: "pointer", userSelect: "none" }}>
+                  Tok/s {sortCol === "toks" ? (sortAsc ? "▲" : "▼") : ""}
+                </th>
+                <th className="num" onClick={() => toggleSort("ttft")} style={{ cursor: "pointer", userSelect: "none" }}>
+                  TTFT {sortCol === "ttft" ? (sortAsc ? "▲" : "▼") : ""}
+                </th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((m) => (
+              {sorted.map((m) => (
                 <tr key={m.id}>
                   <td>
                     <div style={{ fontWeight: 600 }}>{m.displayName}</div>
@@ -291,6 +354,9 @@ export default function ModelsPage() {
                   <td className="num mono">{m.contextWindow}</td>
                   <td className="num mono" style={{ color: "var(--primary)" }}>${m.inputPrice}</td>
                   <td className="num mono">${m.outputPrice}</td>
+                  <td className="num mono" style={{ color: (m.spend ?? 0) > 0 ? "var(--warning)" : "var(--text-tertiary)", fontWeight: (m.spend ?? 0) > 0 ? 600 : 400 }}>
+                    ${(m.spend ?? 0) < 0.0001 && (m.spend ?? 0) > 0 ? (m.spend ?? 0).toFixed(6) : (m.spend ?? 0).toFixed(4)}
+                  </td>
                   <td><ModalityIcons mods={m.modalities} /></td>
                   <td><span className="pill subtle">{m.status}</span></td>
                   <td className="num mono">{fmtTps(m.toksPerSec)}</td>
@@ -298,7 +364,7 @@ export default function ModelsPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={9}><div className="empty-state-box">No models yet — connect a provider and pull its live registry.</div></td></tr>
+                <tr><td colSpan={10}><div className="empty-state-box">No models yet — connect a provider and pull its live registry.</div></td></tr>
               )}
             </tbody>
           </table>
