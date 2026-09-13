@@ -1,4 +1,4 @@
-// Curated Provider Registry: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, and OrcaRouter
+// Curated Provider Registry: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, and Kilo
 
 export interface ProviderDef {
   slug: string;
@@ -42,7 +42,7 @@ function makeAuthHeader(authType: string): (apiKey: string) => Record<string, st
       return (k) => ({ Cookie: k, Authorization: `Bearer ${k}` });
     case "bearer":
     default:
-      return (k) => ({ Authorization: `Bearer ${k}` });
+      return (k): Record<string, string> => (k && k.trim() ? { Authorization: `Bearer ${k.trim()}` } : {});
   }
 }
 
@@ -173,6 +173,22 @@ export const RAW_PROVIDERS_DATA = [
     apiKeyUrl: "https://www.orcarouter.ai",
     website: "https://www.orcarouter.ai/",
     docUrl: "https://www.orcarouter.ai/docs",
+    authType: "bearer" as const,
+    serviceKinds: ["llm"],
+    thinkingConfig: null,
+  },
+  {
+    slug: "kilo",
+    name: "Kilo",
+    category: "apikey" as const,
+    icon: "gateway",
+    color: "#eab308",
+    baseUrl: "https://api.kilo.ai/api/gateway",
+    chatPath: "/chat/completions",
+    modelsPath: "/models",
+    apiKeyUrl: "https://app.kilo.ai",
+    website: "https://kilo.ai/",
+    docUrl: "https://kilo.ai/docs/gateway",
     authType: "bearer" as const,
     serviceKinds: ["llm"],
     thinkingConfig: null,
