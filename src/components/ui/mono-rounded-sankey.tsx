@@ -238,7 +238,7 @@ export function MonoRoundedSankey({
                 textTransform: "uppercase",
               }}
             >
-              SANKEY FLOW
+              ROUTE FLOW
             </span>
             <span
               style={{

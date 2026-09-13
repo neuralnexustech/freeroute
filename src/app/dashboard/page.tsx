@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { useLiveTelemetry } from "@/hooks/useLiveTelemetry";
 import { useTheme } from "@/components/ThemeProvider";
 import { MonoRoundedSankey } from "@/components/ui/mono-rounded-sankey";
+import { MonoRoundedDonut } from "@/components/ui/mono-rounded-donut";
 import { ModelProviderIcon } from "@/components/ModelProviderIcon";
 
 type Metric = "tokens" | "spend" | "requests";
@@ -729,12 +730,24 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      {/* MONO ROUNDED SANKEY FLOW */}
-      <div style={{ display: "flex", justifyContent: "center", width: "100%", margin: "6px 0" }}>
+      {/* ROUTE FLOW & MONO ROUNDED DONUT */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+          gap: 16,
+          width: "100%",
+          margin: "8px 0",
+        }}
+      >
         <MonoRoundedSankey
           theme={theme}
           models={data?.usedModels && data.usedModels.length > 0 ? data.usedModels : []}
           lastRequestTimestamp={data?.lastRequestTimestamp}
+        />
+        <MonoRoundedDonut
+          theme={theme}
+          models={data?.usedModels && data.usedModels.length > 0 ? data.usedModels : []}
         />
       </div>
 
