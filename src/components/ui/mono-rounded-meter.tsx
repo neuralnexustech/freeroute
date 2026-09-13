@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useState } from "react";
+import { ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 interface MonoRoundedMeterProps {
   theme?: "dark" | "light";
-  value?: number; // 0 to 100 (percentage)
+  value?: number; // 0 to 100
   totalRequests?: number;
   successfulRequests?: number;
+  compact?: boolean;
   className?: string;
 }
 
@@ -15,12 +17,13 @@ export function MonoRoundedMeter({
   value = 99.8,
   totalRequests,
   successfulRequests,
+  compact = false,
   className = "",
 }: MonoRoundedMeterProps) {
   const isDark = theme === "dark";
 
-  // Calculate rate from requests if provided, or use value
-  const rate = useMemo(() => {
+  // Calculate rate from requests if provided, or use fallback value
+  const targetRate = useMemo(() => {
     if (totalRequests !== undefined && totalRequests > 0) {
       const succ = successfulRequests !== undefined ? successfulRequests : totalRequests;
       return Math.min(100, Math.max(0, (succ / totalRequests) * 100));
@@ -28,259 +31,152 @@ export function MonoRoundedMeter({
     return Math.min(100, Math.max(0, value));
   }, [value, totalRequests, successfulRequests]);
 
-  const displayRate = rate.toFixed(1);
+  // Animated rate counter for smooth entrance matching the 900ms recharts pie animation
+  const [animatedRate, setAnimatedRate] = useState<number>(0);
+  const [mounted, setMounted] = useState<boolean>(false);
 
-  // Health label
-  const statusLabel = rate >= 99 ? "Optimal Health" : rate >= 95 ? "Normal Load" : "Degraded";
+  useEffect(() => {
+    setMounted(true);
+    let startTimestamp: number | null = null;
+    const duration = 1000; // ms
+    let animFrame: number;
 
-  // Color tokens
-  const cardBg = isDark ? "#121212" : "#ffffff";
-  const cardBorder = isDark ? "#222222" : "#e5e7eb";
-  const canvasBg = isDark ? "#171717" : "#f1f3f5";
-  const textPrimary = isDark ? "#ffffff" : "#000000";
-  const textSecondary = isDark ? "#888888" : "#666666";
-  const badgeBg = isDark ? "rgba(255, 255, 255, 0.08)" : "#e5e7eb";
-  const badgeBorder = isDark ? "rgba(255, 255, 255, 0.15)" : "#d1d5db";
-  const badgeText = isDark ? "#e0e0e0" : "#374151";
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      // Ease out cubic
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      setAnimatedRate(Number((targetRate * easeOut).toFixed(1)));
+      if (progress < 1) {
+        animFrame = requestAnimationFrame(step);
+      } else {
+        setAnimatedRate(Number(targetRate.toFixed(1)));
+      }
+    };
 
-  // Arc track and fill colors
-  const trackStroke = isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.1)";
-  const fillStroke = isDark ? "#ffffff" : "#18181b";
-  const capBg = isDark ? "#171717" : "#f1f3f5";
-  const capBorder = isDark ? "#ffffff" : "#18181b";
+    animFrame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(animFrame);
+  }, [targetRate]);
 
-  // Geometry: 180° semi-circle
-  const cx = 130;
-  const cy = 125;
-  const radius = 68;
-  const strokeWidth = 16;
-  const fullCircumference = 2 * Math.PI * radius; // ~427.26
-  const semiCircumference = Math.PI * radius; // ~213.63
-  const progressArc = Math.max(0, (rate / 100) * semiCircumference);
+  // Data for Recharts Pie (Active vs Remaining)
+  const chartData = useMemo(() => {
+    const active = mounted ? targetRate : 0;
+    const remaining = Math.max(0, 100 - active);
+    return [
+      { name: "Active", value: active },
+      { name: "Remaining", value: remaining },
+    ];
+  }, [targetRate, mounted]);
 
-  // Floating pill cap at leading tip of progress arc
-  const tipAngleRad = Math.PI - (rate / 100) * Math.PI; // from PI (left) to 0 (right)
-  const tipX = cx + radius * Math.cos(tipAngleRad);
-  const tipY = cy - radius * Math.sin(tipAngleRad);
-  const tipRotationDeg = (tipAngleRad * 180) / Math.PI - 90;
+  const displayRate = animatedRate.toFixed(1);
+  const statusLabel = targetRate >= 99 ? "Optimal Health" : targetRate >= 95 ? "Normal Load" : "Degraded";
 
   return (
     <div
-      className={className}
-      style={{
-        width: "100%",
-        maxWidth: "100%",
-        margin: "0 auto",
-        borderRadius: 24,
-        background: cardBg,
-        border: `1px solid ${cardBorder}`,
-        padding: "24px 28px 20px",
-        boxShadow: isDark ? "0 8px 30px rgba(0,0,0,0.5)" : "0 8px 30px rgba(0,0,0,0.06)",
-        fontFamily: "var(--font-sans, system-ui, -apple-system, sans-serif)",
-        color: textPrimary,
-        transition: "background 0.25s, border-color 0.25s",
-      }}
+      className={`relative w-full rounded-[24px] transition-all duration-300 group flex flex-col justify-between overflow-hidden p-4 sm:p-5 ${
+        compact ? "h-[220px] sm:h-[268px]" : "min-h-[290px]"
+      } ${
+        isDark
+          ? "bg-[#181818] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:bg-[#202020]"
+          : "bg-white shadow-[0_4px_20px_rgba(0,0,0,0.04)] border border-neutral-100 text-black hover:shadow-[0_6px_24px_rgba(0,0,0,0.06)]"
+      } ${className}`}
     >
-      {/* 1. Header (SUCCESS RATE, Reliability Badge, 100.0% successful routes) */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+      {/* 1. Header (Authentic Amicro Typography & Speedometer Badge) */}
+      <div className="flex items-center justify-between mb-1">
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <div className="flex items-center gap-2">
             <span
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                color: textSecondary,
-                textTransform: "uppercase",
-              }}
+              className={`text-xs font-semibold tracking-wider uppercase ${
+                isDark ? "text-neutral-400" : "text-neutral-500"
+              }`}
             >
               SUCCESS RATE
             </span>
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                padding: "2px 8px",
-                borderRadius: 12,
-                background: badgeBg,
-                border: `1px solid ${badgeBorder}`,
-                color: badgeText,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-              }}
-            >
-              <span
-                style={{
-                  width: 5,
-                  height: 5,
-                  borderRadius: "50%",
-                  background: rate >= 99 ? "#10b981" : "#f59e0b",
-                }}
-              />
-              Reliability
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-white/10 text-white border border-white/20">
+              Speedometer
             </span>
           </div>
-
-          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>
-              {displayRate}%
-            </span>
-            <span style={{ fontSize: 13, color: textSecondary }}>successful routes</span>
+          <div className="text-xl font-bold tracking-tight tabular-nums mt-0.5 font-sans">
+            {displayRate}% <span className="text-xs font-normal opacity-70">successful routes</span>
           </div>
         </div>
 
-        {/* Status Indicator */}
+        {/* Status Badge */}
         <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            padding: "5px 12px",
-            borderRadius: 10,
-            background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-            border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
-            gap: 6,
-            fontSize: 11.5,
-            color: textSecondary,
-          }}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border ${
+            isDark
+              ? "bg-white/5 border-white/10 text-neutral-300"
+              : "bg-neutral-100 border-neutral-200 text-neutral-700"
+          }`}
         >
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981" }} />
-          Gateway Health
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              targetRate >= 99 ? "bg-emerald-400" : targetRate >= 95 ? "bg-amber-400" : "bg-rose-400"
+            }`}
+          />
+          {statusLabel}
         </div>
       </div>
 
-      {/* 2. Visual Canvas Area */}
+      {/* 2. Main Stage (Exact Amicro Inner Stage with Recharts Semi-Circle & Corner Radius) */}
       <div
-        style={{
-          position: "relative",
-          width: "100%",
-          height: 210,
-          borderRadius: 18,
-          background: canvasBg,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
-        }}
+        className={`relative w-full flex-1 rounded-[14px] overflow-hidden p-2 transition-colors duration-300 flex flex-col items-center justify-center ${
+          isDark ? "bg-[#131313]" : "bg-[#f4f4f6]"
+        }`}
+        style={{ minHeight: compact ? 130 : 150 }}
       >
-        {/* Semi-Circle SVG Meter */}
-        <div style={{ position: "relative", width: 260, height: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg
-            width="260"
-            height="160"
-            viewBox="0 0 260 160"
-            style={{ overflow: "visible" }}
-          >
-            {/* Background 180° Track Arc */}
-            <circle
-              cx={cx}
-              cy={cy}
-              r={radius}
-              fill="none"
-              stroke={trackStroke}
-              strokeWidth={strokeWidth}
+        <ResponsiveContainer width="100%" height={compact ? 120 : 140}>
+          <PieChart>
+            <Pie
+              data={chartData}
+              dataKey="value"
+              cx="50%"
+              cy="70%"
+              startAngle={180}
+              endAngle={0}
+              innerRadius={compact ? 42 : 52}
+              outerRadius={compact ? 58 : 70}
+              cornerRadius={6}
               strokeLinecap="round"
-              strokeDasharray={`${semiCircumference} ${fullCircumference}`}
-              style={{
-                transformOrigin: `${cx}px ${cy}px`,
-                transform: "rotate(180deg)",
-              }}
-            />
+              paddingAngle={4}
+              isAnimationActive={true}
+              animationDuration={900}
+              animationEasing="ease-out"
+            >
+              <Cell fill={isDark ? "#FFFFFF" : "#09090B"} stroke="none" />
+              <Cell fill={isDark ? "rgba(255,255,255,0.1)" : "rgba(9,9,11,0.1)"} stroke="none" />
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
 
-            {/* Active Progress 180° Fill Arc */}
-            <circle
-              cx={cx}
-              cy={cy}
-              r={radius}
-              fill="none"
-              stroke={fillStroke}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-              strokeDasharray={`${progressArc} ${fullCircumference}`}
-              style={{
-                transformOrigin: `${cx}px ${cy}px`,
-                transform: "rotate(180deg)",
-                transition: "stroke-dasharray 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)",
-              }}
-            />
-
-            {/* Floating Pill Cap Indicator at Leading Tip */}
-            {rate > 1 && rate < 99.5 && (
-              <rect
-                x={tipX - 4}
-                y={tipY - 11}
-                width={8}
-                height={22}
-                rx={4}
-                fill={capBg}
-                stroke={capBorder}
-                strokeWidth={2}
-                style={{
-                  transformOrigin: `${tipX}px ${tipY}px`,
-                  transform: `rotate(${tipRotationDeg}deg)`,
-                  transition: "all 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)",
-                }}
-              />
-            )}
-          </svg>
-
-          {/* Centered Numbers inside Semi-Circle */}
-          <div
-            style={{
-              position: "absolute",
-              bottom: 30,
-              left: 0,
-              right: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              pointerEvents: "none",
-            }}
+        {/* Center Floating Value */}
+        <div className="absolute bottom-4 flex flex-col items-center pointer-events-none">
+          <span className="text-lg font-bold tabular-nums font-sans leading-tight">
+            {displayRate}%
+          </span>
+          <span
+            className={`text-[10px] font-mono ${
+              isDark ? "text-neutral-400" : "text-neutral-500"
+            }`}
           >
-            <span
-              style={{
-                fontSize: 26,
-                fontWeight: 800,
-                letterSpacing: "-0.03em",
-                color: textPrimary,
-                lineHeight: 1.1,
-              }}
-            >
-              {displayRate}%
-            </span>
-            <span
-              style={{
-                fontSize: 11.5,
-                fontWeight: 500,
-                color: textSecondary,
-                marginTop: 3,
-              }}
-            >
-              {statusLabel}
-            </span>
-          </div>
+            {statusLabel}
+          </span>
         </div>
       </div>
 
-      {/* 3. Footer (Gateway Reliability | Success Metric) */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginTop: 14,
-          padding: "0 4px",
-          fontSize: 11.5,
-          color: textSecondary,
-        }}
-      >
-        <span style={{ fontWeight: 500 }}>Gateway Reliability</span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }}>
-          Success Metric
+      {/* 3. Footer */}
+      <div className="flex items-center justify-between mt-3 pt-1 border-t border-white/5 text-[11px] font-mono">
+        <span className={isDark ? "text-neutral-400" : "text-neutral-600"}>
+          Rounded Semi-Circle Arc
+        </span>
+        <span className={isDark ? "text-white font-medium" : "text-black font-medium"}>
+          Gauge Meter
         </span>
       </div>
     </div>
   );
 }
+
+// Export default and alias to cover both named imports
+export default MonoRoundedMeter;
+export { MonoRoundedMeter as RoundedMeter };
