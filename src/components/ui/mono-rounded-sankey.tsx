@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { ModelProviderIcon } from "@/components/ModelProviderIcon";
 
 export interface SankeyModel {
   slug: string;
@@ -9,81 +10,164 @@ export interface SankeyModel {
   requests?: number;
   tokens?: number;
   spend?: number;
+  lastUsedAt?: number;
 }
 
 interface MonoRoundedSankeyProps {
   theme?: "dark" | "light";
   models?: SankeyModel[];
-  activeModelSlug?: string;
+  lastRequestTimestamp?: number | null;
   className?: string;
-  forcedMode?: 1 | 2 | "auto";
 }
+
+const INACTIVITY_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes
 
 export function MonoRoundedSankey({
   theme = "dark",
   models = [],
-  activeModelSlug,
+  lastRequestTimestamp,
   className = "",
-  forcedMode = "auto",
 }: MonoRoundedSankeyProps) {
   const isDark = theme === "dark";
 
-  // Mode: "auto", 1, or 2 models
-  const [selectedMode, setSelectedMode] = useState<1 | 2 | "auto">(forcedMode);
-  const [pulseSend, setPulseSend] = useState(false);
-  const [pulseReceive, setPulseReceive] = useState(false);
+  // Last request timestamp tracking
+  const [lastActivity, setLastActivity] = useState<number>(() => {
+    return lastRequestTimestamp || 0;
+  });
 
-  // Periodic subtle sending/receiving animation triggers
+  // Track if gateway is currently idle (> 3 minutes without traffic)
+  const [isIdle, setIsIdle] = useState<boolean>(() => {
+    if (!lastRequestTimestamp) return true;
+    return Date.now() - lastRequestTimestamp > INACTIVITY_THRESHOLD_MS;
+  });
+
+  // Active models currently sending prompts or receiving streams (keyed by model slug)
+  const [activePrompts, setActivePrompts] = useState<Record<string, boolean>>({});
+  const [activeStreams, setActiveStreams] = useState<Record<string, boolean>>({});
+  const [livePulseGateway, setLivePulseGateway] = useState<boolean>(false);
+
+  // Sync with prop updates
   useEffect(() => {
-    const sendInterval = setInterval(() => {
-      setPulseSend(true);
-      setTimeout(() => setPulseSend(false), 1400);
-    }, 2800);
+    if (lastRequestTimestamp && lastRequestTimestamp > lastActivity) {
+      setLastActivity(lastRequestTimestamp);
+      setIsIdle(Date.now() - lastRequestTimestamp > INACTIVITY_THRESHOLD_MS);
+    }
+  }, [lastRequestTimestamp]);
 
-    const recvInterval = setInterval(() => {
-      setPulseReceive(true);
-      setTimeout(() => setPulseReceive(false), 1400);
-    }, 3400);
+  // Periodic check for 3-minute inactivity idle state
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!lastActivity || Date.now() - lastActivity > INACTIVITY_THRESHOLD_MS) {
+        setIsIdle(true);
+      } else {
+        setIsIdle(false);
+      }
+    }, 2000);
+
+    return () => clearInterval(timer);
+  }, [lastActivity]);
+
+  // Listen to REAL Server-Sent Events (SSE) from /api/telemetry/stream
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    let reconnectTimer: NodeJS.Timeout | null = null;
+
+    const handlePayload = (payload: any) => {
+      if (!payload) return;
+      const now = Date.now();
+      const slug = payload.modelSlug || "";
+
+      // Real traffic detected -> update last activity and exit idle
+      setLastActivity(now);
+      setIsIdle(false);
+
+      if (payload.type === "request_start" || payload.phase === "prompt") {
+        if (slug) {
+          setActivePrompts((prev) => ({ ...prev, [slug]: true }));
+          setTimeout(() => {
+            setActivePrompts((prev) => {
+              const next = { ...prev };
+              delete next[slug];
+              return next;
+            });
+          }, 1400);
+        }
+      } else if (payload.type === "request_end" || payload.phase === "stream") {
+        if (slug) {
+          setActiveStreams((prev) => ({ ...prev, [slug]: true }));
+          setTimeout(() => {
+            setActiveStreams((prev) => {
+              const next = { ...prev };
+              delete next[slug];
+              return next;
+            });
+          }, 1600);
+        }
+      } else if (payload.type === "request") {
+        setLivePulseGateway(true);
+        setTimeout(() => setLivePulseGateway(false), 800);
+      }
+    };
+
+    const connectSSE = () => {
+      try {
+        eventSource = new EventSource("/api/telemetry/stream");
+        eventSource.addEventListener("telemetry", (e: MessageEvent) => {
+          try {
+            const data = JSON.parse(e.data);
+            handlePayload(data);
+          } catch {}
+        });
+        eventSource.onerror = () => {
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          reconnectTimer = setTimeout(connectSSE, 3000);
+        };
+      } catch {
+        reconnectTimer = setTimeout(connectSSE, 3000);
+      }
+    };
+
+    connectSSE();
+
+    // Also listen to Cross-tab BroadcastChannel
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        bc = new BroadcastChannel("freeroute-live-telemetry");
+        bc.onmessage = (event) => {
+          handlePayload(event.data);
+        };
+      }
+    } catch {}
 
     return () => {
-      clearInterval(sendInterval);
-      clearInterval(recvInterval);
+      if (eventSource) eventSource.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (bc) bc.close();
     };
   }, []);
 
-  // Determine active models
+  // Determine dynamic active models (1, 2, 3, 4, 5, etc.) based on real usage
   const displayModels = useMemo(() => {
     const fallbackList: SankeyModel[] = [
-      { slug: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "google", requests: 23, tokens: 13853 },
-      { slug: "ling-3.0-flash", name: "Ling 3.0 Flash", provider: "kiosapi", requests: 27, tokens: 138674 },
+      { slug: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "google", requests: 12, tokens: 13853 },
+      { slug: "ling-3.0-flash", name: "Ling 3.0 Flash", provider: "inclusion", requests: 9, tokens: 42100 },
     ];
-    const pool = models.length > 0 ? models : fallbackList;
 
-    let targetCount = 2;
-    if (selectedMode === 1) targetCount = 1;
-    else if (selectedMode === 2) targetCount = 2;
-    else {
-      // Auto: if only 1 model has requests, show 1; otherwise show 2
-      const active = pool.filter((m) => (m.requests ?? 0) > 0);
-      targetCount = active.length === 1 ? 1 : 2;
-    }
+    const sourceList = models.length > 0 ? models : fallbackList;
 
-    if (activeModelSlug) {
-      const found = pool.find((m) => m.slug === activeModelSlug);
-      if (found) {
-        const others = pool.filter((m) => m.slug !== activeModelSlug);
-        return [found, ...others].slice(0, targetCount);
-      }
-    }
+    // Filter to models with requests or recent activity, capped at 5 for clean layout
+    const active = sourceList.filter((m) => (m.requests ?? 0) > 0);
+    const result = (active.length > 0 ? active : sourceList).slice(0, 5);
+    return result;
+  }, [models]);
 
-    return pool.slice(0, targetCount);
-  }, [models, selectedMode, activeModelSlug]);
+  const count = displayModels.length; // 1 to 5
 
-  const model1 = displayModels[0] || { name: "Model 1", slug: "model-1" };
-  const model2 = displayModels[1] || { name: "Model 2", slug: "model-2" };
-  const count = displayModels.length; // 1 or 2
-
-  // Exact color tokens from amicro.vercel.app screenshot
+  // Colors & Themes
   const cardBg = isDark ? "#121212" : "#ffffff";
   const cardBorder = isDark ? "#222222" : "#e5e7eb";
   const canvasBg = isDark ? "#171717" : "#f1f3f5";
@@ -93,16 +177,34 @@ export function MonoRoundedSankey({
   const badgeBorder = isDark ? "rgba(255, 255, 255, 0.15)" : "#d1d5db";
   const badgeText = isDark ? "#e0e0e0" : "#374151";
 
-  // Squircle block colors
-  const blockTop = isDark ? "#eeeeee" : "#1a1a1a";
-  const blockBottom = isDark ? "#888888" : "#555555";
-  const blockRight = isDark ? "#ffffff" : "#000000";
+  // Flow ribbons colors
+  const promptPulseColor = isDark ? "#60a5fa" : "#2563eb";
+  const streamPulseColor = isDark ? "#34d399" : "#059669";
 
-  // Flow band strokes
-  const bandColor = isDark ? "rgba(220, 220, 220, 0.28)" : "rgba(0, 0, 0, 0.18)";
-  const bandActiveColor = isDark ? "rgba(255, 255, 255, 0.65)" : "rgba(0, 0, 0, 0.55)";
-  const sendParticleColor = isDark ? "#60a5fa" : "#2563eb";
-  const receiveParticleColor = isDark ? "#34d399" : "#059669";
+  // Canvas layout dimensions
+  const svgWidth = 600;
+  const svgHeight = 210;
+  const rightNodeX = 532;
+  const rightNodeY = 105;
+
+  // Compute vertical position (y) for each model on the left
+  const modelYPositions = useMemo(() => {
+    if (count <= 1) return [105];
+    const minY = 38;
+    const maxY = 172;
+    return displayModels.map((_, i) => minY + (i * (maxY - minY)) / (count - 1));
+  }, [count, displayModels]);
+
+  // Ribbon stroke thickness based on number of active models
+  const strokeWidth = count === 1 ? 28 : count === 2 ? 22 : count === 3 ? 18 : 14;
+  const nodeSize = count <= 3 ? 48 : 42;
+
+  // Format idle time elapsed text
+  const idleElapsedText = useMemo(() => {
+    if (!lastActivity) return "Idle";
+    const diffMin = Math.floor((Date.now() - lastActivity) / 60000);
+    return diffMin >= 3 ? `${diffMin}m idle` : "Active";
+  }, [lastActivity]);
 
   return (
     <div
@@ -121,7 +223,7 @@ export function MonoRoundedSankey({
         transition: "background 0.25s, border-color 0.25s",
       }}
     >
-      {/* 1. Header (SANKEY FLOW, Transfer Badge, Flow % Routed, Mode Switcher) */}
+      {/* 1. Header (SANKEY FLOW, Dynamic Status Badge, Model Count Info) */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -147,65 +249,58 @@ export function MonoRoundedSankey({
                 color: badgeText,
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 4,
+                gap: 5,
               }}
             >
               <span
                 style={{
-                  width: 5,
-                  height: 5,
+                  width: 6,
+                  height: 6,
                   borderRadius: "50%",
-                  background: pulseSend ? sendParticleColor : pulseReceive ? receiveParticleColor : textSecondary,
+                  background: isIdle ? "#94a3b8" : livePulseGateway ? "#10b981" : "#34d399",
+                  boxShadow: !isIdle ? "0 0 6px #10b981" : "none",
                   transition: "background 0.3s",
                 }}
               />
-              Transfer
+              {isIdle ? "Gateway Idle" : "Transfer Live"}
             </span>
           </div>
 
           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>100%</span>
-            <span style={{ fontSize: 13, color: textSecondary }}>flow routed</span>
+            <span style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>
+              {isIdle ? "0%" : "100%"}
+            </span>
+            <span style={{ fontSize: 13, color: textSecondary }}>
+              {isIdle ? "traffic waiting" : "flow routed"}
+            </span>
           </div>
         </div>
 
-        {/* Dynamic Model Count Switcher */}
+        {/* Dynamic Model & Inactivity Status Indicator */}
         <div
           style={{
             display: "inline-flex",
             alignItems: "center",
-            padding: 3,
+            padding: "5px 12px",
             borderRadius: 10,
             background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
             border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
-            gap: 2,
+            gap: 6,
+            fontSize: 11.5,
+            color: textSecondary,
           }}
         >
-          {(["auto", 1, 2] as const).map((mode) => {
-            const active = selectedMode === mode;
-            const label = mode === "auto" ? "Auto" : mode === 1 ? "1 Model" : "2 Models";
-            return (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setSelectedMode(mode)}
-                style={{
-                  padding: "4px 10px",
-                  fontSize: 11.5,
-                  fontWeight: active ? 600 : 400,
-                  borderRadius: 7,
-                  border: "none",
-                  cursor: "pointer",
-                  background: active ? (isDark ? "rgba(255,255,255,0.14)" : "#ffffff") : "transparent",
-                  color: active ? textPrimary : textSecondary,
-                  boxShadow: active && !isDark ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
+          {isIdle ? (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#eab308" }} />
+              {idleElapsedText} (waiting traffic)
+            </span>
+          ) : (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981" }} />
+              {count} {count === 1 ? "Active Model" : "Active Models"} Routed
+            </span>
+          )}
         </div>
       </div>
 
@@ -214,281 +309,299 @@ export function MonoRoundedSankey({
         style={{
           position: "relative",
           width: "100%",
-          height: 190,
+          height: svgHeight,
           borderRadius: 18,
           background: canvasBg,
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 36px",
           overflow: "hidden",
+          transition: "all 0.3s ease",
         }}
       >
-        {/* Left Side: 1 or 2 Model Squircle Blocks */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            gap: count === 1 ? 0 : 16,
-            zIndex: 3,
-          }}
-        >
-          {/* Block 1 */}
+        {/* ======================= IDLE STATE VIEW (Centered Channel) ======================= */}
+        {isIdle ? (
           <div
-            title={`${model1.name} (${model1.requests ?? 0} requests)`}
             style={{
-              width: 52,
-              height: 52,
-              borderRadius: 16,
-              background: blockTop,
-              boxShadow: isDark ? "0 4px 14px rgba(0,0,0,0.5)" : "0 3px 10px rgba(0,0,0,0.18)",
+              position: "absolute",
+              inset: 0,
               display: "flex",
+              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              position: "relative",
-              cursor: "pointer",
-              transition: "transform 0.2s ease",
+              zIndex: 10,
+              gap: 12,
+              animation: "sankeyFadeIn 0.4s ease-out",
             }}
           >
-            {pulseSend && (
+            {/* Centered Gateway Node with Idle Breathing Radar Waves */}
+            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {/* Radar Wave 1 */}
               <div
                 style={{
                   position: "absolute",
-                  inset: -3,
-                  borderRadius: 19,
-                  border: `2px solid ${sendParticleColor}`,
-                  opacity: 0.85,
-                  animation: "ping 1s cubic-bezier(0,0,0.2,1) infinite",
+                  width: 70,
+                  height: 70,
+                  borderRadius: 24,
+                  border: `2px solid ${isDark ? "rgba(16, 185, 129, 0.35)" : "rgba(16, 185, 129, 0.25)"}`,
+                  animation: "idleRadarPulse 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite",
                 }}
               />
-            )}
-          </div>
+              {/* Radar Wave 2 */}
+              <div
+                style={{
+                  position: "absolute",
+                  width: 70,
+                  height: 70,
+                  borderRadius: 24,
+                  border: `1.5px solid ${isDark ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.15)"}`,
+                  animation: "idleRadarPulse 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite 1.2s",
+                }}
+              />
 
-          {/* Block 2 (Shown only if count === 2) */}
-          {count === 2 && (
-            <div
-              title={`${model2.name} (${model2.requests ?? 0} requests)`}
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: 16,
-                background: blockBottom,
-                boxShadow: isDark ? "0 4px 14px rgba(0,0,0,0.4)" : "0 3px 10px rgba(0,0,0,0.12)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                position: "relative",
-                cursor: "pointer",
-                transition: "transform 0.2s ease",
-              }}
-            >
-              {pulseSend && (
+              {/* Centered freeroute Channel Node */}
+              <div
+                style={{
+                  width: 54,
+                  height: 54,
+                  borderRadius: 18,
+                  background: isDark ? "#ffffff" : "#000000",
+                  boxShadow: isDark ? "0 4px 24px rgba(255,255,255,0.2)" : "0 4px 20px rgba(0,0,0,0.25)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  position: "relative",
+                  zIndex: 2,
+                }}
+              >
                 <div
                   style={{
-                    position: "absolute",
-                    inset: -3,
-                    borderRadius: 19,
-                    border: `2px solid ${sendParticleColor}`,
-                    opacity: 0.85,
-                    animation: "ping 1s cubic-bezier(0,0,0.2,1) infinite",
+                    width: 16,
+                    height: 16,
+                    borderRadius: 5,
+                    background: isDark ? "#121212" : "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
-                />
-              )}
+                >
+                  <div
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: "#10b981",
+                      boxShadow: "0 0 8px #10b981",
+                    }}
+                  />
+                </div>
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* Center SVG: Rounded Flow Bands matching screenshot curvature */}
-        <svg
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            pointerEvents: "none",
-            zIndex: 1,
-          }}
-          viewBox="0 0 600 190"
-          preserveAspectRatio="none"
-        >
-          <defs>
-            <linearGradient id="flowGradient1" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor={isDark ? "#ffffff" : "#1a1a1a"} stopOpacity={isDark ? 0.35 : 0.22} />
-              <stop offset="60%" stopColor={isDark ? "#e0e0e0" : "#333333"} stopOpacity={isDark ? 0.3 : 0.2} />
-              <stop offset="100%" stopColor={isDark ? "#ffffff" : "#000000"} stopOpacity={isDark ? 0.42 : 0.28} />
-            </linearGradient>
-            <linearGradient id="flowGradient2" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor={isDark ? "#999999" : "#555555"} stopOpacity={isDark ? 0.32 : 0.2} />
-              <stop offset="60%" stopColor={isDark ? "#e0e0e0" : "#333333"} stopOpacity={isDark ? 0.3 : 0.2} />
-              <stop offset="100%" stopColor={isDark ? "#ffffff" : "#000000"} stopOpacity={isDark ? 0.42 : 0.28} />
-            </linearGradient>
-          </defs>
+            {/* Subtitle Information */}
+            <div style={{ textAlign: "center", marginTop: 4 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em", color: textPrimary }}>
+                freeroute Gateway · Idle
+              </div>
+              <div style={{ fontSize: 11.5, color: textSecondary, marginTop: 2 }}>
+                Listening on :20129 · Waiting for model traffic
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* ======================= ACTIVE MULTI-MODEL FLOW VIEW ======================= */
+          <>
+            {/* Left Side: Model Squircle Nodes with Real Icons */}
+            {displayModels.map((m, idx) => {
+              const y = modelYPositions[idx];
+              const isSending = !!activePrompts[m.slug];
+              const isReceiving = !!activeStreams[m.slug];
 
-          {count === 1 ? (
-            /* Single Model Flow Band: Clean horizontal rounded ribbon between left and right blocks */
-            <>
-              {/* Background Flow Band */}
-              <path
-                d="M 68 95 C 220 95, 380 95, 532 95"
-                fill="none"
-                stroke={bandColor}
-                strokeWidth={28}
-                strokeLinecap="round"
-              />
-              {/* Active animated sending stream (left to right) */}
-              <path
-                d="M 68 95 C 220 95, 380 95, 532 95"
-                fill="none"
-                stroke={pulseSend ? sendParticleColor : bandActiveColor}
-                strokeWidth={10}
-                strokeLinecap="round"
-                strokeDasharray="14 18"
-                style={{
-                  animation: "sankeyDashFlow 1.6s linear infinite",
-                  opacity: pulseSend ? 0.9 : 0.45,
-                  transition: "stroke 0.3s, opacity 0.3s",
-                }}
-              />
-              {/* Reverse receiving stream (right to left) */}
-              <path
-                d="M 532 95 C 380 95, 220 95, 68 95"
-                fill="none"
-                stroke={pulseReceive ? receiveParticleColor : "transparent"}
-                strokeWidth={7}
-                strokeLinecap="round"
-                strokeDasharray="10 14"
-                style={{
-                  animation: "sankeyDashFlow 1.8s linear infinite",
-                  opacity: pulseReceive ? 0.9 : 0,
-                  transition: "stroke 0.3s, opacity 0.3s",
-                }}
-              />
-            </>
-          ) : (
-            /* 2 Models Converging Flow Bands: Exactly matching screenshot */
-            <>
-              {/* Top Band (from top-left block at y=61 to center-right at y=95) */}
-              <path
-                d="M 68 61 C 210 61, 330 92, 532 95"
-                fill="none"
-                stroke="url(#flowGradient1)"
-                strokeWidth={22}
-                strokeLinecap="round"
-              />
-              {/* Bottom Band (from bottom-left block at y=129 to center-right at y=95) */}
-              <path
-                d="M 68 129 C 210 129, 330 98, 532 95"
-                fill="none"
-                stroke="url(#flowGradient2)"
-                strokeWidth={22}
-                strokeLinecap="round"
-              />
+              return (
+                <div
+                  key={m.slug}
+                  title={`${m.name} (${m.requests ?? 0} reqs, ${m.tokens?.toLocaleString() ?? 0} tokens)`}
+                  style={{
+                    position: "absolute",
+                    left: `${(68 / svgWidth) * 100}%`,
+                    top: `${(y / svgHeight) * 100}%`,
+                    transform: "translate(-50%, -50%)",
+                    width: nodeSize,
+                    height: nodeSize,
+                    borderRadius: 15,
+                    background: isDark ? "#202022" : "#ffffff",
+                    border: `1.5px solid ${isDark ? "#333336" : "#e2e8f0"}`,
+                    boxShadow: isDark ? "0 4px 14px rgba(0,0,0,0.5)" : "0 3px 10px rgba(0,0,0,0.14)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 4,
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {/* Real Model / Provider Icon */}
+                  <div style={{ transform: "scale(1.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <ModelProviderIcon provider={m.provider || ""} name={m.name} />
+                  </div>
 
-              {/* Animated Sending Pulses (Forward) */}
-              <path
-                d="M 68 61 C 210 61, 330 92, 532 95"
-                fill="none"
-                stroke={pulseSend ? sendParticleColor : isDark ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.45)"}
-                strokeWidth={6}
-                strokeLinecap="round"
-                strokeDasharray="8 14"
-                style={{
-                  animation: "sankeyDashFlow 1.6s linear infinite",
-                  opacity: pulseSend ? 0.95 : 0.45,
-                  transition: "stroke 0.3s, opacity 0.3s",
-                }}
-              />
-              <path
-                d="M 68 129 C 210 129, 330 98, 532 95"
-                fill="none"
-                stroke={pulseSend ? sendParticleColor : isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.35)"}
-                strokeWidth={6}
-                strokeLinecap="round"
-                strokeDasharray="8 14"
-                style={{
-                  animation: "sankeyDashFlow 1.9s linear infinite",
-                  opacity: pulseSend ? 0.95 : 0.4,
-                  transition: "stroke 0.3s, opacity 0.3s",
-                }}
-              />
+                  {/* Real Traffic Ping Ring if sending/receiving */}
+                  {isSending && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: -4,
+                        borderRadius: 18,
+                        border: `2px solid ${promptPulseColor}`,
+                        animation: "ping 1s cubic-bezier(0,0,0.2,1) infinite",
+                      }}
+                    />
+                  )}
+                  {isReceiving && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: -4,
+                        borderRadius: 18,
+                        border: `2px solid ${streamPulseColor}`,
+                        animation: "ping 1.1s cubic-bezier(0,0,0.2,1) infinite",
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
 
-              {/* Animated Receiving Responses (Backward from Gateway to Models) */}
-              <path
-                d="M 532 95 C 330 92, 210 61, 68 61"
-                fill="none"
-                stroke={pulseReceive ? receiveParticleColor : "transparent"}
-                strokeWidth={5}
-                strokeLinecap="round"
-                strokeDasharray="6 12"
-                style={{
-                  animation: "sankeyDashFlow 2.1s linear infinite",
-                  opacity: pulseReceive ? 0.9 : 0,
-                  transition: "stroke 0.3s, opacity 0.3s",
-                }}
-              />
-              <path
-                d="M 532 95 C 330 98, 210 129, 68 129"
-                fill="none"
-                stroke={pulseReceive ? receiveParticleColor : "transparent"}
-                strokeWidth={5}
-                strokeLinecap="round"
-                strokeDasharray="6 12"
-                style={{
-                  animation: "sankeyDashFlow 2.3s linear infinite",
-                  opacity: pulseReceive ? 0.9 : 0,
-                  transition: "stroke 0.3s, opacity 0.3s",
-                }}
-              />
-            </>
-          )}
-        </svg>
+            {/* Center Dynamic SVG: Rounded Flow Bands matching exact Amicro curvature */}
+            <svg
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                pointerEvents: "none",
+                zIndex: 1,
+              }}
+              viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+              preserveAspectRatio="none"
+            >
+              <defs>
+                <linearGradient id="sankeyStaticGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor={isDark ? "#ffffff" : "#1a1a1a"} stopOpacity={isDark ? 0.32 : 0.22} />
+                  <stop offset="65%" stopColor={isDark ? "#e0e0e0" : "#444444"} stopOpacity={isDark ? 0.28 : 0.18} />
+                  <stop offset="100%" stopColor={isDark ? "#ffffff" : "#000000"} stopOpacity={isDark ? 0.42 : 0.28} />
+                </linearGradient>
+              </defs>
 
-        {/* Right Side: Destination freeroute Gateway Squircle Block */}
-        <div style={{ display: "flex", alignItems: "center", zIndex: 3 }}>
-          <div
-            title="freeroute AI Gateway"
-            style={{
-              width: 52,
-              height: 52,
-              borderRadius: 16,
-              background: blockRight,
-              boxShadow: isDark
-                ? "0 4px 20px rgba(255,255,255,0.18)"
-                : "0 4px 16px rgba(0,0,0,0.25)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative",
-              flexShrink: 0,
-              cursor: "pointer",
-            }}
-          >
-            {/* Live Gateway Indicator Core */}
+              {displayModels.map((m, idx) => {
+                const y = modelYPositions[idx];
+                const isSending = !!activePrompts[m.slug];
+                const isReceiving = !!activeStreams[m.slug];
+
+                // Cubic Bezier curve from (68, y) to (rightNodeX - 10, 105) so cap hides behind node
+                const endX = rightNodeX - 10;
+                const pathD = `M 68 ${y} C 220 ${y}, 370 ${rightNodeY}, ${endX} ${rightNodeY}`;
+                const reversePathD = `M ${endX} ${rightNodeY} C 370 ${rightNodeY}, 220 ${y}, 68 ${y}`;
+
+                return (
+                  <g key={m.slug}>
+                    {/* Base Static Flow Ribbon (always elegant, zero dummy animations) */}
+                    <path
+                      d={pathD}
+                      fill="none"
+                      stroke="url(#sankeyStaticGrad)"
+                      strokeWidth={strokeWidth}
+                      strokeLinecap="round"
+                    />
+
+                    {/* REAL Sending Pulse (Left to Right) - Only animated during real API request */}
+                    {isSending && (
+                      <path
+                        d={pathD}
+                        fill="none"
+                        stroke={promptPulseColor}
+                        strokeWidth={Math.max(6, strokeWidth * 0.35)}
+                        strokeLinecap="round"
+                        strokeDasharray="12 18"
+                        style={{
+                          animation: "sankeyDashFlow 1.2s linear infinite",
+                          opacity: 0.95,
+                        }}
+                      />
+                    )}
+
+                    {/* REAL Receiving Pulse (Right to Left) - Only animated during real response streaming */}
+                    {isReceiving && (
+                      <path
+                        d={reversePathD}
+                        fill="none"
+                        stroke={streamPulseColor}
+                        strokeWidth={Math.max(6, strokeWidth * 0.35)}
+                        strokeLinecap="round"
+                        strokeDasharray="10 16"
+                        style={{
+                          animation: "sankeyDashFlow 1.4s linear infinite",
+                          opacity: 0.95,
+                        }}
+                      />
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+
+            {/* Right Side: Destination freeroute Gateway Squircle Block */}
             <div
               style={{
-                width: 14,
-                height: 14,
-                borderRadius: 4,
-                background: isDark ? "#121212" : "#ffffff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                position: "absolute",
+                left: `${(rightNodeX / svgWidth) * 100}%`,
+                top: `${(rightNodeY / svgHeight) * 100}%`,
+                transform: "translate(-50%, -50%)",
+                zIndex: 4,
               }}
             >
               <div
+                title="freeroute AI Gateway (Listening on :20129)"
                 style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: pulseSend ? sendParticleColor : pulseReceive ? receiveParticleColor : "#10b981",
-                  boxShadow: `0 0 6px ${pulseSend ? sendParticleColor : "#10b981"}`,
-                  transition: "background 0.3s",
+                  width: 52,
+                  height: 52,
+                  borderRadius: 16,
+                  background: isDark ? "#ffffff" : "#000000",
+                  boxShadow: isDark
+                    ? "0 4px 20px rgba(255,255,255,0.18)"
+                    : "0 4px 16px rgba(0,0,0,0.25)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
                 }}
-              />
+              >
+                {/* Gateway Core Indicator */}
+                <div
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: 4,
+                    background: isDark ? "#121212" : "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: livePulseGateway ? "#3b82f6" : "#10b981",
+                      boxShadow: `0 0 6px ${livePulseGateway ? "#3b82f6" : "#10b981"}`,
+                      transition: "background 0.3s",
+                    }}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Subtle Model Routing Pill Info Row below Canvas */}
@@ -504,18 +617,20 @@ export function MonoRoundedSankey({
         }}
       >
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontWeight: 600 }}>Active Route{count > 1 ? "s" : ""}:</span>
+          <span style={{ fontWeight: 600 }}>Active Channels:</span>
           <span className="mono" style={{ color: textPrimary, fontWeight: 500 }}>
-            {model1.name} {count === 2 ? `+ ${model2.name}` : ""}
+            {isIdle
+              ? "Gateway Idle (Standby)"
+              : displayModels.map((m) => m.name).join(" · ")}
           </span>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: sendParticleColor }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: promptPulseColor }} />
             prompt
           </span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: receiveParticleColor }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: streamPulseColor }} />
             stream
           </span>
         </div>
@@ -533,8 +648,12 @@ export function MonoRoundedSankey({
           color: textSecondary,
         }}
       >
-        <span style={{ fontWeight: 500 }}>Rounded Flow Bands</span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }}>Channel Routing</span>
+        <span style={{ fontWeight: 500 }}>
+          {isIdle ? "Gateway Idle Mode (3m+)" : `Dynamic Flow (${count} Channels)`}
+        </span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }}>
+          Channel Routing
+        </span>
       </div>
 
       {/* Inline Keyframes for Flow Animation */}
@@ -545,6 +664,29 @@ export function MonoRoundedSankey({
           }
           to {
             stroke-dashoffset: 0;
+          }
+        }
+        @keyframes idleRadarPulse {
+          0% {
+            transform: scale(0.9);
+            opacity: 0.7;
+          }
+          50% {
+            opacity: 0.35;
+          }
+          100% {
+            transform: scale(2.4);
+            opacity: 0;
+          }
+        }
+        @keyframes sankeyFadeIn {
+          from {
+            opacity: 0;
+            transform: scale(0.97);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
           }
         }
       `}</style>

@@ -105,11 +105,11 @@ export function useLiveTelemetry(onUpdate: () => void, debounceMs: number = 100)
 /**
  * Broadcast from client (e.g. designer finished a prompt)
  */
-export function notifyClientTelemetry() {
+export function notifyClientTelemetry(payload?: Record<string, any>) {
   try {
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       const channel = new BroadcastChannel("freeroute-live-telemetry");
-      channel.postMessage({ type: "telemetry", timestamp: Date.now() });
+      channel.postMessage({ type: "telemetry", timestamp: Date.now(), ...payload });
       channel.close();
     }
   } catch {}
