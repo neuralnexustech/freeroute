@@ -11,7 +11,7 @@ const MAIN_NAV = [
   { href: "/dashboard/combos", label: "Combos", svg: <><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></> },
   { href: "/dashboard/cli-tools", label: "CLI Tools", svg: <><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" strokeWidth="2.2" /></> },
   { href: "/dashboard/logs", label: "Logs", svg: <path d="M3 12h4l2 6 4-14 2 6h6" /> },
-  { href: "/dashboard/activitys", label: "Activitys", svg: <path d="M18 20V10M12 20V4M6 20v-6" /> },
+  { href: "/dashboard/activities", label: "Activities", svg: <path d="M18 20V10M12 20V4M6 20v-6" /> },
 ];
 
 export function Sidebar() {
@@ -29,8 +29,13 @@ export function Sidebar() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  const isActive = (href: string) =>
-    href === "/dashboard" ? path === "/dashboard" : path === href || path?.startsWith(href + "/");
+  const isActive = (href: string) => {
+    if (href === "/dashboard") return path === "/dashboard";
+    if (href === "/dashboard/activities") {
+      return path === "/dashboard/activities" || path === "/dashboard/activitys" || path === "/dashboard/insights";
+    }
+    return path === href || path?.startsWith(href + "/");
+  };
 
   return (
     <aside className="sidebar" id="app-sidebar" aria-label="Main Navigation">
