@@ -58,21 +58,37 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    const totalSpend = totalSpendAgg._sum.cost ?? 0;
-    const promptTokens = totalTokensAgg._sum.promptTokens ?? 0;
-    const completionTokens = totalTokensAgg._sum.completionTokens ?? 0;
-    const totalTokens = promptTokens + completionTokens;
-    const totalRequests = logs.length;
-
     // 2. Map catalog models by slug
-    const catalogMap = new Map<string, { displayName: string; providerName: string; providerSlug: string }>();
+    const catalogMap = new Map<string, { displayName: string; providerName: string; providerSlug: string; inputPrice: number; outputPrice: number }>();
     for (const m of allCatalogModels) {
       catalogMap.set(m.slug, {
         displayName: m.displayName,
         providerName: m.provider.name,
         providerSlug: m.provider.slug,
+        inputPrice: m.inputPrice,
+        outputPrice: m.outputPrice,
       });
     }
+
+    // Auto backfill any existing zero-cost logs using current model prices
+    for (const l of logs) {
+      if (l.cost <= 0 && (l.promptTokens > 0 || l.completionTokens > 0)) {
+        const cat = catalogMap.get(l.modelSlug);
+        if (cat && (cat.inputPrice > 0 || cat.outputPrice > 0)) {
+          const c = (l.promptTokens / 1_000_000) * cat.inputPrice + (l.completionTokens / 1_000_000) * cat.outputPrice;
+          if (c > 0) {
+            l.cost = c;
+            prisma.requestLog.update({ where: { id: l.id }, data: { cost: c } }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    const totalSpend = logs.reduce((acc, l) => acc + (l.cost || 0), 0);
+    const promptTokens = totalTokensAgg._sum.promptTokens ?? 0;
+    const completionTokens = totalTokensAgg._sum.completionTokens ?? 0;
+    const totalTokens = promptTokens + completionTokens;
+    const totalRequests = logs.length;
 
     // 3. Aggregate usage by model slug
     const usageByModel = new Map<

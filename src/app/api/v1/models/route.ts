@@ -28,6 +28,55 @@ export async function GET() {
     /* fall back gracefully */
   }
 
+  // Aggregate spend from RequestLog
+  const logs = await prisma.requestLog.findMany({
+    select: {
+      modelId: true,
+      modelSlug: true,
+      promptTokens: true,
+      completionTokens: true,
+      cost: true,
+    },
+  });
+
+  const priceMap = new Map<string, { inputPrice: number; outputPrice: number }>();
+  for (const m of models) {
+    priceMap.set(m.id, { inputPrice: m.inputPrice, outputPrice: m.outputPrice });
+    priceMap.set(m.slug, { inputPrice: m.inputPrice, outputPrice: m.outputPrice });
+  }
+
+  const spendBySlug = new Map<string, number>();
+  const spendById = new Map<string, number>();
+  const requestsBySlug = new Map<string, number>();
+  const requestsById = new Map<string, number>();
+  const tokensBySlug = new Map<string, number>();
+  const tokensById = new Map<string, number>();
+
+  for (const l of logs) {
+    let cost = l.cost ?? 0;
+    const pt = l.promptTokens ?? 0;
+    const ct = l.completionTokens ?? 0;
+    const totTok = pt + ct;
+
+    if (cost <= 0 && totTok > 0) {
+      const p = (l.modelId ? priceMap.get(l.modelId) : null) || priceMap.get(l.modelSlug);
+      if (p && (p.inputPrice > 0 || p.outputPrice > 0)) {
+        cost = (pt / 1_000_000) * p.inputPrice + (ct / 1_000_000) * p.outputPrice;
+      }
+    }
+
+    if (l.modelId) {
+      spendById.set(l.modelId, (spendById.get(l.modelId) || 0) + cost);
+      requestsById.set(l.modelId, (requestsById.get(l.modelId) || 0) + 1);
+      tokensById.set(l.modelId, (tokensById.get(l.modelId) || 0) + totTok);
+    }
+    if (l.modelSlug) {
+      spendBySlug.set(l.modelSlug, (spendBySlug.get(l.modelSlug) || 0) + cost);
+      requestsBySlug.set(l.modelSlug, (requestsBySlug.get(l.modelSlug) || 0) + 1);
+      tokensBySlug.set(l.modelSlug, (tokensBySlug.get(l.modelSlug) || 0) + totTok);
+    }
+  }
+
   const comboEntries = combos.map((c) => ({
     id: c.name,
     modelId: c.id,
@@ -48,34 +97,46 @@ export async function GET() {
     isCombo: true,
     strategy: c.strategy,
     targetCount: c.targets.length,
+    spend: Math.round((spendBySlug.get(c.name) ?? 0) * 1_000_000) / 1_000_000,
+    requests: requestsBySlug.get(c.name) ?? 0,
+    tokens: tokensBySlug.get(c.name) ?? 0,
   }));
 
-  const modelEntries = models.map((m) => ({
-    id: m.slug,
-    modelId: m.id,
-    object: "model",
-    created: Math.floor(m.createdAt.getTime() / 1000),
-    owned_by: m.provider.slug,
-    permission: [],
-    root: m.slug,
-    parent: null,
-    displayName: m.displayName,
-    provider: m.provider,
-    contextWindow: m.contextWindow,
-    inputPrice: m.inputPrice,
-    outputPrice: m.outputPrice,
-    modalities: m.modalities,
-    enabled: m.enabled,
-    status: m.status,
-    toksPerSec: m.toksPerSec,
-    latencyMs: m.latencyMs,
-    isCombo: false,
-    ttftMs:
-      bench[m.id]?.ttftMs ??
-      (m as unknown as { ttftMs: number | null }).ttftMs ??
-      null,
-    httpStatus: bench[m.id]?.httpStatus ?? null,
-  }));
+  const modelEntries = models.map((m) => {
+    const mSpend = (m.id && spendById.has(m.id) ? spendById.get(m.id) : null) ?? spendBySlug.get(m.slug) ?? 0;
+    const mReqs = (m.id && requestsById.has(m.id) ? requestsById.get(m.id) : null) ?? requestsBySlug.get(m.slug) ?? 0;
+    const mToks = (m.id && tokensById.has(m.id) ? tokensById.get(m.id) : null) ?? tokensBySlug.get(m.slug) ?? 0;
+
+    return {
+      id: m.slug,
+      modelId: m.id,
+      object: "model",
+      created: Math.floor(m.createdAt.getTime() / 1000),
+      owned_by: m.provider.slug,
+      permission: [],
+      root: m.slug,
+      parent: null,
+      displayName: m.displayName,
+      provider: m.provider,
+      contextWindow: m.contextWindow,
+      inputPrice: m.inputPrice,
+      outputPrice: m.outputPrice,
+      modalities: m.modalities,
+      enabled: m.enabled,
+      status: m.status,
+      toksPerSec: m.toksPerSec,
+      latencyMs: m.latencyMs,
+      isCombo: false,
+      spend: Math.round(mSpend * 1_000_000) / 1_000_000,
+      requests: mReqs,
+      tokens: mToks,
+      ttftMs:
+        bench[m.id]?.ttftMs ??
+        (m as unknown as { ttftMs: number | null }).ttftMs ??
+        null,
+      httpStatus: bench[m.id]?.httpStatus ?? null,
+    };
+  });
 
   return NextResponse.json({
     object: "list",

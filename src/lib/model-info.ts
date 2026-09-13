@@ -119,6 +119,7 @@ export async function resolveViaOpenRouter(modelSlug: string): Promise<ResolvedM
       const r = await fetch("https://openrouter.ai/api/v1/models", {
         headers: { "User-Agent": "freeroute/1.0" },
         next: { revalidate: 3600 },
+        signal: AbortSignal.timeout(5000),
       });
       if (r.ok) {
         const json = await r.json().catch(() => ({}));
@@ -188,6 +189,7 @@ export async function resolveViaWebSearch(modelSlug: string, providerName = ""):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         Accept: "text/html,application/xhtml+xml",
       },
+      signal: AbortSignal.timeout(2000),
     });
 
     if (!r.ok) return null;
@@ -339,15 +341,19 @@ export async function resolveModelSpecs(
     return resolveViaHeuristics(modelSlug, providerSlug);
   }
 
-  // Default "cascade" (Option 3 -> Option 1 -> Option 2 -> Option 4)
+  // Default "cascade" (Option 3 Offline -> Option 1 OpenRouter -> Option 4 Heuristics -> Option 2 Web Search)
   const offline = resolveViaOfflineRegistry(modelSlug);
   if (offline) return offline;
 
   const openrouter = await resolveViaOpenRouter(modelSlug);
   if (openrouter) return openrouter;
 
+  // Heuristics are instant (0ms) and accurately resolve family specs
+  const heur = resolveViaHeuristics(modelSlug, providerSlug);
+  if (heur && heur.confidence >= 0.7) return heur;
+
   const web = await resolveViaWebSearch(modelSlug, providerSlug);
   if (web) return web;
 
-  return resolveViaHeuristics(modelSlug, providerSlug);
+  return heur;
 }
