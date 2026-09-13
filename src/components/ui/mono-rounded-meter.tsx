@@ -82,23 +82,18 @@ export function MonoRoundedMeter({
       } ${className}`}
     >
       {/* 1. Header (Authentic Amicro Typography & Speedometer Badge) */}
-      <div className="flex items-center justify-between mb-1">
-        <div>
-          <div className="flex items-center gap-2">
-            <span
-              className={`text-xs font-semibold tracking-wider uppercase ${
-                isDark ? "text-neutral-400" : "text-neutral-500"
-              }`}
-            >
-              SUCCESS RATE
-            </span>
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-white/10 text-white border border-white/20">
-              Speedometer
-            </span>
-          </div>
-          <div className="text-xl font-bold tracking-tight tabular-nums mt-0.5 font-sans">
-            {displayRate}% <span className="text-xs font-normal opacity-70">successful routes</span>
-          </div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span
+            className={`text-xs font-semibold tracking-wider uppercase ${
+              isDark ? "text-neutral-400" : "text-neutral-500"
+            }`}
+          >
+            SUCCESS RATE
+          </span>
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-white/10 text-white border border-white/20">
+            Speedometer
+          </span>
         </div>
 
         {/* Status Badge */}
@@ -111,10 +106,10 @@ export function MonoRoundedMeter({
         >
           <span
             className={`w-1.5 h-1.5 rounded-full ${
-              targetRate >= 99 ? "bg-emerald-400" : targetRate >= 95 ? "bg-amber-400" : "bg-rose-400"
+              targetRate >= 99 ? "bg-emerald-400" : targetRate >= 95 ? "bg-amber-400" : "bg-sky-400"
             }`}
           />
-          {statusLabel}
+          Live
         </div>
       </div>
 
@@ -123,19 +118,19 @@ export function MonoRoundedMeter({
         className={`relative w-full flex-1 rounded-[14px] overflow-hidden p-2 transition-colors duration-300 flex flex-col items-center justify-center ${
           isDark ? "bg-[#131313]" : "bg-[#f4f4f6]"
         }`}
-        style={{ minHeight: compact ? 130 : 150 }}
+        style={{ minHeight: compact ? 140 : 160 }}
       >
-        <ResponsiveContainer width="100%" height={compact ? 120 : 140}>
+        <ResponsiveContainer width="100%" height={compact ? 130 : 150}>
           <PieChart>
             <Pie
               data={chartData}
               dataKey="value"
               cx="50%"
-              cy="70%"
+              cy="72%"
               startAngle={180}
               endAngle={0}
-              innerRadius={compact ? 42 : 52}
-              outerRadius={compact ? 58 : 70}
+              innerRadius={compact ? 44 : 54}
+              outerRadius={compact ? 60 : 72}
               cornerRadius={6}
               strokeLinecap="round"
               paddingAngle={4}
@@ -149,29 +144,25 @@ export function MonoRoundedMeter({
           </PieChart>
         </ResponsiveContainer>
 
-        {/* Center Floating Value */}
-        <div className="absolute bottom-4 flex flex-col items-center pointer-events-none">
-          <span className="text-lg font-bold tabular-nums font-sans leading-tight">
+        {/* Center of Meter Floating Typography */}
+        <div
+          className="absolute flex flex-col items-center justify-center pointer-events-none"
+          style={{
+            top: "54%",
+            transform: "translateY(-20%)",
+          }}
+        >
+          <span className="text-2xl sm:text-3xl font-bold tracking-tight tabular-nums font-sans leading-none">
             {displayRate}%
           </span>
           <span
-            className={`text-[10px] font-mono ${
+            className={`text-xs font-medium tracking-wide mt-1 capitalize ${
               isDark ? "text-neutral-400" : "text-neutral-500"
             }`}
           >
-            {statusLabel}
+            successful
           </span>
         </div>
-      </div>
-
-      {/* 3. Footer */}
-      <div className="flex items-center justify-between mt-3 pt-1 border-t border-white/5 text-[11px] font-mono">
-        <span className={isDark ? "text-neutral-400" : "text-neutral-600"}>
-          Rounded Semi-Circle Arc
-        </span>
-        <span className={isDark ? "text-white font-medium" : "text-black font-medium"}>
-          Gauge Meter
-        </span>
       </div>
     </div>
   );
