@@ -81,7 +81,7 @@ export function MonoRoundedMeter({
         transition: "background 0.25s, border-color 0.25s",
       }}
     >
-      {/* 1. Header (ARC METER, Speedometer Badge, 99.8% success rate) */}
+      {/* 1. Header (SUCCESS RATE, Reliability Badge, 100.0% successful routes) */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -94,7 +94,7 @@ export function MonoRoundedMeter({
                 textTransform: "uppercase",
               }}
             >
-              ARC METER
+              SUCCESS RATE
             </span>
             <span
               style={{
@@ -110,7 +110,15 @@ export function MonoRoundedMeter({
                 gap: 5,
               }}
             >
-              Speedometer
+              <span
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: "50%",
+                  background: rate >= 99 ? "#10b981" : "#f59e0b",
+                }}
+              />
+              Reliability
             </span>
           </div>
 
@@ -118,7 +126,7 @@ export function MonoRoundedMeter({
             <span style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>
               {displayRate}%
             </span>
-            <span style={{ fontSize: 13, color: textSecondary }}>success rate</span>
+            <span style={{ fontSize: 13, color: textSecondary }}>successful routes</span>
           </div>
         </div>
 
@@ -256,7 +264,7 @@ export function MonoRoundedMeter({
         </div>
       </div>
 
-      {/* 3. Footer (Rounded Semi-Circle Arc | Gauge Meter) */}
+      {/* 3. Footer (Gateway Reliability | Success Metric) */}
       <div
         style={{
           display: "flex",
@@ -268,9 +276,9 @@ export function MonoRoundedMeter({
           color: textSecondary,
         }}
       >
-        <span style={{ fontWeight: 500 }}>Rounded Semi-Circle Arc</span>
+        <span style={{ fontWeight: 500 }}>Gateway Reliability</span>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }}>
-          Gauge Meter
+          Success Metric
         </span>
       </div>
     </div>
