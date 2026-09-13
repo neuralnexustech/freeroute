@@ -114,8 +114,8 @@ export function extractFilesFromRawTurn(
     } catch {}
   }
 
-  // 1. Check explicit <file name="filename.ext">...</file>
-  const fileTagRegex = /<file\s+name="([^"]+)">([\s\S]*?)<\/file>/gi;
+  // 1. Check explicit <file name="filename.ext"> or <file path="...">...</file>
+  const fileTagRegex = /<file\s+(?:name|path|filename)=["']([^"']+)["'][^>]*>([\s\S]*?)<\/file>/gi;
   let m: RegExpExecArray | null;
   while ((m = fileTagRegex.exec(rawContent)) !== null) {
     const name = m[1].trim();
@@ -580,15 +580,16 @@ export function usePlaygroundChat(options: Options = {}) {
         const project = extractProject(raw) ?? extractFencedProject(raw);
         if (project) {
           const fw = detectFramework(project.files, project.title);
+          const htmlFile = project.files.find((f) => f.path === "index.html" || f.path.endsWith(".html"));
           setArtifact({
             title: project.title,
-            html: "",
+            html: htmlFile ? htmlFile.content : "",
             streaming: false,
             files: project.files,
             framework: fw,
           });
           if (project.files.length > 0) {
-            setSelectedFile(project.files[0].path);
+            setSelectedFile(htmlFile ? htmlFile.path : project.files[0].path);
           }
           break;
         }
@@ -596,6 +597,28 @@ export function usePlaygroundChat(options: Options = {}) {
         const found = extractArtifact(raw) ?? extractFencedArtifact(raw);
         if (found) {
           setArtifact({ title: found.title, html: found.html, streaming: false });
+          break;
+        }
+
+        // Fallback: check extractFilesFromRawTurn for models using loose <file> tags
+        const rawTurnFiles = extractFilesFromRawTurn(raw, new Map());
+        if (rawTurnFiles.length > 0) {
+          const projFiles: ProjectFile[] = rawTurnFiles.map((tf) => ({
+            path: tf.name,
+            content: tf.content,
+          }));
+          const htmlFile = rawTurnFiles.find((f) => f.name === "index.html" || f.name.endsWith(".html"));
+          const fw = detectFramework(projFiles, "Web Project");
+          setArtifact({
+            title: "Web Project",
+            html: htmlFile ? htmlFile.content : "",
+            streaming: false,
+            files: projFiles,
+            framework: fw,
+          });
+          if (projFiles.length > 0) {
+            setSelectedFile(htmlFile ? htmlFile.name : projFiles[0].path);
+          }
           break;
         }
 
@@ -714,47 +737,54 @@ export function usePlaygroundChat(options: Options = {}) {
           if (projectAcc.includes("</project>")) {
             projectMode = false;
             const projectContent = projectAcc.replace(/<\/project>[\s\S]*$/, "");
-            const fileRe = /<file\s+path="([^"]*)">([\s\S]*?)<\/file>/gi;
+            const fileRe = /<file\s+(?:path|name|filename)=["']([^"']+)["'][^>]*>([\s\S]*?)<\/file>/gi;
             let fm: RegExpExecArray | null;
             while ((fm = fileRe.exec(projectContent)) !== null) {
-              projectFiles.push({ path: fm[1], content: fm[2].trim() });
+              projectFiles.push({ path: fm[1].trim(), content: fm[2].trim() });
             }
             const fw = detectFramework(projectFiles, artifactTitle);
+            const htmlFile = projectFiles.find((f) => f.path === "index.html" || f.path.endsWith(".html"));
             setArtifact({
               title: artifactTitle,
-              html: "",
+              html: htmlFile ? htmlFile.content : "",
               streaming: false,
               files: projectFiles,
               framework: fw,
             });
             if (projectFiles.length > 0) {
-              setSelectedFile(projectFiles[0].path);
+              setSelectedFile(htmlFile ? htmlFile.path : projectFiles[0].path);
             }
           }
           return;
         }
 
-        const projectOpen = delta.match(/<project\s+[^>]*title="([^"]*)"[^>]*>/i);
+        const projectOpen = delta.match(/<project(?:\s+[^>]*)?>/i);
         if (projectOpen && !accHtml) {
           projectMode = true;
           projectAcc = delta;
-          artifactTitle = projectOpen[1] || "Project";
+          const tm = delta.match(/title="([^"]*)"/i);
+          artifactTitle = tm ? tm[1] : "Project";
           setArtifact({ title: artifactTitle, html: "", streaming: true, files: [], framework: "html" });
           onArtifactDetectedRef.current?.();
           return;
         }
 
         const combinedText = accText + delta;
-        if (!accHtml && /<project\s+[^>]*title="/i.test(combinedText)) {
-          const m = combinedText.match(/<project\s+[^>]*title="([^"]*)"[^>]*>/i);
-          if (m) {
+        if (!accHtml && /<project(?:\s+[^>]*)?>/i.test(combinedText)) {
+          const m = combinedText.match(/<project(?:\s+[^>]*)?>/i);
+          if (m && m.index !== undefined) {
             projectMode = true;
-            projectAcc = combinedText.slice(combinedText.indexOf("<project"));
-            artifactTitle = m[1] || "Project";
+            projectAcc = combinedText.slice(m.index);
+            const tm = m[0].match(/title="([^"]*)"/i);
+            artifactTitle = tm ? tm[1] : "Project";
             setArtifact({ title: artifactTitle, html: "", streaming: true, files: [], framework: "html" });
             onArtifactDetectedRef.current?.();
             return;
           }
+        }
+
+        if (mode === "designer" && !projectMode && /<file\s+(?:name|path|filename)=/i.test(combinedText)) {
+          onArtifactDetectedRef.current?.();
         }
 
         for (const evt of parser.feed(delta)) {
@@ -930,6 +960,30 @@ export function usePlaygroundChat(options: Options = {}) {
             return Array.from(map.values());
           });
           setActiveWorkspaceFile(turnFiles[0]);
+
+          // Always ensure artifact state is synced with project files!
+          const projFiles: ProjectFile[] = turnFiles.map((tf) => ({
+            path: tf.name,
+            content: tf.content,
+          }));
+          const htmlFile = turnFiles.find((f) => f.name === "index.html" || f.name.endsWith(".html"));
+          const fw = detectFramework(projFiles, artifactTitle || "Web Project");
+          setArtifact({
+            title: artifactTitle || (htmlFile ? "Web Project" : "Project"),
+            html: htmlFile ? htmlFile.content : (accHtml || ""),
+            streaming: false,
+            files: projFiles,
+            framework: fw,
+          });
+          if (projFiles.length > 0) {
+            setSelectedFile((prev) => {
+              if (prev && projFiles.some((f) => f.path === prev)) return prev;
+              return htmlFile ? htmlFile.name : projFiles[0].path;
+            });
+          }
+          if (mode === "designer") {
+            onArtifactDetectedRef.current?.();
+          }
         }
 
         const totalCharLen = accText.length + accHtml.length + projectAcc.length;

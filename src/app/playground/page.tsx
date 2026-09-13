@@ -74,14 +74,14 @@ export default function PlaygroundPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isStreaming]);
 
-  // If in designer mode and artifact arrives, ensure right panel is open
+  // If in designer mode and artifact arrives or workspace files exist, ensure right panel is open
   useEffect(() => {
-    if (mode === "designer" && artifact) {
+    if (mode === "designer" && (artifact || (workspaceFiles && workspaceFiles.length > 0))) {
       setRightPanelOpen(true);
     }
-  }, [mode, artifact]);
+  }, [mode, artifact, workspaceFiles]);
 
-  // Convert artifact to project format if multi-file
+  // Convert artifact or workspace files to project format if multi-file
   const projectData = React.useMemo(() => {
     if (artifact?.files && artifact.files.length > 0) {
       const filesMap: Record<string, string> = {};
@@ -93,8 +93,18 @@ export default function PlaygroundPage() {
         files: filesMap,
       };
     }
+    if (workspaceFiles && workspaceFiles.length > 0) {
+      const filesMap: Record<string, string> = {};
+      for (const f of workspaceFiles) {
+        filesMap[f.name] = f.content;
+      }
+      return {
+        title: "Design Project",
+        files: filesMap,
+      };
+    }
     return null;
-  }, [artifact]);
+  }, [artifact, workspaceFiles]);
 
   const activeRoom = rooms.find((r) => r.id === activeRoomId);
 
