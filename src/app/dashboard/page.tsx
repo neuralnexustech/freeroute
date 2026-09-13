@@ -56,6 +56,19 @@ interface OverviewApiResponse {
     avgWeekSpend: number;
     totalTokens: number;
     totalSpend: number;
+    monthName?: string;
+    year?: number;
+    monthActivity?: Array<{
+      day: number;
+      date: string;
+      tokens: number;
+      requests: number;
+      spend: number;
+      level: number;
+      isToday: boolean;
+      isFuture: boolean;
+      dayOfWeek: number;
+    }>;
   };
   apiKeys: Array<{
     id: string;
@@ -90,6 +103,7 @@ function formatCleanTitle(slug: string, rawName?: string): string {
 
 export default function OverviewPage() {
   const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [metric, setMetric] = useState<Metric>("tokens");
   const [range, setRange] = useState("Last 7 Days");
   const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
@@ -202,38 +216,66 @@ export default function OverviewPage() {
     ];
   }, [maxDayVal, metric]);
 
-  // Heatmap matrix
-  const heatmapWeeks = 52;
-  const heatmapMatrix = useMemo(() => {
-    const weeks: Array<Array<{ date: string; level: number; count: number }>> = [];
-    const now = new Date(2026, 8, 7);
-
-    for (let w = 0; w < heatmapWeeks; w++) {
-      const days: Array<{ date: string; level: number; count: number }> = [];
-      for (let d = 0; d < 7; d++) {
-        const offset = (heatmapWeeks - 1 - w) * 7 + (6 - d);
-        const cellDate = new Date(now.getTime() - offset * 86400000);
-        const dateStr = cellDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-
-        let level = 0;
-        let count = 0;
-
-        if (w === 51) {
-          if (d === 0) { level = 2; count = 31; }
-          if (d === 1) { level = 4; count = 109; }
-          if (d === 2) { level = 3; count = 6; }
-        }
-
-        days.push({ date: dateStr, level, count });
-      }
-      weeks.push(days);
+  // Current Month activity calendar grid
+  const monthActivityData = useMemo(() => {
+    if (data?.activity?.monthActivity && data.activity.monthActivity.length > 0) {
+      return data.activity.monthActivity;
     }
-    return weeks;
-  }, [data]);
+    // Fallback if data is loading
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth(), i + 1);
+      return {
+        day: i + 1,
+        date: d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        tokens: 0,
+        requests: 0,
+        spend: 0,
+        level: 0,
+        isToday: i + 1 === now.getDate(),
+        isFuture: i + 1 > now.getDate(),
+        dayOfWeek: d.getDay(),
+      };
+    });
+  }, [data?.activity?.monthActivity]);
 
-  const monthLabels = [
-    "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
-  ];
+  // Calendar slots: Monday-first (0=Mon, 1=Tue, ..., 6=Sun)
+  const monthCalendarSlots = useMemo(() => {
+    if (monthActivityData.length === 0) return [];
+    const firstDay = monthActivityData[0];
+    const firstDayIndex = (firstDay.dayOfWeek + 6) % 7;
+    const slots: Array<{
+      type: "empty" | "day";
+      day?: number;
+      date?: string;
+      tokens?: number;
+      requests?: number;
+      spend?: number;
+      level?: number;
+      isToday?: boolean;
+      isFuture?: boolean;
+    }> = [];
+
+    // Leading empty slots for starting day alignment
+    for (let i = 0; i < firstDayIndex; i++) {
+      slots.push({ type: "empty" });
+    }
+
+    // Days of the month
+    for (const item of monthActivityData) {
+      slots.push({
+        type: "day",
+        ...item,
+      });
+    }
+
+    return slots;
+  }, [monthActivityData]);
+
+  const currentMonthDisplay = data?.activity?.monthName 
+    ? `${data.activity.monthName} ${data?.activity?.year ?? new Date().getFullYear()}`
+    : new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   return (
     <div style={{ maxWidth: 1240, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24, paddingBottom: 40, position: "relative" }}>
@@ -730,181 +772,295 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      {/* ROUTE FLOW & SUCCESS RATE METER */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-          gap: 16,
-          width: "100%",
-          margin: "8px 0",
-        }}
-      >
+      {/* 1. ROUTE FLOW (SET FULL WIDTH) */}
+      <div style={{ width: "100%", margin: "4px 0 8px" }}>
         <MonoRoundedSankey
           theme={theme}
           models={data?.usedModels && data.usedModels.length > 0 ? data.usedModels : []}
           lastRequestTimestamp={data?.lastRequestTimestamp}
         />
+      </div>
+
+      {/* 2. ACTIVITY (THIS MONTH) & SUCCESS RATE (SIDE-BY-SIDE) */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
+          gap: 16,
+          width: "100%",
+          alignItems: "stretch",
+          margin: "8px 0 12px",
+        }}
+      >
+        {/* Left Card: ACTIVITY (THIS MONTH CALENDAR HEATMAP) */}
+        <div
+          className="card"
+          style={{
+            background: isDark ? "#121212" : "#ffffff",
+            border: `1px solid ${isDark ? "#222222" : "#e5e7eb"}`,
+            borderRadius: 24,
+            padding: "24px 28px 20px",
+            boxShadow: isDark ? "0 8px 30px rgba(0,0,0,0.5)" : "0 8px 30px rgba(0,0,0,0.06)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            transition: "background 0.25s, border-color 0.25s",
+          }}
+        >
+          <div>
+            {/* Activity Card Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      color: "var(--text-secondary)",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    ACTIVITY
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: "2px 8px",
+                      borderRadius: 12,
+                      background: isDark ? "rgba(255, 255, 255, 0.08)" : "#e5e7eb",
+                      border: `1px solid ${isDark ? "rgba(255, 255, 255, 0.15)" : "#d1d5db"}`,
+                      color: isDark ? "#e0e0e0" : "#374151",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: "50%",
+                        background: "#38bdf8",
+                        boxShadow: "0 0 6px #38bdf8",
+                      }}
+                    />
+                    {currentMonthDisplay}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <span style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>
+                    {metric === "spend"
+                      ? `$${(data?.activity?.totalSpend ?? 0).toFixed(2)}`
+                      : metric === "requests"
+                      ? `${(data?.requests ?? 0).toLocaleString()}`
+                      : `${(data?.activity?.totalTokens ?? 0).toLocaleString()}`}
+                  </span>
+                  <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                    {metric === "spend" ? "spent this month" : metric === "requests" ? "requests this month" : "tokens this month"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Status indicator badge */}
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  padding: "5px 12px",
+                  borderRadius: 10,
+                  background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                  gap: 6,
+                  fontSize: 11.5,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981" }} />
+                {data?.activity?.longestStreak ?? "1 day"} streak
+              </div>
+            </div>
+
+            {/* Metrics Summary Row */}
+            <div style={{ display: "flex", gap: 28, marginBottom: 18, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", marginBottom: 2 }}>Streak</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+                  {data?.activity?.longestStreak ?? "1 day"}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", marginBottom: 2 }}>Avg / day</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+                  {metric === "spend"
+                    ? `$${(data?.activity?.avgDaySpend ?? 0).toFixed(4)}`
+                    : `${(data?.activity?.avgDayTokens ?? 0).toLocaleString()}`}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", marginBottom: 2 }}>Avg / week</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+                  {metric === "spend"
+                    ? `$${(data?.activity?.avgWeekSpend ?? 0).toFixed(3)}`
+                    : `${(data?.activity?.avgWeekTokens ?? 0).toLocaleString()}`}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", marginBottom: 2 }}>Total Month</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+                  {metric === "spend"
+                    ? `$${(data?.activity?.totalSpend ?? 0).toFixed(2)}`
+                    : `${(data?.activity?.totalTokens ?? 0).toLocaleString()}`}
+                </div>
+              </div>
+            </div>
+
+            {/* Calendar Weekday Header */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(7, 1fr)",
+                gap: 6,
+                marginBottom: 6,
+                textAlign: "center",
+                fontSize: 11,
+                fontWeight: 600,
+                color: "var(--text-tertiary)",
+              }}
+            >
+              <span>Mon</span>
+              <span>Tue</span>
+              <span>Wed</span>
+              <span>Thu</span>
+              <span>Fri</span>
+              <span>Sat</span>
+              <span>Sun</span>
+            </div>
+
+            {/* Calendar Slots Grid (Only This Month) */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(7, 1fr)",
+                gap: 6,
+              }}
+            >
+              {monthCalendarSlots.map((slot, idx) => {
+                if (slot.type === "empty") {
+                  return <div key={`empty-${idx}`} style={{ height: 32 }} />;
+                }
+
+                // Authentic Intensity Colors
+                let bg = isDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.04)";
+                let textColor = isDark ? "#71717a" : "#a1a1aa";
+                let borderStyle = `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`;
+
+                if (slot.level === 1) {
+                  bg = isDark ? "rgba(56, 189, 248, 0.28)" : "#bae6fd";
+                  textColor = isDark ? "#7dd3fc" : "#0369a1";
+                  borderStyle = `1px solid ${isDark ? "rgba(56, 189, 248, 0.4)" : "#7dd3fc"}`;
+                } else if (slot.level === 2) {
+                  bg = isDark ? "rgba(14, 165, 233, 0.55)" : "#38bdf8";
+                  textColor = isDark ? "#ffffff" : "#0c4a6e";
+                  borderStyle = "1px solid #0284c7";
+                } else if (slot.level === 3) {
+                  bg = isDark ? "#0284c7" : "#0284c7";
+                  textColor = "#ffffff";
+                  borderStyle = "1px solid #0369a1";
+                } else if (slot.level === 4) {
+                  bg = isDark ? "#2563eb" : "#0070f3";
+                  textColor = "#ffffff";
+                  borderStyle = "1px solid #1d4ed8";
+                }
+
+                if (slot.isFuture) {
+                  bg = isDark ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)";
+                  borderStyle = `1px dashed ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`;
+                  textColor = isDark ? "#52525b" : "#d4d4d8";
+                }
+
+                const tooltip = slot.isFuture
+                  ? `Upcoming (${slot.date})`
+                  : (slot.tokens ?? 0) > 0
+                  ? `${slot.tokens?.toLocaleString()} tokens · ${slot.requests} requests · $${(slot.spend ?? 0).toFixed(4)} on ${slot.date}`
+                  : `No activity on ${slot.date}`;
+
+                return (
+                  <div
+                    key={`day-${slot.day}`}
+                    title={tooltip}
+                    style={{
+                      height: 32,
+                      borderRadius: 8,
+                      background: bg,
+                      border: borderStyle,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      position: "relative",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                      outline: slot.isToday ? "2px solid #38bdf8" : "none",
+                      outlineOffset: slot.isToday ? 2 : 0,
+                    }}
+                  >
+                    <span style={{ fontSize: 11, fontWeight: 700, color: textColor }}>
+                      {slot.day}
+                    </span>
+                    {slot.isToday && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          bottom: 2,
+                          width: 3.5,
+                          height: 3.5,
+                          borderRadius: "50%",
+                          background: "#38bdf8",
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Bottom Legend */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginTop: 14,
+              fontSize: 11,
+              color: "var(--text-tertiary)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <span>Less</span>
+              <div style={{ width: 10, height: 10, borderRadius: 2.5, background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
+              <div style={{ width: 10, height: 10, borderRadius: 2.5, background: isDark ? "rgba(56, 189, 248, 0.28)" : "#bae6fd" }} />
+              <div style={{ width: 10, height: 10, borderRadius: 2.5, background: isDark ? "rgba(14, 165, 233, 0.55)" : "#38bdf8" }} />
+              <div style={{ width: 10, height: 10, borderRadius: 2.5, background: isDark ? "#0284c7" : "#0284c7" }} />
+              <div style={{ width: 10, height: 10, borderRadius: 2.5, background: isDark ? "#2563eb" : "#0070f3" }} />
+              <span>More</span>
+            </div>
+
+            <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+              {currentMonthDisplay} · {monthActivityData.length} Days
+            </span>
+          </div>
+        </div>
+
+        {/* Right Card: SUCCESS RATE METER (BESIDE ACTIVITY) */}
         <MonoRoundedMeter
           theme={theme}
           value={99.8}
           totalRequests={data?.requests}
         />
-      </div>
-
-      {/* 2. ACTIVITY CARD (HEATMAP) */}
-      <div
-        className="card"
-        style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-subtle)",
-          borderRadius: 14,
-          padding: "24px 28px",
-          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
-        }}
-      >
-        {/* Activity Card Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>Activity</span>
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 15,
-                height: 15,
-                borderRadius: "50%",
-                border: "1px solid var(--text-tertiary)",
-                color: "var(--text-tertiary)",
-                fontSize: 10,
-                cursor: "help",
-              }}
-              title="Daily gateway request activity across the past 52 weeks"
-            >
-              i
-            </span>
-          </div>
-
-          <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--text-secondary)" }}>
-            {metric === "tokens" ? "Tokens" : metric === "spend" ? "Spend" : "Requests"}
-          </div>
-        </div>
-
-        {/* Metrics Summary Row */}
-        <div style={{ display: "flex", gap: 36, marginBottom: 24, flexWrap: "wrap" }}>
-          <div>
-            <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginBottom: 2 }}>Longest streak</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
-              {data?.activity?.longestStreak ?? "1 day"}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginBottom: 2 }}>Avg / day</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
-              {metric === "spend" ? `$${(data?.activity?.avgDaySpend ?? 0).toFixed(4)}` : `${(data?.activity?.avgDayTokens ?? 0).toLocaleString()}`}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginBottom: 2 }}>Avg / week</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
-              {metric === "spend" ? `$${(data?.activity?.avgWeekSpend ?? 0).toFixed(3)}` : `${(data?.activity?.avgWeekTokens ?? 0).toLocaleString()}`}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12.5, color: "var(--text-tertiary)", marginBottom: 2 }}>Total</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
-              {metric === "spend" ? `$${(data?.activity?.totalSpend ?? 0).toFixed(2)}` : `${(data?.activity?.totalTokens ?? 0).toLocaleString()}`}
-            </div>
-          </div>
-        </div>
-
-        {/* 52-week Contribution Heatmap Matrix */}
-        <div style={{ overflowX: "auto", paddingBottom: 6 }}>
-          <div style={{ minWidth: 840 }}>
-            {/* Months row */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                paddingLeft: 22,
-                marginBottom: 8,
-                fontSize: 11,
-                color: "var(--text-tertiary)",
-                fontWeight: 500,
-              }}
-            >
-              {monthLabels.map((m, i) => (
-                <span key={`${m}-${i}`} style={{ flex: 1, textAlign: "left" }}>
-                  {m}
-                </span>
-              ))}
-            </div>
-
-            {/* Matrix grid with Weekday labels on left */}
-            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-              {/* Day labels column: M, W, F */}
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                  height: 100,
-                  fontSize: 10,
-                  color: "var(--text-tertiary)",
-                  fontWeight: 500,
-                  paddingTop: 14,
-                  paddingBottom: 14,
-                }}
-              >
-                <span>M</span>
-                <span>W</span>
-                <span>F</span>
-              </div>
-
-              {/* 52 weeks of cells */}
-              <div style={{ display: "flex", gap: 3.5, flex: 1 }}>
-                {heatmapMatrix.map((week, wIdx) => (
-                  <div key={wIdx} style={{ display: "flex", flexDirection: "column", gap: 3.5 }}>
-                    {week.map((cell, dIdx) => {
-                      let bg = "rgba(150, 150, 150, 0.12)";
-                      if (cell.level === 1) bg = "#bae6fd";
-                      else if (cell.level === 2) bg = "#38bdf8";
-                      else if (cell.level === 3) bg = "#0284c7";
-                      else if (cell.level === 4) bg = "#0070f3";
-
-                      return (
-                        <div
-                          key={dIdx}
-                          style={{
-                            width: 11.5,
-                            height: 11.5,
-                            borderRadius: 2.5,
-                            background: bg,
-                            cursor: "pointer",
-                            transition: "transform 0.1s ease",
-                          }}
-                          title={`${cell.count > 0 ? `${cell.count.toLocaleString()} tokens` : "No activity"} on ${cell.date}`}
-                        />
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Bottom Legend: Less ▢ ▢ ▢ ▢ ▢ More */}
-            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 14, fontSize: 11, color: "var(--text-tertiary)" }}>
-              <span>Less</span>
-              <div style={{ width: 11, height: 11, borderRadius: 2.5, background: "rgba(150, 150, 150, 0.14)" }} />
-              <div style={{ width: 11, height: 11, borderRadius: 2.5, background: "#bae6fd" }} />
-              <div style={{ width: 11, height: 11, borderRadius: 2.5, background: "#38bdf8" }} />
-              <div style={{ width: 11, height: 11, borderRadius: 2.5, background: "#0284c7" }} />
-              <div style={{ width: 11, height: 11, borderRadius: 2.5, background: "#0070f3" }} />
-              <span>More</span>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* 3. API KEYS SECTION AT BOTTOM */}
