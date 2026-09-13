@@ -20,7 +20,7 @@ interface MonoRoundedSankeyProps {
   className?: string;
 }
 
-const INACTIVITY_THRESHOLD_MS = 35 * 1000; // 35 seconds
+const INACTIVITY_THRESHOLD_MS = 45 * 1000; // 45 seconds
 
 export function MonoRoundedSankey({
   theme = "dark",
@@ -30,42 +30,37 @@ export function MonoRoundedSankey({
 }: MonoRoundedSankeyProps) {
   const isDark = theme === "dark";
 
-  // Last request timestamp tracking
-  const [lastActivity, setLastActivity] = useState<number>(() => {
-    return lastRequestTimestamp || 0;
-  });
+  // Real-time 1-second clock to trigger dynamic cleanup when 45s expires
+  const [currentTime, setCurrentTime] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  // Track if gateway is currently idle (> 3 minutes without traffic)
-  const [isIdle, setIsIdle] = useState<boolean>(() => {
-    if (!lastRequestTimestamp) return true;
-    return Date.now() - lastRequestTimestamp > INACTIVITY_THRESHOLD_MS;
-  });
+  // Track per-model last activity timestamp (keyed by model slug)
+  const [modelTimestamps, setModelTimestamps] = useState<Record<string, number>>({});
+
+  // Sync timestamps from incoming props
+  useEffect(() => {
+    if (models && models.length > 0) {
+      setModelTimestamps((prev) => {
+        const next = { ...prev };
+        for (const m of models) {
+          if (m.lastUsedAt && (!next[m.slug] || m.lastUsedAt > next[m.slug])) {
+            next[m.slug] = m.lastUsedAt;
+          }
+        }
+        return next;
+      });
+    }
+  }, [models]);
 
   // Active models currently sending prompts or receiving streams (keyed by model slug)
   const [activePrompts, setActivePrompts] = useState<Record<string, boolean>>({});
   const [activeStreams, setActiveStreams] = useState<Record<string, boolean>>({});
   const [livePulseGateway, setLivePulseGateway] = useState<boolean>(false);
-
-  // Sync with prop updates
-  useEffect(() => {
-    if (lastRequestTimestamp && lastRequestTimestamp > lastActivity) {
-      setLastActivity(lastRequestTimestamp);
-      setIsIdle(Date.now() - lastRequestTimestamp > INACTIVITY_THRESHOLD_MS);
-    }
-  }, [lastRequestTimestamp]);
-
-  // Periodic check for 3-minute inactivity idle state
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (!lastActivity || Date.now() - lastActivity > INACTIVITY_THRESHOLD_MS) {
-        setIsIdle(true);
-      } else {
-        setIsIdle(false);
-      }
-    }, 2000);
-
-    return () => clearInterval(timer);
-  }, [lastActivity]);
 
   // Listen to REAL Server-Sent Events (SSE) from /api/telemetry/stream
   useEffect(() => {
@@ -77,9 +72,13 @@ export function MonoRoundedSankey({
       const now = Date.now();
       const slug = payload.modelSlug || "";
 
-      // Real traffic detected -> update last activity and exit idle
-      setLastActivity(now);
-      setIsIdle(false);
+      // Real traffic detected -> update model activity timestamp
+      if (slug) {
+        setModelTimestamps((prev) => ({
+          ...prev,
+          [slug]: now,
+        }));
+      }
 
       if (payload.type === "request_start" || payload.phase === "prompt") {
         if (slug) {
@@ -150,22 +149,57 @@ export function MonoRoundedSankey({
     };
   }, []);
 
-  // Determine dynamic active models (1, 2, 3, 4, 5, etc.) based on real usage
+  // Determine dynamic active models (only models used within the last 45 seconds)
   const displayModels = useMemo(() => {
-    const fallbackList: SankeyModel[] = [
-      { slug: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "google", requests: 12, tokens: 13853 },
-      { slug: "ling-3.0-flash", name: "Ling 3.0 Flash", provider: "inclusion", requests: 9, tokens: 42100 },
-    ];
+    const candidateMap = new Map<string, SankeyModel & { lastActive: number }>();
 
-    const sourceList = models.length > 0 ? models : fallbackList;
+    // 1. Seed with models from props
+    for (const m of models) {
+      const last = modelTimestamps[m.slug] || m.lastUsedAt || 0;
+      candidateMap.set(m.slug, { ...m, lastActive: last });
+    }
 
-    // Filter to models with requests or recent activity, capped at 5 for clean layout
-    const active = sourceList.filter((m) => (m.requests ?? 0) > 0);
-    const result = (active.length > 0 ? active : sourceList).slice(0, 5);
-    return result;
-  }, [models]);
+    // 2. Seed with live telemetry models
+    for (const [slug, ts] of Object.entries(modelTimestamps)) {
+      if (!candidateMap.has(slug)) {
+        candidateMap.set(slug, {
+          slug,
+          name: slug.split("/").pop() || slug,
+          provider: slug.split("/")[0] || "custom",
+          requests: 1,
+          tokens: 0,
+          lastActive: ts,
+        });
+      } else {
+        const existing = candidateMap.get(slug)!;
+        existing.lastActive = Math.max(existing.lastActive, ts);
+      }
+    }
 
-  const count = displayModels.length; // 1 to 5
+    // 3. Filter STRICTLY to models active within the last 45 seconds
+    // Models older than 45 seconds are idle and removed!
+    const active = Array.from(candidateMap.values()).filter(
+      (m) => currentTime - m.lastActive <= INACTIVITY_THRESHOLD_MS
+    );
+
+    // Sort most recent first, capped at 5 channels
+    return active.sort((a, b) => b.lastActive - a.lastActive).slice(0, 5);
+  }, [models, modelTimestamps, currentTime]);
+
+  const count = displayModels.length; // 0, 1, 2, 3, 4, 5
+  const isIdle = count === 0;
+
+  // Track overall last activity timestamp across all models
+  const lastActivity = useMemo(() => {
+    let latest = lastRequestTimestamp || 0;
+    for (const ts of Object.values(modelTimestamps)) {
+      if (ts > latest) latest = ts;
+    }
+    for (const m of models) {
+      if (m.lastUsedAt && m.lastUsedAt > latest) latest = m.lastUsedAt;
+    }
+    return latest;
+  }, [lastRequestTimestamp, modelTimestamps, models]);
 
   // Colors & Themes
   const cardBg = isDark ? "#121212" : "#ffffff";
@@ -636,7 +670,7 @@ export function MonoRoundedSankey({
         }}
       >
         <span style={{ fontWeight: 500 }}>
-          {isIdle ? "Gateway Idle Mode (35s+)" : `Dynamic Flow (${count} Channels)`}
+          {isIdle ? "Gateway Idle Mode (45s+)" : `Dynamic Flow (${count} ${count === 1 ? "Channel" : "Channels"})`}
         </span>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }}>
           Channel Routing
