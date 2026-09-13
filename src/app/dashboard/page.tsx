@@ -729,7 +729,7 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      {/* MONO ROUNDED SANKEY FLOW (amicro) */}
+      {/* MONO ROUNDED SANKEY FLOW */}
       <div style={{ display: "flex", justifyContent: "center", width: "100%", margin: "6px 0" }}>
         <MonoRoundedSankey
           theme={theme}

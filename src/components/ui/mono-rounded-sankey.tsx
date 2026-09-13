@@ -20,7 +20,7 @@ interface MonoRoundedSankeyProps {
   className?: string;
 }
 
-const INACTIVITY_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes
+const INACTIVITY_THRESHOLD_MS = 35 * 1000; // 35 seconds
 
 export function MonoRoundedSankey({
   theme = "dark",
@@ -202,8 +202,10 @@ export function MonoRoundedSankey({
   // Format idle time elapsed text
   const idleElapsedText = useMemo(() => {
     if (!lastActivity) return "Idle";
-    const diffMin = Math.floor((Date.now() - lastActivity) / 60000);
-    return diffMin >= 3 ? `${diffMin}m idle` : "Active";
+    const diffSec = Math.floor((Date.now() - lastActivity) / 1000);
+    if (diffSec < 60) return `${diffSec}s idle`;
+    const diffMin = Math.floor(diffSec / 60);
+    return `${diffMin}m idle`;
   }, [lastActivity]);
 
   return (
@@ -471,7 +473,7 @@ export function MonoRoundedSankey({
               );
             })}
 
-            {/* Center Dynamic SVG: Rounded Flow Bands matching exact Amicro curvature */}
+            {/* Center Dynamic SVG: Rounded Flow Bands */}
             <svg
               style={{
                 position: "absolute",
@@ -649,7 +651,7 @@ export function MonoRoundedSankey({
         }}
       >
         <span style={{ fontWeight: 500 }}>
-          {isIdle ? "Gateway Idle Mode (3m+)" : `Dynamic Flow (${count} Channels)`}
+          {isIdle ? "Gateway Idle Mode (35s+)" : `Dynamic Flow (${count} Channels)`}
         </span>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600 }}>
           Channel Routing
