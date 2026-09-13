@@ -91,22 +91,74 @@ export function ArtifactPanel({
 
   const activeFileList: FileTreeFile[] = React.useMemo(() => {
     if (projectFilesList.length > 0) return projectFilesList;
+    if (artifact?.files && artifact.files.length > 0) {
+      return artifact.files;
+    }
     if (artifact?.html) {
       return [{ path: "index.html", content: artifact.html }];
     }
     return [];
   }, [projectFilesList, artifact]);
 
+  // Compute effective selected file so it never points to an unresolvable path when files exist
+  const effectiveSelectedFile = React.useMemo(() => {
+    if (project?.files) {
+      const keys = Object.keys(project.files);
+      if (selectedFile && project.files[selectedFile] !== undefined) {
+        return selectedFile;
+      }
+      if (project.files["index.html"] !== undefined) {
+        return "index.html";
+      }
+      if (keys.length > 0) return keys[0];
+    }
+    if (activeFileList.length > 0) {
+      if (selectedFile && activeFileList.some((f) => f.path === selectedFile)) {
+        return selectedFile;
+      }
+      const htmlFile = activeFileList.find((f) => f.path === "index.html" || f.path.endsWith(".html"));
+      if (htmlFile) return htmlFile.path;
+      return activeFileList[0].path;
+    }
+    if (artifact?.html) {
+      return "index.html";
+    }
+    return selectedFile || "";
+  }, [project, selectedFile, activeFileList, artifact]);
+
+  // Keep parent selectedFile in sync if not set
+  useEffect(() => {
+    if (!selectedFile && effectiveSelectedFile && onSelectFile) {
+      onSelectFile(effectiveSelectedFile);
+    }
+  }, [selectedFile, effectiveSelectedFile, onSelectFile]);
+
+  // Automatically switch viewMode to "code" if user selected a script or style file
+  useEffect(() => {
+    if (selectedFile) {
+      if (
+        selectedFile.endsWith(".css") ||
+        selectedFile.endsWith(".js") ||
+        selectedFile.endsWith(".ts") ||
+        selectedFile.endsWith(".json")
+      ) {
+        setViewMode("code");
+      }
+    }
+  }, [selectedFile]);
+
   // Active code content based on selected file or artifact
   const activeCode = React.useMemo(() => {
-    if (project?.files && selectedFile && project.files[selectedFile] !== undefined) {
-      return project.files[selectedFile];
+    if (project?.files && effectiveSelectedFile && project.files[effectiveSelectedFile] !== undefined) {
+      return project.files[effectiveSelectedFile];
     }
+    const fromList = activeFileList.find((f) => f.path === effectiveSelectedFile);
+    if (fromList) return fromList.content;
     if (artifact?.html) {
       return artifact.html;
     }
     return "";
-  }, [project, selectedFile, artifact]);
+  }, [project, effectiveSelectedFile, activeFileList, artifact]);
 
   // Generate sandboxed srcdoc
   const srcDoc = React.useMemo(() => {
@@ -639,7 +691,7 @@ export function ArtifactPanel({
               <div className="w-60 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#12141c] shrink-0">
                 <FileTree
                   files={activeFileList}
-                  selectedFile={selectedFile}
+                  selectedFile={effectiveSelectedFile || selectedFile}
                   onSelectFile={onSelectFile}
                   projectName={project?.title || artifact?.title || "project-root"}
                 />
@@ -649,7 +701,7 @@ export function ArtifactPanel({
             {/* Code Content View */}
             <div className="flex-1 flex flex-col h-full overflow-hidden bg-neutral-950 text-neutral-100 font-mono text-xs">
               <div className="flex items-center justify-between px-4 py-2 bg-neutral-900 border-b border-neutral-800 text-neutral-400 text-[11px]">
-                <span>{selectedFile || "source.html"}</span>
+                <span>{effectiveSelectedFile || selectedFile || "source.html"}</span>
                 <button
                   onClick={handleCopyCode}
                   className="flex items-center gap-1 hover:text-neutral-200 transition-colors"

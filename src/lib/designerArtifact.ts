@@ -291,6 +291,8 @@ export function stripArtifactTags(content: string): string {
     .replace(/<artifact\s+[^>]*>[\s\S]*$/i, "")
     .replace(/<project\s+[^>]*>[\s\S]*?<\/project>/gi, "")
     .replace(/<project\s+[^>]*>[\s\S]*$/i, "")
+    .replace(/<file\s+[^>]*>[\s\S]*?<\/file>/gi, "")
+    .replace(/<file\s+[^>]*>[\s\S]*$/i, "")
     .replace(/<\/?(?:dots_)?function_call[^>]*>/gi, "")
     .replace(/<\/?(?:dots_)?tool_call[^>]*>/gi, "")
     .trim();
@@ -298,22 +300,37 @@ export function stripArtifactTags(content: string): string {
 
 /**
  * Extract a multi-file project from stored message content.
- * Looks for <project identifier="..." title="..."> blocks containing
- * <file path="..."> elements.
+ * Looks for <project ...> blocks or individual <file path/name="..."> tags.
  */
 export function extractProject(content: string): { title: string; files: { path: string; content: string }[] } | null {
-  const projectRe = /<project\s+[^>]*title="([^"]*)"[^>]*>([\s\S]*?)<\/project>/i;
+  const projectRe = /<project(?:\s+[^>]*)?>([\s\S]*?)<\/project>/i;
   const m = content.match(projectRe);
-  if (!m) return null;
-  const inner = m[2];
-  const fileRe = /<file\s+path="([^"]*)">([\s\S]*?)<\/file>/gi;
+  let inner = "";
+  let title = "Project";
+
+  if (m) {
+    inner = m[1];
+    const titleMatch = m[0].match(/title="([^"]*)"/i);
+    if (titleMatch) title = titleMatch[1];
+  } else if (/<file\s+(?:path|name|filename)=/i.test(content)) {
+    inner = content;
+  } else {
+    return null;
+  }
+
+  const fileRe = /<file\s+(?:path|name|filename)=["']([^"']+)["'][^>]*>([\s\S]*?)<\/file>/gi;
   const files: { path: string; content: string }[] = [];
+  const seenPaths = new Set<string>();
   let fm: RegExpExecArray | null;
   while ((fm = fileRe.exec(inner)) !== null) {
-    files.push({ path: fm[1], content: fm[2].trim() });
+    const p = fm[1].trim();
+    if (p && !seenPaths.has(p)) {
+      seenPaths.add(p);
+      files.push({ path: p, content: fm[2].trim() });
+    }
   }
   if (files.length === 0) return null;
-  return { title: m[1] || "Project", files };
+  return { title, files };
 }
 
 /**
