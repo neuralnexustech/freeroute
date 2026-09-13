@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { useLiveTelemetry } from "@/hooks/useLiveTelemetry";
 import { useTheme } from "@/components/ThemeProvider";
 import { MonoRoundedSankey } from "@/components/ui/mono-rounded-sankey";
-import { MonoRoundedDonut } from "@/components/ui/mono-rounded-donut";
+import { MonoRoundedMeter } from "@/components/ui/mono-rounded-meter";
 import { ModelProviderIcon } from "@/components/ModelProviderIcon";
 
 type Metric = "tokens" | "spend" | "requests";
@@ -730,7 +730,7 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      {/* ROUTE FLOW & MONO ROUNDED DONUT */}
+      {/* ROUTE FLOW & SUCCESS RATE METER */}
       <div
         style={{
           display: "grid",
@@ -745,9 +745,10 @@ export default function OverviewPage() {
           models={data?.usedModels && data.usedModels.length > 0 ? data.usedModels : []}
           lastRequestTimestamp={data?.lastRequestTimestamp}
         />
-        <MonoRoundedDonut
+        <MonoRoundedMeter
           theme={theme}
-          models={data?.usedModels && data.usedModels.length > 0 ? data.usedModels : []}
+          value={99.8}
+          totalRequests={data?.requests}
         />
       </div>
 
