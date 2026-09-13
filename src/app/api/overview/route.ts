@@ -102,6 +102,7 @@ export async function GET(req: NextRequest) {
         promptTokens: number;
         completionTokens: number;
         spend: number;
+        lastUsedAt?: number;
       }
     >();
 
@@ -109,6 +110,7 @@ export async function GET(req: NextRequest) {
       const cat = catalogMap.get(l.modelSlug);
       const provSlug = cat?.providerSlug || l.modelSlug.split("/")[0] || "custom";
       const displayName = cat?.displayName || l.modelSlug.split("/").pop() || l.modelSlug;
+      const logTime = new Date(l.createdAt).getTime();
 
       const existing = usageByModel.get(l.modelSlug) ?? {
         slug: l.modelSlug,
@@ -119,6 +121,7 @@ export async function GET(req: NextRequest) {
         promptTokens: 0,
         completionTokens: 0,
         spend: 0,
+        lastUsedAt: logTime,
       };
 
       existing.requests += 1;
@@ -126,6 +129,7 @@ export async function GET(req: NextRequest) {
       existing.completionTokens += l.completionTokens;
       existing.tokens += l.promptTokens + l.completionTokens;
       existing.spend += l.cost;
+      existing.lastUsedAt = Math.max(existing.lastUsedAt || 0, logTime);
       usageByModel.set(l.modelSlug, existing);
     }
 
@@ -416,7 +420,10 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    const lastRequestTimestamp = logs[0]?.createdAt ? new Date(logs[0].createdAt).getTime() : null;
+
     return NextResponse.json({
+      lastRequestTimestamp,
       spend: totalSpend,
       tokens: totalTokens,
       promptTokens,

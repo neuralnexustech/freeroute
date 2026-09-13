@@ -156,7 +156,15 @@ function createSseResponse(opts: {
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
-          if (ttftMs === null) ttftMs = Date.now() - started;
+          if (ttftMs === null) {
+            ttftMs = Date.now() - started;
+            broadcastTelemetry({
+              type: "request_end",
+              modelSlug: model,
+              timestamp: Date.now(),
+              phase: "stream",
+            });
+          }
           const chunkText = decoder.decode(value, { stream: true });
 
           if (!isSse) {
@@ -366,6 +374,13 @@ export async function POST(req: NextRequest) {
         const upstreamBody = isAnthropic
           ? openAIToAnthropic({ ...body, model: m.slug })
           : { ...body, model: m.slug };
+
+        broadcastTelemetry({
+          type: "request_start",
+          modelSlug: m.slug,
+          timestamp: started,
+          phase: "prompt",
+        });
 
         const upstreamRes = await fetch(url, {
           method: "POST",
@@ -607,6 +622,13 @@ export async function POST(req: NextRequest) {
       const upstreamBody = isAnthropic
         ? openAIToAnthropic({ ...body, model: m.slug })
         : { ...body, model: m.slug };
+
+      broadcastTelemetry({
+        type: "request_start",
+        modelSlug: m.slug,
+        timestamp: started,
+        phase: "prompt",
+      });
 
       const upstream = await fetch(url, {
         method: "POST",

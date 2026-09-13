@@ -11,7 +11,7 @@ export const telemetryEmitter =
 telemetryEmitter.setMaxListeners(500);
 
 export interface TelemetryPayload {
-  type: "request" | "model" | "refresh" | "heartbeat";
+  type: "request" | "request_start" | "request_end" | "model" | "refresh" | "heartbeat";
   timestamp: number;
   modelSlug?: string;
   toksPerSec?: number | null;
@@ -20,6 +20,7 @@ export interface TelemetryPayload {
   status?: number;
   cost?: number;
   app?: string;
+  phase?: "prompt" | "stream" | "complete";
 }
 
 /**
