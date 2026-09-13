@@ -602,52 +602,92 @@ export default function LogsPage() {
 
                   {/* Status Column */}
                   <td style={{ padding: "13px 18px", verticalAlign: "middle" }}>
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: "2.5px 8px",
-                        borderRadius: 5,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        background:
-                          row.status === 200
-                            ? "rgba(34, 197, 94, 0.12)"
-                            : row.status < 500
-                            ? "rgba(245, 158, 11, 0.12)"
-                            : "rgba(239, 68, 68, 0.12)",
-                        border: `1px solid ${
-                          row.status === 200
-                            ? "rgba(34, 197, 94, 0.3)"
-                            : row.status < 500
-                            ? "rgba(245, 158, 11, 0.3)"
-                            : "rgba(239, 68, 68, 0.3)"
-                        }`,
-                        color:
-                          row.status === 200
-                            ? "#22c55e"
-                            : row.status < 500
-                            ? "#f59e0b"
-                            : "#ef4444",
-                      }}
-                      title={row.errorMessage || (row.status === 200 ? "Success (200 OK)" : `HTTP ${row.status} - Click to see reason`)}
-                    >
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                       <span
                         style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: "50%",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "2.5px 8px",
+                          borderRadius: 5,
+                          fontSize: 12,
+                          fontWeight: 600,
                           background:
+                            row.status === 200
+                              ? "rgba(34, 197, 94, 0.12)"
+                              : row.status < 500
+                              ? "rgba(245, 158, 11, 0.12)"
+                              : "rgba(239, 68, 68, 0.12)",
+                          border: `1px solid ${
+                            row.status === 200
+                              ? "rgba(34, 197, 94, 0.3)"
+                              : row.status < 500
+                              ? "rgba(245, 158, 11, 0.3)"
+                              : "rgba(239, 68, 68, 0.3)"
+                          }`,
+                          color:
                             row.status === 200
                               ? "#22c55e"
                               : row.status < 500
                               ? "#f59e0b"
                               : "#ef4444",
                         }}
-                      />
-                      {row.status}
-                    </span>
+                        title={row.errorMessage || (row.status === 200 ? "Success (200 OK)" : `HTTP ${row.status} - Click to see reason`)}
+                      >
+                        <span
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            background:
+                              row.status === 200
+                                ? "#22c55e"
+                                : row.status < 500
+                                ? "#f59e0b"
+                                : "#ef4444",
+                          }}
+                        />
+                        {row.status}
+                      </span>
+                      {row.status >= 400 && (
+                        <button
+                          type="button"
+                          title="Retry model test via gateway"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const btn = e.currentTarget;
+                            btn.style.opacity = "0.5";
+                            try {
+                              const res = await fetch("/api/models/health-check", { method: "POST" });
+                              const d = await res.json();
+                              alert(`Health check completed for ${d.checked ?? 0} models.`);
+                            } catch {
+                              alert("Retry failed to reach gateway.");
+                            } finally {
+                              btn.style.opacity = "1";
+                            }
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: 22,
+                            height: 22,
+                            borderRadius: 4,
+                            border: "1px solid rgba(239, 68, 68, 0.35)",
+                            background: "rgba(239, 68, 68, 0.1)",
+                            color: "#ef4444",
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="23 4 23 10 17 10" />
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   </td>
 
                   {/* Speed Column */}

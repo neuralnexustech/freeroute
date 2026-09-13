@@ -91,8 +91,30 @@ export function ToolResultWidget({
 }
 
 function WeatherWidget({ data }: { data: WeatherData }) {
-  const isRain = /rain|drizzle|shower/i.test(data.condition || "");
-  const isCloud = /cloud|overcast/i.test(data.condition || "");
+  const anyData = (data || {}) as any;
+  const condition = data.condition || anyData.conditions || "Clear";
+  const isRain = /rain|drizzle|shower/i.test(condition);
+  const isCloud = /cloud|overcast/i.test(condition);
+
+  // Normalize temperature display (handle "25\u00b0C", "25°C", or numeric 25)
+  let tempDisplay = "";
+  if (data.temperature !== undefined && data.temperature !== null) {
+    const s = String(data.temperature).trim();
+    if (s.includes("°")) {
+      tempDisplay = s;
+    } else {
+      tempDisplay = `${s}°${data.unit || "C"}`;
+    }
+  } else {
+    tempDisplay = "25°C";
+  }
+
+  // Normalize humidity display (handle "70%" or numeric 70)
+  const rawHumidity = data.humidity ?? anyData.humidity_pct;
+  const humidityStr = rawHumidity !== undefined && rawHumidity !== null ? String(rawHumidity).replace("%", "").trim() : undefined;
+
+  // Normalize wind display (handle wind or wind_speed)
+  const windStr = data.wind || anyData.wind_speed || anyData.windSpeed;
 
   return (
     <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-gradient-to-br from-sky-500/10 via-indigo-500/5 to-transparent p-5 text-neutral-800 dark:text-neutral-100 shadow-sm">
@@ -101,8 +123,8 @@ function WeatherWidget({ data }: { data: WeatherData }) {
           <span className="text-xs uppercase tracking-wider text-sky-600 dark:text-sky-400 font-semibold">
             Live Weather
           </span>
-          <h3 className="text-lg font-bold mt-0.5">{data.location || "Current Location"}</h3>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 capitalize">{data.condition}</p>
+          <h3 className="text-lg font-bold mt-0.5">{data.location || anyData.city || "Current Location"}</h3>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 capitalize">{condition}</p>
         </div>
         <div className="p-3 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-300">
           {isRain ? <CloudRain size={28} /> : isCloud ? <Cloud size={28} /> : <Sun size={28} />}
@@ -111,21 +133,21 @@ function WeatherWidget({ data }: { data: WeatherData }) {
 
       <div className="mt-4 flex items-baseline gap-2">
         <span className="text-4xl font-extrabold tracking-tight">
-          {data.temperature}°{data.unit || "C"}
+          {tempDisplay}
         </span>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs border-t border-neutral-200/60 dark:border-neutral-800/60 pt-3">
-        {data.humidity !== undefined && (
+        {humidityStr !== undefined && (
           <div className="flex items-center gap-1.5 text-neutral-600 dark:text-neutral-400">
             <Droplets size={14} className="text-sky-500" />
-            <span>Humidity: {data.humidity}%</span>
+            <span>Humidity: {humidityStr}%</span>
           </div>
         )}
-        {data.wind && (
+        {windStr && (
           <div className="flex items-center gap-1.5 text-neutral-600 dark:text-neutral-400">
             <Wind size={14} className="text-sky-500" />
-            <span>Wind: {data.wind}</span>
+            <span>Wind: {windStr}</span>
           </div>
         )}
       </div>

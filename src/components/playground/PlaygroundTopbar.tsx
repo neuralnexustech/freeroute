@@ -19,6 +19,8 @@ interface Props {
   onToggleRightPanel: () => void;
   mode: "chat" | "designer";
   onToggleMode: () => void;
+  editMode?: "rewrite" | "patch";
+  onToggleEditMode?: () => void;
   models: ModelOption[];
   selectedModel: string;
   onSelectModel: (slug: string) => void;
@@ -33,6 +35,8 @@ export function PlaygroundTopbar({
   onToggleRightPanel,
   mode,
   onToggleMode,
+  editMode = "rewrite",
+  onToggleEditMode,
   models,
   selectedModel,
   onSelectModel,
@@ -70,6 +74,22 @@ export function PlaygroundTopbar({
           {isDesigner ? <Paintbrush size={11} className="text-emerald-500" /> : <MessageSquare size={11} />}
           <span>{isDesigner ? "Designer Mode" : "Chat Mode"}</span>
         </button>
+
+        {/* Patch vs Rewrite mode toggle in designer */}
+        {isDesigner && (
+          <button
+            type="button"
+            onClick={onToggleEditMode}
+            title={editMode === "patch" ? "Patch Mode: Only edits specific sections" : "Rewrite Mode: Full artifact generation"}
+            className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-medium transition-all ${
+              editMode === "patch"
+                ? "bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300"
+                : "bg-blue-500/15 border border-blue-500/30 text-blue-700 dark:text-blue-300"
+            }`}
+          >
+            <span>{editMode === "patch" ? "🩹 Patch Mode" : "🔄 Full Rewrite"}</span>
+          </button>
+        )}
       </div>
 
       {/* Right controls */}

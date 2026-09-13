@@ -30,14 +30,23 @@ export function MonoRoundedSankey({
 }: MonoRoundedSankeyProps) {
   const isDark = theme === "dark";
 
-  // Real-time 1-second clock to trigger dynamic cleanup when 45s expires
+  // Active models currently sending prompts or receiving streams (keyed by model slug)
+  const [activePrompts, setActivePrompts] = useState<Record<string, boolean>>({});
+  const [activeStreams, setActiveStreams] = useState<Record<string, boolean>>({});
+  const [livePulseGateway, setLivePulseGateway] = useState<boolean>(false);
+  // Live tok/s per model (from SSE toksPerSec field)
+  const [modelTokPerSec, setModelTokPerSec] = useState<Record<string, number>>({});
+
+  // Real-time clock — 1s when models are active, 10s when idle
   const [currentTime, setCurrentTime] = useState<number>(() => Date.now());
   useEffect(() => {
+    const hasActivity =
+      Object.keys(activeStreams).length > 0 || Object.keys(activePrompts).length > 0;
     const timer = setInterval(() => {
       setCurrentTime(Date.now());
-    }, 1000);
+    }, hasActivity ? 1000 : 10000);
     return () => clearInterval(timer);
-  }, []);
+  }, [activeStreams, activePrompts]);
 
   // Track per-model last activity timestamp (keyed by model slug)
   const [modelTimestamps, setModelTimestamps] = useState<Record<string, number>>({});
@@ -56,11 +65,6 @@ export function MonoRoundedSankey({
       });
     }
   }, [models]);
-
-  // Active models currently sending prompts or receiving streams (keyed by model slug)
-  const [activePrompts, setActivePrompts] = useState<Record<string, boolean>>({});
-  const [activeStreams, setActiveStreams] = useState<Record<string, boolean>>({});
-  const [livePulseGateway, setLivePulseGateway] = useState<boolean>(false);
 
   // Listen to REAL Server-Sent Events (SSE) from /api/telemetry/stream
   useEffect(() => {
@@ -94,12 +98,24 @@ export function MonoRoundedSankey({
       } else if (payload.type === "request_end" || payload.phase === "stream") {
         if (slug) {
           setActiveStreams((prev) => ({ ...prev, [slug]: true }));
+          // Capture live tok/s if provided by the telemetry event
+          if (payload.toksPerSec && payload.toksPerSec > 0) {
+            setModelTokPerSec((prev) => ({ ...prev, [slug]: Math.round(payload.toksPerSec) }));
+          }
           setTimeout(() => {
             setActiveStreams((prev) => {
               const next = { ...prev };
               delete next[slug];
               return next;
             });
+            // Clear tok/s after stream ends
+            setTimeout(() => {
+              setModelTokPerSec((prev) => {
+                const next = { ...prev };
+                delete next[slug];
+                return next;
+              });
+            }, 3000);
           }, 1600);
         }
       } else if (payload.type === "request") {
@@ -488,6 +504,30 @@ export function MonoRoundedSankey({
                         animation: "ping 1.1s cubic-bezier(0,0,0.2,1) infinite",
                       }}
                     />
+                  )}
+
+                  {/* Live tok/s streaming badge */}
+                  {isReceiving && !!modelTokPerSec[m.slug] && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: -9,
+                        right: -8,
+                        fontSize: 9,
+                        fontFamily: "var(--font-mono, monospace)",
+                        fontWeight: 700,
+                        backgroundColor: "#10b981",
+                        color: "#ffffff",
+                        padding: "1px 5px",
+                        borderRadius: 9999,
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.35)",
+                        zIndex: 10,
+                        pointerEvents: "none",
+                        lineHeight: "13px",
+                      }}
+                    >
+                      {modelTokPerSec[m.slug]} t/s
+                    </span>
                   )}
                 </div>
               );

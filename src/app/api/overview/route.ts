@@ -33,12 +33,15 @@ export async function GET(req: NextRequest) {
         take: 500,
       }),
       prisma.requestLog.findMany({
+        where: { createdAt: { gte: new Date(Date.now() - 90 * DAY) } },
         select: {
           createdAt: true,
           promptTokens: true,
           completionTokens: true,
           cost: true,
         },
+        orderBy: { createdAt: "desc" },
+        take: 5000,
       }),
       prisma.requestLog.aggregate({ where, _sum: { cost: true } }),
       prisma.requestLog.aggregate({
@@ -89,6 +92,9 @@ export async function GET(req: NextRequest) {
     const completionTokens = totalTokensAgg._sum.completionTokens ?? 0;
     const totalTokens = promptTokens + completionTokens;
     const totalRequests = logs.length;
+    // Real success/failure counts for Success Rate meter
+    const successfulRequests = logs.filter((l) => l.status >= 200 && l.status < 300).length;
+    const failedRequests = logs.filter((l) => l.status >= 400).length;
 
     // 3. Aggregate usage by model slug
     const usageByModel = new Map<
@@ -140,8 +146,14 @@ export async function GET(req: NextRequest) {
       color: MODEL_PALETTE[idx % MODEL_PALETTE.length],
     }));
 
-    // 4. Build 7-day daily breakdown for chart
-    const numDays = range === "today" ? 1 : range === "30d" ? 30 : 7;
+    // 4. Build daily breakdown for chart — correct range mapping
+    const numDays =
+      range === "today" ? 1
+      : range === "30d" ? 30
+      : range === "90d" ? 90
+      : range === "all"
+        ? Math.max(7, Math.ceil((Date.now() - (logs[logs.length - 1] ? new Date(logs[logs.length - 1].createdAt).getTime() : Date.now())) / DAY) + 1)
+      : 7;
     const dailyChart: Array<{
       date: string;
       fullDate: string;
@@ -401,8 +413,18 @@ export async function GET(req: NextRequest) {
       appUsage.set(cleanApp, au);
     }
 
+    const startOfTodayMs = startOfToday.getTime();
+    const todayKeySpend = new Map<string, number>();
+    for (const l of logs) {
+      if (l.apiKeyId && new Date(l.createdAt).getTime() >= startOfTodayMs) {
+        todayKeySpend.set(l.apiKeyId, (todayKeySpend.get(l.apiKeyId) ?? 0) + (l.cost ?? 0));
+      }
+    }
+
     const enrichedApiKeys = apiKeys.map((k) => {
       const u = keyUsage.get(k.id) ?? { tokens: 0, requests: 0, spend: 0 };
+      const todaySpend = todayKeySpend.get(k.id) ?? 0;
+      const dailyBudget = (k as any).dailyBudget as number | null | undefined;
       return {
         id: k.id,
         name: k.name,
@@ -411,6 +433,8 @@ export async function GET(req: NextRequest) {
         tokens: u.tokens,
         requests: u.requests,
         spend: u.spend,
+        todaySpend,
+        dailyBudget: dailyBudget ?? null,
       };
     }).sort((a, b) => (b.tokens !== a.tokens ? b.tokens - a.tokens : b.requests - a.requests));
 
@@ -481,6 +505,7 @@ export async function GET(req: NextRequest) {
     }
 
     const lastRequestTimestamp = logs[0]?.createdAt ? new Date(logs[0].createdAt).getTime() : null;
+    const successRate = totalRequests > 0 ? Math.round((successfulRequests / totalRequests) * 1000) / 10 : 100;
 
     return NextResponse.json({
       lastRequestTimestamp,
@@ -489,6 +514,9 @@ export async function GET(req: NextRequest) {
       promptTokens,
       completionTokens,
       requests: totalRequests,
+      successfulRequests,
+      failedRequests,
+      successRate,
       usedModels: topDisplayModels,
       allModels: allModelsForDrawer,
       dailyChart,

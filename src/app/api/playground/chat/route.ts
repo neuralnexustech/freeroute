@@ -66,8 +66,20 @@ export async function POST(req: NextRequest) {
     const recent = rawHistory.slice(rawHistory.length - 10);
 
     const compactedSummary = older
-      .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 150)}...`)
-      .join("\n");
+      .map((m) => {
+        const role = m.role === "user" ? "User" : "Assistant";
+        if (m.role === "assistant" && mode === "designer") {
+          const artifactMatch =
+            m.content.match(/<artifact[^>]*>([\s\S]*?)<\/artifact>/i) ||
+            m.content.match(/```html([\s\S]*?)```/i);
+          if (artifactMatch) {
+            const prose = m.content.slice(0, 100);
+            return `${role}: ${prose}...\n[Full HTML artifact preserved]:\n${artifactMatch[0]}`;
+          }
+        }
+        return `${role}: ${m.content.slice(0, 200)}...`;
+      })
+      .join("\n\n");
 
     formattedHistory = [
       {
@@ -102,14 +114,21 @@ export async function POST(req: NextRequest) {
     await prisma.designerRoom.update({ where: { id: roomId }, data: { model } });
   }
 
+  const editMode: "rewrite" | "patch" = body?.editMode === "patch" ? "patch" : "rewrite";
+
   // Build comprehensive agent system prompt (incorporating Cursor IDE & OpenDesign standards)
-  const systemPrompt = buildSystemPrompt({
+  let systemPrompt = buildSystemPrompt({
     mode,
     model,
     activeFile,
     inspectedElement,
     message,
   });
+
+  if (mode === "designer" && editMode === "patch") {
+    systemPrompt += `\n\n[SURGICAL PATCH MODE ENABLED]\nThe user wants an incremental patch rather than a full document rewrite.\nReturn ONLY the specific updated section wrapped in:\n<patch selector="CSS_SELECTOR">\n  <!-- NEW/MODIFIED INNER HTML -->\n</patch>\nDo NOT output the full <!DOCTYPE html> or whole file unless explicitly asked. Be precise and concise.`;
+  }
+
   const started = Date.now();
 
   const gatewayBody: any = {

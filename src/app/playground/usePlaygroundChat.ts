@@ -227,6 +227,51 @@ export interface DesignerArtifactView {
   framework?: string;
 }
 
+export function extractToolResultFromText(text: string): { type: string; data: any } | null {
+  if (!text) return null;
+
+  // 1. Standard <tool_call name="...">JSON</tool_call>
+  const toolMatch = text.match(/<tool_call\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/tool_call>/i);
+  if (toolMatch) {
+    try {
+      const parsed = JSON.parse(toolMatch[2]?.trim());
+      return { type: toolMatch[1], data: parsed };
+    } catch {}
+  }
+
+  // 2. <tool_output>JSON</tool_output> (Gemini / Python / agent tools)
+  const outMatch = text.match(/<tool_output>([\s\S]*?)<\/tool_output>/i);
+  if (outMatch) {
+    try {
+      const parsed = JSON.parse(outMatch[1]?.trim());
+      let inferredType = "weather";
+      if (parsed.location || parsed.temperature || parsed.conditions || parsed.condition || parsed.forecast) {
+        inferredType = "weather";
+      } else if (parsed.headers && parsed.rows) {
+        inferredType = "table";
+      } else if (parsed.issues || parsed.summary || parsed.vulnerabilities) {
+        inferredType = "code_review";
+      } else if (parsed.tree || parsed.root) {
+        inferredType = "file_tree";
+      } else if (parsed.results) {
+        inferredType = "web_search";
+      }
+      return { type: inferredType, data: parsed };
+    } catch {}
+  }
+
+  // 3. <function_call name="...">JSON</function_call>
+  const fnMatch = text.match(/<function_call\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/function_call>/i);
+  if (fnMatch) {
+    try {
+      const parsed = JSON.parse(fnMatch[2]?.trim());
+      return { type: fnMatch[1], data: parsed };
+    } catch {}
+  }
+
+  return null;
+}
+
 export function extractAgentStepsAndSuggestions(
   rawContent: string,
   files?: Array<{ name: string; additions?: number; deletions?: number }>
@@ -257,6 +302,16 @@ export function extractAgentStepsAndSuggestions(
 
   // 2. Synthesize realistic steps if none were explicitly emitted
   if (steps.length === 0) {
+    if (rawContent.includes("<tool_code>") || rawContent.includes("<tool_output>")) {
+      steps.push({
+        id: "step-tool-1",
+        action: "command",
+        label: "ran 1 command",
+        description: rawContent.includes("weather") ? "Queried live weather API" : "Executed system tool call",
+        status: "completed",
+      });
+    }
+
     if (files && files.length > 0) {
       steps.push({
         id: "step-1",
@@ -331,6 +386,7 @@ export function usePlaygroundChat(options: Options = {}) {
   // Designer studio state
   const [artifact, setArtifact] = useState<DesignerArtifactView | null>(null);
   const [selectedFile, setSelectedFile] = useState("index.html");
+  const [editMode, setEditMode] = useState<"rewrite" | "patch">("rewrite");
 
   // Chat Mode context panel state (most recent tool result: weather, table, code review, file tree)
   const [activeToolResult, setActiveToolResult] = useState<{ type: string; data: any } | null>(null);
@@ -544,12 +600,9 @@ export function usePlaygroundChat(options: Options = {}) {
         }
 
         // Restore tool call if present in chat mode
-        const toolMatch = raw.match(/<tool_call\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/tool_call>/i);
-        if (toolMatch) {
-          try {
-            const parsed = JSON.parse(toolMatch[2]);
-            setActiveToolResult({ type: toolMatch[1], data: parsed });
-          } catch {}
+        const toolRes = extractToolResultFromText(raw);
+        if (toolRes) {
+          setActiveToolResult(toolRes);
         }
       }
     } catch {}
@@ -721,13 +774,10 @@ export function usePlaygroundChat(options: Options = {}) {
         }
 
         // Check for tool calls in text stream
-        if (accText.includes("</tool_call>")) {
-          const m = accText.match(/<tool_call\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/tool_call>/i);
-          if (m) {
-            try {
-              const parsed = JSON.parse(m[2]);
-              setActiveToolResult({ type: m[1], data: parsed });
-            } catch {}
+        if (accText.includes("</tool_call>") || accText.includes("</tool_output>") || accText.includes("</function_call>")) {
+          const toolRes = extractToolResultFromText(accText);
+          if (toolRes) {
+            setActiveToolResult(toolRes);
           }
         }
 
@@ -752,6 +802,7 @@ export function usePlaygroundChat(options: Options = {}) {
             roomId,
             message: trimmed,
             mode,
+            editMode,
             model: selectedModel,
             inspectedElement,
             screenshot,
@@ -917,16 +968,26 @@ export function usePlaygroundChat(options: Options = {}) {
         refreshRooms();
       } catch (err: any) {
         if (err?.name !== "AbortError") {
+          const msg = err?.message ?? "";
+          const errContent = accText
+            ? accText + "\n\n---\n⚠️ Stream interrupted: " + (msg || "connection lost")
+            : msg.includes("404")
+            ? "⚠️ **Model not found or disconnected.**\nGo to **Providers → Models** and connect a model first."
+            : msg.includes("401") || msg.includes("403")
+            ? "⚠️ **API key invalid or expired.**\nCheck your provider settings and make sure the key is valid."
+            : msg.includes("429")
+            ? "⚠️ **Rate limit exceeded.**\nWait a moment and try again, or switch to a different model."
+            : msg.includes("502") || msg.includes("503") || msg.includes("504")
+            ? "⚠️ **Gateway error — provider temporarily unavailable.**\nTry a different model or retry in a few seconds."
+            : msg.includes("HTTP 4") || msg.includes("HTTP 5")
+            ? `⚠️ **Request failed (${msg}).**\nCheck your provider connection in Settings.`
+            : "⚠️ **Could not connect to model.**\n" + (msg || "An unexpected error occurred. Please try again.");
+
           setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantId
-                ? {
-                    ...msg,
-                    content: accText || "Error communicating with model.",
-                    reasoning: accReasoning || undefined,
-                    streaming: false,
-                  }
-                : msg
+            prev.map((m) =>
+              m.id === assistantId
+                ? { ...m, content: errContent, reasoning: accReasoning || undefined, streaming: false }
+                : m
             )
           );
         }
@@ -1024,6 +1085,8 @@ export function usePlaygroundChat(options: Options = {}) {
     artifact,
     selectedFile,
     setSelectedFile,
+    editMode,
+    setEditMode,
     activeToolResult,
     setActiveToolResult,
     workspaceFiles,

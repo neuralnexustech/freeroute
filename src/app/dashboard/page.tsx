@@ -45,6 +45,9 @@ interface OverviewApiResponse {
   promptTokens: number;
   completionTokens: number;
   requests: number;
+  successfulRequests?: number;
+  failedRequests?: number;
+  successRate?: number;
   usedModels: ModelUsageItem[];
   allModels: ModelUsageItem[];
   dailyChart: DailyChartItem[];
@@ -75,6 +78,11 @@ interface OverviewApiResponse {
     name: string;
     prefix: string;
     createdAt: string;
+    tokens?: number;
+    requests?: number;
+    spend?: number;
+    todaySpend?: number;
+    dailyBudget?: number | null;
   }>;
 }
 
@@ -108,6 +116,8 @@ export default function OverviewPage() {
   const [range, setRange] = useState("Last 7 Days");
   const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
   const [hoveredBar, setHoveredBar] = useState<{ day: string; fullDate: string; total: number; segments: any[] } | null>(null);
 
   const [data, setData] = useState<OverviewApiResponse | null>(null);
@@ -194,9 +204,15 @@ export default function OverviewPage() {
     ...chartDays.map((d) => (metric === "spend" ? d.totalSpend : metric === "tokens" ? d.totalTokens : d.totalRequests))
   );
 
+  const ceilMax = useMemo(() => {
+    return maxDayVal <= 20 ? 20
+      : maxDayVal <= 100 ? Math.ceil(maxDayVal / 10) * 10
+      : maxDayVal <= 1000 ? Math.ceil(maxDayVal / 100) * 100
+      : Math.ceil(maxDayVal / 1000) * 1000;
+  }, [maxDayVal]);
+
   // Dynamic Y-axis labels matching max
   const yTicks = useMemo(() => {
-    const ceilMax = maxDayVal > 2000 ? 3800 : maxDayVal > 500 ? 1000 : maxDayVal > 50 ? 150 : 20;
     if (metric === "spend") {
       return [
         { label: `$${ceilMax.toFixed(2)}`, topPct: 0 },
@@ -214,7 +230,7 @@ export default function OverviewPage() {
       { label: formatNum(ceilMax * 0.25), topPct: 75 },
       { label: "0", topPct: 100 },
     ];
-  }, [maxDayVal, metric]);
+  }, [ceilMax, metric]);
 
   // Current Month activity calendar grid
   const monthActivityData = useMemo(() => {
@@ -279,6 +295,52 @@ export default function OverviewPage() {
 
   return (
     <div style={{ maxWidth: 1240, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24, paddingBottom: 40, position: "relative" }}>
+
+      {/* Cost Budget Warning Banners */}
+      {data?.apiKeys?.some((k) => k.dailyBudget && (k.todaySpend ?? 0) >= k.dailyBudget * 0.7) && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+          {data.apiKeys
+            .filter((k) => k.dailyBudget && (k.todaySpend ?? 0) >= k.dailyBudget * 0.7)
+            .map((k) => {
+              const spent = k.todaySpend ?? 0;
+              const budget = k.dailyBudget!;
+              const pct = Math.round((spent / budget) * 100);
+              const isOver = pct >= 100;
+              return (
+                <div
+                  key={k.id}
+                  style={{
+                    padding: "10px 18px",
+                    borderRadius: 10,
+                    background: isOver ? "rgba(239, 68, 68, 0.12)" : "rgba(245, 158, 11, 0.12)",
+                    border: `1px solid ${isOver ? "rgba(239, 68, 68, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
+                    color: isOver ? "#ef4444" : "#f59e0b",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <span>{isOver ? "🚨" : "⚠️"}</span>
+                    <span>
+                      Budget Warning for <strong>{k.name}</strong>: ${spent.toFixed(3)} spent today of ${budget.toFixed(2)} daily limit ({pct}% used).
+                    </span>
+                  </span>
+                  <Link
+                    href="/dashboard/api-keys"
+                    style={{ textDecoration: "underline", color: "inherit", fontWeight: 600, fontSize: 12 }}
+                  >
+                    Adjust Budget →
+                  </Link>
+                </div>
+              );
+            })}
+        </div>
+      )}
 
       {/* 1. USAGE SUMMARY CARD */}
       <div
@@ -531,7 +593,9 @@ export default function OverviewPage() {
               >
                 {chartDays.map((day) => {
                   const dayVal = metric === "spend" ? day.totalSpend : metric === "tokens" ? day.totalTokens : day.totalRequests;
-                  const totalHeightPct = dayVal > 0 ? Math.min(96, Math.max(4, (dayVal / (yTicks[0].label.includes("k") ? 3800 : maxDayVal)) * 100)) : 0;
+                  const totalHeightPct = dayVal > 0
+                    ? Math.min(96, Math.max(4, (dayVal / Math.max(1, ceilMax)) * 100))
+                    : 0;
 
                   return (
                     <div
@@ -1058,8 +1122,8 @@ export default function OverviewPage() {
         {/* Right Card: SUCCESS RATE METER (BESIDE ACTIVITY) */}
         <MonoRoundedMeter
           theme={theme}
-          value={99.8}
-          totalRequests={data?.requests}
+          totalRequests={data?.requests ?? 0}
+          successfulRequests={data?.successfulRequests ?? data?.requests ?? 0}
         />
       </div>
 
@@ -1163,16 +1227,44 @@ export default function OverviewPage() {
               }}
             >
               <div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
-                  Top models
-                </h3>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
+                    Top models
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCompareMode(!compareMode);
+                      if (compareMode) setSelectedForCompare([]);
+                    }}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: "2px 8px",
+                      borderRadius: 6,
+                      border: `1px solid ${compareMode ? "#8b5cf6" : "var(--border-default)"}`,
+                      background: compareMode ? "rgba(139, 92, 246, 0.15)" : "transparent",
+                      color: compareMode ? "#8b5cf6" : "var(--text-secondary)",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {compareMode ? "✓ Comparing (pick 2)" : "⇄ Compare"}
+                  </button>
+                </div>
                 <p style={{ fontSize: 13, color: "var(--text-tertiary)", margin: "5px 0 0 0" }}>
-                  Ranked by {metric} over the selected window
+                  {compareMode
+                    ? `Select 2 models to compare side-by-side (${selectedForCompare.length}/2)`
+                    : `Ranked by ${metric} over the selected window`}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setDrawerOpen(false)}
+                onClick={() => {
+                  setDrawerOpen(false);
+                  setCompareMode(false);
+                  setSelectedForCompare([]);
+                }}
                 style={{
                   background: "transparent",
                   color: "var(--text-tertiary)",
@@ -1190,6 +1282,67 @@ export default function OverviewPage() {
               </button>
             </div>
 
+            {/* Model Comparison Table (when 2 models selected) */}
+            {compareMode && selectedForCompare.length === 2 && (() => {
+              const m1 = data?.allModels?.find((m) => m.slug === selectedForCompare[0]);
+              const m2 = data?.allModels?.find((m) => m.slug === selectedForCompare[1]);
+              if (!m1 || !m2) return null;
+              return (
+                <div
+                  style={{
+                    margin: "14px 24px",
+                    padding: "14px",
+                    borderRadius: 10,
+                    background: "var(--bg-surface-elevated, rgba(255,255,255,0.04))",
+                    border: "1px solid rgba(139, 92, 246, 0.35)",
+                    fontSize: 12,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: "#8b5cf6" }}>Model Comparison</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedForCompare([])}
+                      style={{ fontSize: 11, color: "var(--text-tertiary)", background: "transparent", cursor: "pointer", border: "none" }}
+                    >
+                      Reset
+                    </button>
+                  </div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>
+                        <th style={{ padding: "6px 8px" }}>Metric</th>
+                        <th style={{ padding: "6px 8px" }}>{formatCleanTitle(m1.slug, m1.name)}</th>
+                        <th style={{ padding: "6px 8px" }}>{formatCleanTitle(m2.slug, m2.name)}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                        <td style={{ padding: "6px 8px", color: "var(--text-tertiary)" }}>Provider</td>
+                        <td style={{ padding: "6px 8px", fontWeight: 600 }}>{m1.provider}</td>
+                        <td style={{ padding: "6px 8px", fontWeight: 600 }}>{m2.provider}</td>
+                      </tr>
+                      <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                        <td style={{ padding: "6px 8px", color: "var(--text-tertiary)" }}>Requests</td>
+                        <td style={{ padding: "6px 8px", fontWeight: 600 }}>{m1.requests}</td>
+                        <td style={{ padding: "6px 8px", fontWeight: 600 }}>{m2.requests}</td>
+                      </tr>
+                      <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                        <td style={{ padding: "6px 8px", color: "var(--text-tertiary)" }}>Tokens</td>
+                        <td style={{ padding: "6px 8px", fontWeight: 600 }}>{m1.tokens.toLocaleString()}</td>
+                        <td style={{ padding: "6px 8px", fontWeight: 600 }}>{m2.tokens.toLocaleString()}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: "6px 8px", color: "var(--text-tertiary)" }}>Spend</td>
+                        <td style={{ padding: "6px 8px", fontWeight: 600 }}>${m1.spend.toFixed(4)}</td>
+                        <td style={{ padding: "6px 8px", fontWeight: 600 }}>${m2.spend.toFixed(4)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+
             {/* Scrollable Model List - Every single row has a visible horizontal line underneath */}
             <div
               style={{
@@ -1206,10 +1359,24 @@ export default function OverviewPage() {
                     : metric === "spend"
                     ? `$${curVal.toFixed(2)}`
                     : `${curVal}`;
+                const isSelected = selectedForCompare.includes(m.slug);
 
                 return (
                   <div
                     key={m.slug}
+                    onClick={() => {
+                      if (compareMode) {
+                        if (isSelected) {
+                          setSelectedForCompare(selectedForCompare.filter((s) => s !== m.slug));
+                        } else {
+                          if (selectedForCompare.length < 2) {
+                            setSelectedForCompare([...selectedForCompare, m.slug]);
+                          } else {
+                            setSelectedForCompare([selectedForCompare[1], m.slug]);
+                          }
+                        }
+                      }
+                    }}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -1218,12 +1385,25 @@ export default function OverviewPage() {
                       borderBottom: "1px solid var(--border-default)",
                       cursor: "pointer",
                       transition: "background-color 0.12s ease",
+                      background: isSelected ? "rgba(139, 92, 246, 0.08)" : "transparent",
                     }}
-                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--bg-surface-hover)")}
-                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) (e.currentTarget as HTMLElement).style.background = "var(--bg-surface-hover)";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) (e.currentTarget as HTMLElement).style.background = "transparent";
+                    }}
                   >
-                    {/* Left: Icon + Name + Provider */}
+                    {/* Left: Checkbox (if compareMode) + Icon + Name + Provider */}
                     <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flex: 1, paddingRight: 12 }}>
+                      {compareMode && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          readOnly
+                          style={{ cursor: "pointer", accentColor: "#8b5cf6" }}
+                        />
+                      )}
                       <ModelProviderIcon provider={m.provider} name={m.name} />
                       <div style={{ display: "flex", alignItems: "baseline", gap: 8, overflow: "hidden" }}>
                         <span

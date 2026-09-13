@@ -32,3 +32,32 @@ export async function validateApiKey(raw?: string | null) {
   if (rec.expiresAt && rec.expiresAt < new Date()) return null;
   return rec;
 }
+
+// ---------------------------------------------------------------------------
+// Per-key sliding window rate limiter (in-memory, resets on server restart)
+// ---------------------------------------------------------------------------
+declare global {
+  // eslint-disable-next-line no-var
+  var __rlWindows: Map<string, { count: number; start: number }> | undefined;
+}
+
+const rlWindows: Map<string, { count: number; start: number }> =
+  globalThis.__rlWindows ?? (globalThis.__rlWindows = new Map());
+
+/**
+ * Returns true if the request is allowed, false if rate-limited.
+ * Uses a per-minute sliding window keyed by API key ID.
+ */
+export function checkRateLimit(keyId: string, rpmLimit: number): boolean {
+  const now = Date.now();
+  const w = rlWindows.get(keyId);
+  if (!w || now - w.start > 60_000) {
+    // New window
+    rlWindows.set(keyId, { count: 1, start: now });
+    return true;
+  }
+  if (w.count >= rpmLimit) return false;
+  w.count++;
+  return true;
+}
+
