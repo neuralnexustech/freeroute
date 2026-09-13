@@ -291,6 +291,8 @@ export function stripArtifactTags(content: string): string {
     .replace(/<artifact\s+[^>]*>[\s\S]*$/i, "")
     .replace(/<project\s+[^>]*>[\s\S]*?<\/project>/gi, "")
     .replace(/<project\s+[^>]*>[\s\S]*$/i, "")
+    .replace(/<\/?(?:dots_)?function_call[^>]*>/gi, "")
+    .replace(/<\/?(?:dots_)?tool_call[^>]*>/gi, "")
     .trim();
 }
 

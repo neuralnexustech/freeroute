@@ -186,6 +186,9 @@ export function ChatMessageRow({
       .replace(/<function_call[\s\S]*$/i, "")
       .replace(/<function_output[\s\S]*?<\/function_output>/gi, "")
       .replace(/<function_output[\s\S]*$/i, "")
+      .replace(/<\/?(?:dots_)?function_call[^>]*>/gi, "")
+      .replace(/<\/?(?:dots_)?tool_call[^>]*>/gi, "")
+      .replace(/<dots_[\s\S]*?<\/dots_[\s\S]*?>/gi, "")
       .trim();
 
     return { parsedToolCalls: toolCalls, displayContent: textWithoutTools };
@@ -222,6 +225,8 @@ export function ChatMessageRow({
       .replace(/<\/?suggestions>/gi, "")
       .replace(/\[Inspected Component:[\s\S]*?User Request:/gi, "")
       .replace(/\[Inspected Component:[\s\S]*?\]/gi, "")
+      .replace(/<\/?(?:dots_)?function_call[^>]*>/gi, "")
+      .replace(/<\/?(?:dots_)?tool_call[^>]*>/gi, "")
       .replace(/<\/?think>/gi, "");
 
     // Strip raw multiline code blocks (```...```, ````...````, '''...''', indented code fences)
