@@ -213,7 +213,7 @@ export function MonoRoundedSankey({
       className={className}
       style={{
         width: "100%",
-        maxWidth: 720,
+        maxWidth: "100%",
         margin: "0 auto",
         borderRadius: 24,
         background: cardBg,

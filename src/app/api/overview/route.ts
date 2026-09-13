@@ -290,7 +290,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 6. Calculate Activity Streak and Daily Averages
+    // 6. Calculate Activity Streak, Daily Averages, and Current Month Activity Breakdown
     const activeDates = new Set<string>();
     for (const l of allLogs) {
       const d = new Date(l.createdAt);
@@ -303,6 +303,66 @@ export async function GET(req: NextRequest) {
 
     const avgDailySpend = totalSpend / activeDaysCount;
     const avgWeeklySpend = avgDailySpend * 7;
+
+    // Build Current Month daily activity matrix
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const monthName = now.toLocaleDateString("en-US", { month: "long" });
+    const todayDate = now.getDate();
+
+    const monthLogsMap = new Map<number, { tokens: number; requests: number; spend: number }>();
+    for (const l of allLogs) {
+      const d = new Date(l.createdAt);
+      if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
+        const day = d.getDate();
+        const cur = monthLogsMap.get(day) ?? { tokens: 0, requests: 0, spend: 0 };
+        const tok = l.promptTokens + l.completionTokens;
+        cur.tokens += tok;
+        cur.requests += 1;
+        cur.spend += l.cost;
+        monthLogsMap.set(day, cur);
+      }
+    }
+
+    const monthActivity: Array<{
+      day: number;
+      date: string;
+      tokens: number;
+      requests: number;
+      spend: number;
+      level: number;
+      isToday: boolean;
+      isFuture: boolean;
+      dayOfWeek: number;
+    }> = [];
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayDate = new Date(currentYear, currentMonth, day);
+      const isToday = day === todayDate;
+      const isFuture = day > todayDate;
+      const stats = monthLogsMap.get(day) ?? { tokens: 0, requests: 0, spend: 0 };
+
+      let level = 0;
+      if (stats.tokens > 0) {
+        if (stats.tokens < 500) level = 1;
+        else if (stats.tokens < 5000) level = 2;
+        else if (stats.tokens < 40000) level = 3;
+        else level = 4;
+      }
+
+      monthActivity.push({
+        day,
+        date: dayDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        tokens: stats.tokens,
+        requests: stats.requests,
+        spend: stats.spend,
+        level,
+        isToday,
+        isFuture,
+        dayOfWeek: dayDate.getDay(),
+      });
+    }
 
     // 7. Compute real API key usage and Apps breakdown
     let rawAppRows: Array<{ id: string; app: string | null }> = [];
@@ -442,6 +502,9 @@ export async function GET(req: NextRequest) {
         avgWeekSpend: avgWeeklySpend,
         totalTokens,
         totalSpend,
+        monthName,
+        year: currentYear,
+        monthActivity,
       },
       apiKeys: enrichedApiKeys,
     });
