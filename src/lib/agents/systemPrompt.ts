@@ -128,6 +128,7 @@ DELIVERABLE CONTRACT:
 3. Tactile Interactions (Emil Kowalski): Every button must have 'active:scale-[0.98]' and 150ms smooth transition.
 4. Inspectable Components: Add 'data-od-id="kebab-case-id"' to all major sections, cards, and buttons so the user can click to inspect.
 5. Anti-AI-Slop: No generic gradient blobs on dark cards, no three identical feature cards with colored left borders, no orphaned words.
+6. Clean Text: NEVER output raw internal function/tool tags such as <dots_function_call> or <function_call> in chat text.
 </designer_mode_craft_contract>`);
   } else {
     sections.push(`<chat_mode_engineering_contract>
