@@ -13,6 +13,7 @@ export interface SrcdocOptions {
   theme?: "light" | "dark";
   baseHref?: string;
   reloadKey?: number;
+  files?: Record<string, string>;
 }
 
 /**
@@ -23,6 +24,49 @@ export function sanitizeTitle(text: string): string {
     .replace(/[:#%&*{}\\<>?/+|"]+/g, "-")
     .replace(/^~\$/, "")
     .trim() || "Untitled Project";
+}
+
+/**
+ * Inlines project CSS and JS files referenced by relative URLs into the HTML string
+ */
+export function inlineProjectFiles(html: string, files?: Record<string, string>): string {
+  if (!files || Object.keys(files).length === 0) return html;
+
+  let result = html;
+
+  // 1. Resolve <link rel="stylesheet" href="...">
+  result = result.replace(/<link\s+[^>]*href=["']([^"']+)["'][^>]*>/gi, (match, href) => {
+    if (!/rel=["']stylesheet["']/i.test(match)) return match;
+    const cleanHref = href.replace(/^\.\//, "").replace(/^\//, "").trim();
+    
+    // Check direct match or base filename match
+    const matchedKey = Object.keys(files).find(
+      (k) => k === cleanHref || k.endsWith("/" + cleanHref) || cleanHref.endsWith("/" + k)
+    );
+
+    if (matchedKey && files[matchedKey]) {
+      return `<style data-inlined-from="${matchedKey}">\n/* Inlined from ${matchedKey} */\n${files[matchedKey]}\n</style>`;
+    }
+    return match;
+  });
+
+  // 2. Resolve <script src="...">
+  result = result.replace(/<script\s+[^>]*src=["']([^"']+)["'][^>]*>\s*<\/script>/gi, (match, src) => {
+    if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("//")) {
+      return match;
+    }
+    const cleanSrc = src.replace(/^\.\//, "").replace(/^\//, "").trim();
+    const matchedKey = Object.keys(files).find(
+      (k) => k === cleanSrc || k.endsWith("/" + cleanSrc) || cleanSrc.endsWith("/" + k)
+    );
+
+    if (matchedKey && files[matchedKey]) {
+      return `<script data-inlined-from="${matchedKey}">\n/* Inlined from ${matchedKey} */\n${files[matchedKey]}\n</script>`;
+    }
+    return match;
+  });
+
+  return result;
 }
 
 /**
@@ -63,6 +107,36 @@ const OBSERVABILITY_BRIDGE_SCRIPT = `
         time: Date.now()
       }, '*');
     });
+
+    // 1b. Console Log Interception Bridge
+    try {
+      var consoleMethods = ['log', 'info', 'warn', 'error'];
+      consoleMethods.forEach(function(method) {
+        var original = console[method];
+        console[method] = function() {
+          if (original) {
+            try { original.apply(console, arguments); } catch (_) {}
+          }
+          try {
+            var args = Array.prototype.slice.call(arguments).map(function(arg) {
+              if (arg === null) return 'null';
+              if (arg === undefined) return 'undefined';
+              if (typeof arg === 'object') {
+                try { return JSON.stringify(arg, null, 2); } catch (_) { return String(arg); }
+              }
+              return String(arg);
+            });
+            window.parent.postMessage({
+              type: 'freeroute:preview-console',
+              level: method,
+              args: args,
+              message: args.join(' '),
+              time: Date.now()
+            }, '*');
+          } catch (_) {}
+        };
+      });
+    } catch (_) {}
 
     // Notify parent that document is loaded and responsive
     window.addEventListener('DOMContentLoaded', function() {
@@ -690,6 +764,11 @@ export function buildSrcdoc(rawContent: string, options: SrcdocOptions = {}): st
 
   // Guard against meta-refresh infinite redirect loops
   content = content.replace(/<meta[^>]+http-equiv=["']?refresh["']?[^>]*>/gi, "<!-- [meta refresh disabled] -->");
+
+  // Inline project CSS/JS if multi-file dictionary provided
+  if (options.files) {
+    content = inlineProjectFiles(content, options.files);
+  }
 
   // 1. Check if it's a React / TSX / JSX component
   if (isReactComponentSource(content, options.title)) {

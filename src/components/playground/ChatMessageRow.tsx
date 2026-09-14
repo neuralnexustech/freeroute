@@ -312,7 +312,21 @@ export function ChatMessageRow({
 
         {/* 4. ASSISTANT TEXT CONTENT */}
         {userFacingText ? (
-          <ReactMarkdownLite content={userFacingText} />
+          <ReactMarkdownLite
+            content={userFacingText}
+            onRunCode={(code, lang) => {
+              const ext =
+                lang === "python" || lang === "py"
+                  ? "py"
+                  : lang === "typescript" || lang === "ts"
+                  ? "ts"
+                  : "js";
+              onRunFile?.({
+                name: `snippet.${ext}`,
+                content: code,
+              });
+            }}
+          />
         ) : message.streaming && thinkingContent ? (
           <div className="flex items-center gap-2 text-xs text-neutral-400 italic py-1">
             <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
