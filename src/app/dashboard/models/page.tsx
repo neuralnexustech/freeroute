@@ -148,6 +148,23 @@ function contextBucket(ctx: string): string {
   return "> 128K";
 }
 
+function fmtModelPrice(price: number) {
+  if (price === 0) {
+    return (
+      <span className="pill active" style={{ fontSize: 10.5, padding: "1px 6px", fontWeight: 700 }}>
+        Free
+      </span>
+    );
+  }
+  const formatted =
+    price < 0.01
+      ? price.toFixed(4)
+      : price < 1 && (price * 100) % 1 !== 0
+      ? price.toFixed(3)
+      : price.toFixed(2);
+  return `$${formatted}`;
+}
+
 export default function ModelsPage() {
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<ModelRow[]>([]);
@@ -403,8 +420,8 @@ export default function ModelsPage() {
                     })()}
                   </td>
                   <td className="num mono">{m.contextWindow}</td>
-                  <td className="num mono" style={{ color: "var(--primary)" }}>${m.inputPrice}</td>
-                  <td className="num mono">${m.outputPrice}</td>
+                  <td className="num mono" style={{ color: m.inputPrice === 0 ? "inherit" : "var(--primary)" }}>{fmtModelPrice(m.inputPrice)}</td>
+                  <td className="num mono">{fmtModelPrice(m.outputPrice)}</td>
                   <td className="num mono" style={{ color: (m.spend ?? 0) > 0 ? "var(--warning)" : "var(--text-tertiary)", fontWeight: (m.spend ?? 0) > 0 ? 600 : 400 }}>
                     ${(m.spend ?? 0) < 0.0001 && (m.spend ?? 0) > 0 ? (m.spend ?? 0).toFixed(6) : (m.spend ?? 0).toFixed(4)}
                   </td>
@@ -422,7 +439,7 @@ export default function ModelsPage() {
         </div>
       </div>
       <p style={{ color: "var(--text-tertiary)", fontSize: 11.5 }}>
-        Prices reflect per million tokens on the cheapest verified route. Throughput (tok/s) and Time to First Token (TTFT) are updated continuously via real-time trace telemetry.
+        Prices reflect cost per 1 Million (1M) prompt &amp; completion tokens on the cheapest verified route. Models marked <strong style={{ color: "#10b981" }}>Free</strong> incur zero token charges. Throughput (tok/s) and Time to First Token (TTFT) are updated continuously via real-time trace telemetry.
       </p>
     </>
   );
