@@ -24,11 +24,14 @@ import {
   LayoutGrid,
   Plus,
   FileCode2,
+  Terminal as TerminalIcon,
+  Play,
 } from "lucide-react";
 import JSZip from "jszip";
 import { FileTree, FileTreeFile } from "./FileTree";
 import { buildSandboxedSrcDoc, sanitizeTitle } from "@/lib/srcdoc";
 import { DesignerArtifactView } from "@/lib/designerArtifact";
+import { TerminalPanel, TerminalOutput } from "./TerminalPanel";
 
 export interface InspectedElement {
   tag: string;
@@ -49,6 +52,12 @@ interface Props {
   onFixErrorWithAI?: (errorMessage: string) => void;
   onInspectElement?: (el: InspectedElement) => void;
   onAttachScreenshot?: (dataUrl: string) => void;
+  viewMode?: "preview" | "code" | "terminal";
+  onViewModeChange?: (mode: "preview" | "code" | "terminal") => void;
+  terminalOutput?: TerminalOutput | null;
+  isExecuting?: boolean;
+  onRunCode?: () => void;
+  onClearTerminal?: () => void;
 }
 
 export function ArtifactPanel({
@@ -60,8 +69,22 @@ export function ArtifactPanel({
   onFixErrorWithAI,
   onInspectElement,
   onAttachScreenshot,
+  viewMode: viewModeProp,
+  onViewModeChange,
+  terminalOutput,
+  isExecuting,
+  onRunCode,
+  onClearTerminal,
 }: Props) {
-  const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
+  const [internalViewMode, setInternalViewMode] = useState<"preview" | "code" | "terminal">("preview");
+  const viewMode = viewModeProp !== undefined ? viewModeProp : internalViewMode;
+  const setViewMode = onViewModeChange || setInternalViewMode;
+
+  const [internalTerminalOutput, setInternalTerminalOutput] = useState<TerminalOutput | null>(null);
+  const [isInternalExecuting, setIsInternalExecuting] = useState(false);
+
+  const resolvedOutput = terminalOutput !== undefined ? terminalOutput : internalTerminalOutput;
+  const isCurrentlyExecuting = isExecuting !== undefined ? isExecuting : isInternalExecuting;
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [zoom, setZoom] = useState<number>(100);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -159,6 +182,49 @@ export function ArtifactPanel({
     }
     return "";
   }, [project, effectiveSelectedFile, activeFileList, artifact]);
+
+  const handleExecuteCurrentCode = async () => {
+    if (onRunCode) {
+      onRunCode();
+      return;
+    }
+    if (!effectiveSelectedFile || !activeCode) return;
+    setIsInternalExecuting(true);
+    setViewMode("terminal");
+    const rawExt = effectiveSelectedFile.split(".").pop()?.toLowerCase() || "";
+    const language = rawExt === "py" ? "python" : (rawExt === "ts" ? "typescript" : "javascript");
+    const cmd = language === "python" ? `python ${effectiveSelectedFile}` : `node ${effectiveSelectedFile}`;
+
+    try {
+      const res = await fetch("/api/playground/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          language,
+          code: activeCode,
+          filename: effectiveSelectedFile,
+        }),
+      });
+      const data = await res.json();
+      setInternalTerminalOutput({
+        stdout: data.stdout || "",
+        stderr: data.stderr || "",
+        exitCode: data.exitCode ?? 0,
+        executionTimeMs: data.executionTimeMs || 0,
+        command: cmd,
+      });
+    } catch (err: any) {
+      setInternalTerminalOutput({
+        stdout: "",
+        stderr: `Execution Request Failed: ${err.message}`,
+        exitCode: 1,
+        executionTimeMs: 0,
+        command: cmd,
+      });
+    } finally {
+      setIsInternalExecuting(false);
+    }
+  };
 
   // Generate sandboxed srcdoc
   const srcDoc = React.useMemo(() => {
@@ -464,6 +530,24 @@ export function ArtifactPanel({
               <Code2 size={13} />
               <span>Code</span>
             </button>
+            <button
+              onClick={() => setViewMode("terminal")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition-all ${
+                viewMode === "terminal"
+                  ? "bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-xs font-semibold"
+                  : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-200"
+              }`}
+            >
+              <TerminalIcon size={13} className={isCurrentlyExecuting ? "text-emerald-500 animate-pulse" : ""} />
+              <span>Terminal</span>
+              {resolvedOutput && (
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    resolvedOutput.exitCode === 0 ? "bg-emerald-500" : "bg-rose-500"
+                  }`}
+                />
+              )}
+            </button>
           </div>
 
           <span className="text-neutral-300 dark:text-neutral-700">|</span>
@@ -701,7 +785,23 @@ export function ArtifactPanel({
             {/* Code Content View */}
             <div className="flex-1 flex flex-col h-full overflow-hidden bg-neutral-950 text-neutral-100 font-mono text-xs">
               <div className="flex items-center justify-between px-4 py-2 bg-neutral-900 border-b border-neutral-800 text-neutral-400 text-[11px]">
-                <span>{effectiveSelectedFile || selectedFile || "source.html"}</span>
+                <div className="flex items-center gap-2">
+                  <span>{effectiveSelectedFile || selectedFile || "source.html"}</span>
+                  {(effectiveSelectedFile?.endsWith(".py") ||
+                    effectiveSelectedFile?.endsWith(".js") ||
+                    effectiveSelectedFile?.endsWith(".ts") ||
+                    effectiveSelectedFile?.endsWith(".mjs")) && (
+                    <button
+                      onClick={handleExecuteCurrentCode}
+                      disabled={isCurrentlyExecuting}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-[10.5px] transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+                      title="Run this file in Terminal"
+                    >
+                      <Play size={10} className="fill-current" />
+                      <span>{effectiveSelectedFile?.endsWith(".py") ? "Run Python" : "Run Code"}</span>
+                    </button>
+                  )}
+                </div>
                 <button
                   onClick={handleCopyCode}
                   className="flex items-center gap-1 hover:text-neutral-200 transition-colors"
@@ -715,6 +815,27 @@ export function ArtifactPanel({
               </pre>
             </div>
           </div>
+        )}
+
+        {/* TERMINAL VIEW */}
+        {viewMode === "terminal" && (
+          <TerminalPanel
+            currentFile={
+              effectiveSelectedFile
+                ? {
+                    name: effectiveSelectedFile,
+                    content: activeCode,
+                  }
+                : null
+            }
+            output={resolvedOutput}
+            isRunning={isCurrentlyExecuting}
+            onRunCode={handleExecuteCurrentCode}
+            onClearOutput={() => {
+              if (onClearTerminal) onClearTerminal();
+              setInternalTerminalOutput(null);
+            }}
+          />
         )}
       </div>
 

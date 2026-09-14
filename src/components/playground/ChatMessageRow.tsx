@@ -20,6 +20,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Clock,
+  Play,
 } from "lucide-react";
 import { ReactMarkdownLite } from "./ReactMarkdownLite";
 import { ToolResultWidget } from "./ToolResultWidget";
@@ -56,6 +57,7 @@ export interface ChatMessage {
 interface Props {
   message: ChatMessage;
   onOpenFileInPreview?: (fileName: string) => void;
+  onRunFile?: (file: MessageTurnFile) => void;
   onDownloadFile?: (file: MessageTurnFile) => void;
   onSelectSuggestion?: (prompt: string) => void;
   mode: "chat" | "designer";
@@ -64,6 +66,7 @@ interface Props {
 export function ChatMessageRow({
   message,
   onOpenFileInPreview,
+  onRunFile,
   onDownloadFile,
   onSelectSuggestion,
   mode,
@@ -328,8 +331,10 @@ export function ChatMessageRow({
                 const linesCount = file.content ? file.content.split("\n").length : 1;
                 const additions = file.additions ?? Math.max(1, linesCount);
                 const deletions = file.deletions ?? 0;
-                const ext = file.name.split(".").pop()?.toUpperCase() || "FILE";
-                const isRunnable = ext === "PY" || ext === "JS" || ext === "TS";
+                const rawExt = file.name.split(".").pop()?.toLowerCase() || "";
+                const ext = rawExt.toUpperCase() || "FILE";
+                const isRunnable = rawExt === "py" || rawExt === "js" || rawExt === "ts" || rawExt === "mjs";
+                const runLabel = rawExt === "py" ? "Run Python" : rawExt === "js" || rawExt === "mjs" ? "Run Node" : "Run Code";
 
                 return (
                   <div
@@ -373,19 +378,38 @@ export function ChatMessageRow({
                     </button>
 
                     <div className="flex items-center gap-1.5 shrink-0 text-xs">
-                      {onOpenFileInPreview && (
-                        <button
-                          type="button"
-                          onClick={() => onOpenFileInPreview(file.name)}
-                          className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer flex items-center gap-1 ${
-                            isRunnable
-                              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100"
-                              : "text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40"
-                          }`}
-                        >
-                          {isRunnable && <span className="font-bold">▶</span>}
-                          <span>{isRunnable ? "Run / Code" : "Open"}</span>
-                        </button>
+                      {isRunnable ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => (onRunFile ? onRunFile(file) : onOpenFileInPreview?.(file.name))}
+                            className="px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 active:scale-95 shadow-2xs"
+                            title={`Run ${file.name} in Terminal`}
+                          >
+                            <Play size={10} className="fill-current" />
+                            <span>{runLabel}</span>
+                          </button>
+                          {onOpenFileInPreview && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenFileInPreview(file.name)}
+                              className="px-2 py-1 rounded-lg font-medium transition-colors cursor-pointer text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                              title="View Code"
+                            >
+                              <span>Code</span>
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        onOpenFileInPreview && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenFileInPreview(file.name)}
+                            className="px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                          >
+                            <span>Open</span>
+                          </button>
+                        )
                       )}
                       {onDownloadFile && (
                         <button

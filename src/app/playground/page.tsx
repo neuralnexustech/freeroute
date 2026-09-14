@@ -8,6 +8,7 @@ import { ChatMessageRow } from "@/components/playground/ChatMessageRow";
 import { ArtifactPanel, InspectedElement } from "@/components/playground/ArtifactPanel";
 import { ToolResultWidget } from "@/components/playground/ToolResultWidget";
 import { ChatWorkspacePanel } from "@/components/playground/ChatWorkspacePanel";
+import { TerminalOutput } from "@/components/playground/TerminalPanel";
 import { usePlaygroundChat } from "./usePlaygroundChat";
 import {
   Sparkles,
@@ -68,6 +69,59 @@ export default function PlaygroundPage() {
       setRightPanelOpen(true);
     },
   });
+
+  // Terminal execution state shared across Chat and Designer modes
+  const [terminalOutput, setTerminalOutput] = useState<TerminalOutput | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [designerTab, setDesignerTab] = useState<"preview" | "code" | "terminal">("preview");
+  const [workspaceTab, setWorkspaceTab] = useState<"file" | "terminal" | "review" | "tree" | "widget">("file");
+
+  const handleRunFile = async (file: { name: string; content: string }) => {
+    setRightPanelOpen(true);
+    if (mode === "designer") {
+      setSelectedFile(file.name);
+      setDesignerTab("terminal");
+    } else {
+      const found = workspaceFiles.find((f) => f.name === file.name);
+      if (found) setActiveWorkspaceFile(found);
+      setWorkspaceTab("terminal");
+    }
+
+    setIsExecuting(true);
+    const rawExt = file.name.split(".").pop()?.toLowerCase() || "";
+    const language = rawExt === "py" ? "python" : (rawExt === "ts" ? "typescript" : "javascript");
+    const cmd = language === "python" ? `python ${file.name}` : `node ${file.name}`;
+
+    try {
+      const res = await fetch("/api/playground/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          language,
+          code: file.content,
+          filename: file.name,
+        }),
+      });
+      const data = await res.json();
+      setTerminalOutput({
+        stdout: data.stdout || "",
+        stderr: data.stderr || "",
+        exitCode: data.exitCode ?? 0,
+        executionTimeMs: data.executionTimeMs || 0,
+        command: cmd,
+      });
+    } catch (err: any) {
+      setTerminalOutput({
+        stdout: "",
+        stderr: `Execution Request Failed: ${err.message}`,
+        exitCode: 1,
+        executionTimeMs: 0,
+        command: cmd,
+      });
+    } finally {
+      setIsExecuting(false);
+    }
+  };
 
   // Auto-scroll messages
   useEffect(() => {
@@ -248,14 +302,17 @@ export default function PlaygroundPage() {
                   onOpenFileInPreview={(filename) => {
                     if (mode === "designer") {
                       setSelectedFile(filename);
+                      setDesignerTab(filename.endsWith(".html") ? "preview" : "code");
                     } else {
                       const found = workspaceFiles.find((f) => f.name === filename);
                       if (found) {
                         setActiveWorkspaceFile(found);
                       }
+                      setWorkspaceTab("file");
                     }
                     setRightPanelOpen(true);
                   }}
+                  onRunFile={handleRunFile}
                   onDownloadFile={(file) => {
                     const blob = new Blob([file.content], { type: "text/plain;charset=utf-8" });
                     const url = URL.createObjectURL(blob);
@@ -316,6 +373,26 @@ export default function PlaygroundPage() {
               onAttachScreenshot={(dataUrl) => {
                 setScreenshot(dataUrl);
               }}
+              viewMode={designerTab}
+              onViewModeChange={setDesignerTab}
+              terminalOutput={terminalOutput}
+              isExecuting={isExecuting}
+              onRunCode={() => {
+                const targetFile =
+                  (artifact?.files?.find((f) => f.path === selectedFile)
+                    ? { name: selectedFile, content: artifact.files.find((f) => f.path === selectedFile)!.content }
+                    : null) ||
+                  workspaceFiles.find((f) => f.name === selectedFile) ||
+                  (selectedFile && projectData?.files[selectedFile] !== undefined
+                    ? { name: selectedFile, content: projectData.files[selectedFile] }
+                    : null);
+                if (targetFile) {
+                  handleRunFile(targetFile);
+                } else if (workspaceFiles[0]) {
+                  handleRunFile(workspaceFiles[0]);
+                }
+              }}
+              onClearTerminal={() => setTerminalOutput(null)}
             />
           ) : (
             /* Chat Mode Right-Side Context & Tools Workspace */
@@ -328,6 +405,18 @@ export default function PlaygroundPage() {
               }}
               activeToolResult={activeToolResult}
               onSendPrompt={(prompt) => send(prompt)}
+              activeTab={workspaceTab}
+              onTabChange={setWorkspaceTab}
+              terminalOutput={terminalOutput}
+              isExecuting={isExecuting}
+              onRunCode={() => {
+                if (activeWorkspaceFile) {
+                  handleRunFile(activeWorkspaceFile);
+                } else if (workspaceFiles[0]) {
+                  handleRunFile(workspaceFiles[0]);
+                }
+              }}
+              onClearTerminal={() => setTerminalOutput(null)}
             />
           )}
         </div>
