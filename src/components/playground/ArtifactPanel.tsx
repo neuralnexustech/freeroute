@@ -1,6 +1,34 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import dynamic from "next/dynamic";
+
+const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 h-full flex items-center justify-center bg-[#1e1e1e] text-neutral-400 font-mono text-xs">
+      Loading Code Editor...
+    </div>
+  ),
+});
+
+function getMonacoLanguage(filename: string): string {
+  const ext = filename?.split(".").pop()?.toLowerCase() || "";
+  switch (ext) {
+    case "html": return "html";
+    case "css": return "css";
+    case "js":
+    case "mjs":
+    case "jsx": return "javascript";
+    case "ts":
+    case "tsx": return "typescript";
+    case "py": return "python";
+    case "json": return "json";
+    case "md": return "markdown";
+    case "sql": return "sql";
+    default: return "plaintext";
+  }
+}
 import {
   Eye,
   Code2,
@@ -30,8 +58,9 @@ import {
 import JSZip from "jszip";
 import { FileTree, FileTreeFile } from "./FileTree";
 import { buildSandboxedSrcDoc, sanitizeTitle } from "@/lib/srcdoc";
+import { runPythonWithPyodide } from "@/lib/pyodideRunner";
 import { DesignerArtifactView } from "@/lib/designerArtifact";
-import { TerminalPanel, TerminalOutput } from "./TerminalPanel";
+import { TerminalPanel, TerminalOutput, ConsoleLogEntry } from "./TerminalPanel";
 
 export interface InspectedElement {
   tag: string;
@@ -91,6 +120,8 @@ export function ArtifactPanel({
   const [inspectorActive, setInspectorActive] = useState(false);
   const [screenshotMenuOpen, setScreenshotMenuOpen] = useState(false);
   const [capturedScreenshot, setCapturedScreenshot] = useState<string | null>(null);
+  const [liveConsoleLogs, setLiveConsoleLogs] = useState<ConsoleLogEntry[]>([]);
+  const [editedFiles, setEditedFiles] = useState<Record<string, string>>({});
 
   // Runtime error state
   const [runtimeError, setRuntimeError] = useState<{
@@ -172,6 +203,9 @@ export function ArtifactPanel({
 
   // Active code content based on selected file or artifact
   const activeCode = React.useMemo(() => {
+    if (effectiveSelectedFile && editedFiles[effectiveSelectedFile] !== undefined) {
+      return editedFiles[effectiveSelectedFile];
+    }
     if (project?.files && effectiveSelectedFile && project.files[effectiveSelectedFile] !== undefined) {
       return project.files[effectiveSelectedFile];
     }
@@ -181,7 +215,7 @@ export function ArtifactPanel({
       return artifact.html;
     }
     return "";
-  }, [project, effectiveSelectedFile, activeFileList, artifact]);
+  }, [project, effectiveSelectedFile, activeFileList, artifact, editedFiles]);
 
   const handleExecuteCurrentCode = async () => {
     if (onRunCode) {
@@ -194,6 +228,22 @@ export function ArtifactPanel({
     const rawExt = effectiveSelectedFile.split(".").pop()?.toLowerCase() || "";
     const language = rawExt === "py" ? "python" : (rawExt === "ts" ? "typescript" : "javascript");
     const cmd = language === "python" ? `python ${effectiveSelectedFile}` : `node ${effectiveSelectedFile}`;
+
+    if (language === "python") {
+      try {
+        const pyResult = await runPythonWithPyodide(activeCode);
+        setInternalTerminalOutput({
+          stdout: pyResult.stdout || (pyResult.result ? `=> ${pyResult.result}` : ""),
+          stderr: pyResult.stderr || "",
+          exitCode: pyResult.stderr ? 1 : 0,
+          executionTimeMs: pyResult.executionTimeMs,
+          command: cmd,
+        });
+        return;
+      } catch (clientErr: any) {
+        console.warn("Pyodide execution fallback to server API:", clientErr);
+      }
+    }
 
     try {
       const res = await fetch("/api/playground/execute", {
@@ -228,14 +278,20 @@ export function ArtifactPanel({
 
   // Generate sandboxed srcdoc
   const srcDoc = React.useMemo(() => {
-    if (project?.files) {
+    const combinedFiles = project?.files
+      ? { ...project.files, ...editedFiles }
+      : Object.keys(editedFiles).length > 0
+      ? editedFiles
+      : null;
+
+    if (combinedFiles) {
       // Find entry point or main html
       const entryPath =
-        project.files["index.html"] !== undefined
+        combinedFiles["index.html"] !== undefined
           ? "index.html"
-          : Object.keys(project.files).find((f) => f.endsWith(".html")) || "";
+          : Object.keys(combinedFiles).find((f) => f.endsWith(".html")) || "";
 
-      let html = entryPath ? project.files[entryPath] : "";
+      let html = entryPath ? combinedFiles[entryPath] : "";
 
       if (html) {
         // Inline CSS files
@@ -246,16 +302,16 @@ export function ArtifactPanel({
           (match, href1, href2) => {
             const href = (href1 || href2 || "").replace(/^\.?\//, "");
             const cleanHref = href.split("?")[0].split("#")[0];
-            if (project.files[cleanHref] !== undefined) {
+            if (combinedFiles[cleanHref] !== undefined) {
               inlinedCss.add(cleanHref);
-              return `<style data-filename="${cleanHref}">\n${project.files[cleanHref]}\n</style>`;
+              return `<style data-filename="${cleanHref}">\n${combinedFiles[cleanHref]}\n</style>`;
             }
             return match;
           }
         );
 
-        // 2. Inline any remaining CSS files from project.files that were not inlined
-        Object.entries(project.files).forEach(([fname, content]) => {
+        // 2. Inline any remaining CSS files from combinedFiles that were not inlined
+        Object.entries(combinedFiles).forEach(([fname, content]) => {
           if (fname.endsWith(".css") && !inlinedCss.has(fname)) {
             const styleTag = `<style data-filename="${fname}">\n${content}\n</style>`;
             if (html.includes("</head>")) {
@@ -273,16 +329,16 @@ export function ArtifactPanel({
           /<script\s+[^>]*src=["']([^"']+)["'][^>]*>\s*<\/script>/gi,
           (match, src) => {
             const cleanSrc = (src || "").replace(/^\.?\//, "").split("?")[0].split("#")[0];
-            if (project.files[cleanSrc] !== undefined) {
+            if (combinedFiles[cleanSrc] !== undefined) {
               inlinedJs.add(cleanSrc);
-              return `<script data-filename="${cleanSrc}">\n${project.files[cleanSrc]}\n</script>`;
+              return `<script data-filename="${cleanSrc}">\n${combinedFiles[cleanSrc]}\n</script>`;
             }
             return match;
           }
         );
 
         // 4. Inline any remaining JS files
-        Object.entries(project.files).forEach(([fname, content]) => {
+        Object.entries(combinedFiles).forEach(([fname, content]) => {
           if (
             (fname.endsWith(".js") || fname.endsWith(".ts")) &&
             !fname.endsWith(".d.ts") &&
@@ -298,21 +354,30 @@ export function ArtifactPanel({
         });
       } else {
         // Check for React component entry point
-        const reactEntry = Object.keys(project.files).find(
+        const reactEntry = Object.keys(combinedFiles).find(
           (f) => f.endsWith(".tsx") || f.endsWith(".jsx")
         );
         if (reactEntry) {
-          return buildSandboxedSrcDoc(project.files[reactEntry], {
-            title: project.title || reactEntry,
+          return buildSandboxedSrcDoc(combinedFiles[reactEntry], {
+            title: project?.title || reactEntry,
             theme: "light",
+            files: combinedFiles,
           });
         }
         // synthesize simple preview if other project files
-        html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><script src="https://cdn.tailwindcss.com"></script></head><body class="p-8 bg-neutral-50 text-neutral-900 font-sans"><div class="max-w-xl mx-auto bg-white p-6 rounded-2xl shadow-sm border border-neutral-200"><h2 class="text-xl font-bold mb-2">${project.title || "Project Preview"}</h2><p class="text-sm text-neutral-600 mb-4">Multi-file project with ${Object.keys(project.files).length} files.</p><div class="space-y-1">${Object.keys(project.files).map((f) => `<div class="text-xs font-mono py-1 px-2 rounded bg-neutral-100">${f}</div>`).join("")}</div></div></body></html>`;
+        html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><script src="https://cdn.tailwindcss.com"></script></head><body class="p-8 bg-neutral-50 text-neutral-900 font-sans"><div class="max-w-xl mx-auto bg-white p-6 rounded-2xl shadow-sm border border-neutral-200"><h2 class="text-xl font-bold mb-2">${project?.title || "Project Preview"}</h2><p class="text-sm text-neutral-600 mb-4">Multi-file project with ${Object.keys(combinedFiles).length} files.</p><div class="space-y-1">${Object.keys(combinedFiles).map((f) => `<div class="text-xs font-mono py-1 px-2 rounded bg-neutral-100">${f}</div>`).join("")}</div></div></body></html>`;
       }
 
       return buildSandboxedSrcDoc(html, {
-        title: project.title || "Project Preview",
+        title: project?.title || "Project Preview",
+        theme: "light",
+        files: combinedFiles,
+      });
+    }
+
+    if (editedFiles["index.html"]) {
+      return buildSandboxedSrcDoc(editedFiles["index.html"], {
+        title: artifact?.title || "Design Artifact",
         theme: "light",
       });
     }
@@ -325,7 +390,7 @@ export function ArtifactPanel({
     }
 
     return "";
-  }, [project, artifact]);
+  }, [project, artifact, editedFiles]);
 
   // Listen to postMessage from sandboxed iframe
   useEffect(() => {
@@ -343,6 +408,16 @@ export function ArtifactPanel({
       } else if (data.type === "freeroute:preview-ready") {
         // clear errors on clean reload
         setRuntimeError(null);
+      } else if (data.type === "freeroute:preview-console") {
+        setLiveConsoleLogs((prev) => [
+          ...prev.slice(-199),
+          {
+            level: data.level || "log",
+            args: data.args || [],
+            message: data.message || "",
+            time: data.time || Date.now(),
+          },
+        ]);
       } else if (data.type === "freeroute:element-selected") {
         if (onInspectElement) {
           onInspectElement({
@@ -787,6 +862,24 @@ export function ArtifactPanel({
               <div className="flex items-center justify-between px-4 py-2 bg-neutral-900 border-b border-neutral-800 text-neutral-400 text-[11px]">
                 <div className="flex items-center gap-2">
                   <span>{effectiveSelectedFile || selectedFile || "source.html"}</span>
+                  {effectiveSelectedFile && editedFiles[effectiveSelectedFile] !== undefined && (
+                    <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-medium border border-amber-500/30">
+                      <span>Edited</span>
+                      <button
+                        onClick={() => {
+                          setEditedFiles((prev) => {
+                            const next = { ...prev };
+                            delete next[effectiveSelectedFile];
+                            return next;
+                          });
+                        }}
+                        className="hover:text-white cursor-pointer ml-0.5"
+                        title="Reset to original content"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  )}
                   {(effectiveSelectedFile?.endsWith(".py") ||
                     effectiveSelectedFile?.endsWith(".js") ||
                     effectiveSelectedFile?.endsWith(".ts") ||
@@ -804,15 +897,39 @@ export function ArtifactPanel({
                 </div>
                 <button
                   onClick={handleCopyCode}
-                  className="flex items-center gap-1 hover:text-neutral-200 transition-colors"
+                  className="flex items-center gap-1 hover:text-neutral-200 transition-colors cursor-pointer"
                 >
                   {copiedCode ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                   <span>{copiedCode ? "Copied" : "Copy"}</span>
                 </button>
               </div>
-              <pre className="flex-1 p-4 overflow-auto leading-relaxed">
-                <code>{activeCode || "// No code available"}</code>
-              </pre>
+
+              {/* Monaco Code Editor */}
+              <div className="flex-1 h-full overflow-hidden">
+                <MonacoEditor
+                  height="100%"
+                  language={getMonacoLanguage(effectiveSelectedFile || selectedFile || "")}
+                  value={activeCode || ""}
+                  theme="vs-dark"
+                  onChange={(val) => {
+                    if (val !== undefined && effectiveSelectedFile) {
+                      setEditedFiles((prev) => ({ ...prev, [effectiveSelectedFile]: val }));
+                    }
+                  }}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 12.5,
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                    scrollBeyondLastLine: false,
+                    lineNumbers: "on",
+                    roundedSelection: true,
+                    padding: { top: 12, bottom: 12 },
+                    automaticLayout: true,
+                    tabSize: 2,
+                    wordWrap: "on",
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -829,11 +946,13 @@ export function ArtifactPanel({
                 : null
             }
             output={resolvedOutput}
+            consoleLogs={liveConsoleLogs}
             isRunning={isCurrentlyExecuting}
             onRunCode={handleExecuteCurrentCode}
             onClearOutput={() => {
               if (onClearTerminal) onClearTerminal();
               setInternalTerminalOutput(null);
+              setLiveConsoleLogs([]);
             }}
           />
         )}

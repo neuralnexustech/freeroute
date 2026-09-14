@@ -14,17 +14,26 @@ import {
   Code2,
 } from "lucide-react";
 
+export interface ConsoleLogEntry {
+  level: "log" | "info" | "warn" | "error" | "debug";
+  args: string[];
+  message: string;
+  time: number;
+}
+
 export interface TerminalOutput {
   stdout: string;
   stderr: string;
   exitCode: number;
   executionTimeMs: number;
   command: string;
+  consoleLogs?: ConsoleLogEntry[];
 }
 
 interface Props {
   currentFile?: { name: string; content: string } | null;
   output: TerminalOutput | null;
+  consoleLogs?: ConsoleLogEntry[];
   isRunning: boolean;
   onRunCode?: () => void;
   onClearOutput?: () => void;
@@ -33,11 +42,13 @@ interface Props {
 export function TerminalPanel({
   currentFile,
   output,
+  consoleLogs = [],
   isRunning,
   onRunCode,
   onClearOutput,
 }: Props) {
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<"all" | "commands" | "console">("all");
 
   const rawExt = currentFile?.name?.split(".").pop()?.toLowerCase() || "";
   const languageLabel =
@@ -51,9 +62,21 @@ export function TerminalPanel({
 
   const isRunnable = rawExt === "py" || rawExt === "js" || rawExt === "ts" || rawExt === "mjs";
 
+  const mergedLogs = React.useMemo(() => {
+    return (output?.consoleLogs && output.consoleLogs.length > 0)
+      ? output.consoleLogs
+      : consoleLogs;
+  }, [output?.consoleLogs, consoleLogs]);
+
   const handleCopy = () => {
-    if (!output) return;
-    const text = `${output.command ? `$ ${output.command}\n` : ""}${output.stdout || ""}${output.stderr || ""}`;
+    if (!output && mergedLogs.length === 0) return;
+    let text = "";
+    if (output) {
+      text += `${output.command ? `$ ${output.command}\n` : ""}${output.stdout || ""}${output.stderr || ""}\n`;
+    }
+    if (mergedLogs.length > 0) {
+      text += mergedLogs.map((l) => `[${l.level.toUpperCase()}] ${l.message}`).join("\n");
+    }
     navigator.clipboard?.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -146,6 +169,47 @@ export function TerminalPanel({
         </div>
       </div>
 
+      {/* SUB-TOOLBAR FOR FILTER TABS */}
+      {(output || mergedLogs.length > 0) && (
+        <div className="flex items-center gap-1 px-4 py-1.5 bg-[#0b0e14] border-b border-neutral-800/80 text-[11px]">
+          <button
+            onClick={() => setActiveTab("all")}
+            className={`px-2.5 py-0.5 rounded-md transition-colors cursor-pointer font-medium ${
+              activeTab === "all"
+                ? "bg-neutral-800 text-white"
+                : "text-neutral-400 hover:text-neutral-200"
+            }`}
+          >
+            All
+          </button>
+          {output && (
+            <button
+              onClick={() => setActiveTab("commands")}
+              className={`px-2.5 py-0.5 rounded-md transition-colors cursor-pointer font-medium ${
+                activeTab === "commands"
+                  ? "bg-neutral-800 text-white"
+                  : "text-neutral-400 hover:text-neutral-200"
+              }`}
+            >
+              Output
+            </button>
+          )}
+          {mergedLogs.length > 0 && (
+            <button
+              onClick={() => setActiveTab("console")}
+              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-md transition-colors cursor-pointer font-medium ${
+                activeTab === "console"
+                  ? "bg-neutral-800 text-white"
+                  : "text-neutral-400 hover:text-neutral-200"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Preview Logs ({mergedLogs.length})</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 2. TERMINAL BODY / OUTPUT SCREEN */}
       <div className="flex-1 p-4 overflow-auto font-mono text-[12px] leading-relaxed space-y-2 select-text">
         {isRunning ? (
@@ -161,7 +225,7 @@ export function TerminalPanel({
               <span>Executing script in isolated sandbox runtime...</span>
             </div>
           </div>
-        ) : output ? (
+        ) : (output && (activeTab === "all" || activeTab === "commands")) ? (
           <div className="space-y-3">
             {/* Command Header */}
             {output.command && (
@@ -199,8 +263,60 @@ export function TerminalPanel({
               <span>Duration: {output.executionTimeMs}ms</span>
             </div>
           </div>
-        ) : (
-          /* Empty / Idle State */
+        ) : null}
+
+        {/* Live Preview Console Logs Section */}
+        {mergedLogs.length > 0 && (activeTab === "all" || activeTab === "console") && (
+          <div className={`space-y-1.5 ${output && activeTab === "all" ? "pt-4 border-t border-neutral-800/80" : ""}`}>
+            <div className="flex items-center justify-between text-[10.5px] text-neutral-500 pb-1 uppercase tracking-wider font-semibold">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                <span>Live Browser Sandbox Logs</span>
+              </div>
+              <span>{mergedLogs.length} events</span>
+            </div>
+
+            <div className="space-y-1">
+              {mergedLogs.map((log, idx) => {
+                const timeStr = new Date(log.time).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                const isError = log.level === "error";
+                const isWarn = log.level === "warn";
+
+                return (
+                  <div
+                    key={idx}
+                    className={`flex items-start gap-2.5 px-2.5 py-1 rounded border text-[11.5px] font-mono leading-relaxed ${
+                      isError
+                        ? "bg-rose-950/30 border-rose-900/50 text-rose-300"
+                        : isWarn
+                        ? "bg-amber-950/30 border-amber-900/50 text-amber-300"
+                        : "bg-neutral-900/40 border-neutral-800/50 text-neutral-300"
+                    }`}
+                  >
+                    <span className="text-[10px] text-neutral-500 shrink-0 pt-0.5 select-none">{timeStr}</span>
+                    <span
+                      className={`text-[9.5px] font-bold uppercase px-1.5 py-0.2 rounded shrink-0 select-none ${
+                        isError
+                          ? "bg-rose-900/80 text-rose-200"
+                          : isWarn
+                          ? "bg-amber-900/80 text-amber-200"
+                          : "bg-blue-900/60 text-blue-300"
+                      }`}
+                    >
+                      {log.level}
+                    </span>
+                    <div className="flex-1 overflow-x-auto whitespace-pre-wrap break-all">
+                      {log.message}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Empty / Idle State */}
+        {!isRunning && !output && mergedLogs.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 text-neutral-500 space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-emerald-400">
               <TerminalIcon size={24} />
@@ -213,7 +329,7 @@ export function TerminalPanel({
               <p className="text-[11.5px] text-neutral-500 leading-normal">
                 {currentFile
                   ? `Click "Run Script" to execute ${currentFile.name} and view stdout / stderr.`
-                  : "Select a Python or Node.js file to execute code in the sandbox."}
+                  : "Select a Python or Node.js file to execute code in the sandbox, or interact with preview to view console logs."}
               </p>
             </div>
 

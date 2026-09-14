@@ -19,6 +19,8 @@ import {
   Palette,
   BarChart3,
   Wand2,
+  Mic,
+  MicOff,
 } from "lucide-react";
 import { InspectedElement } from "./ArtifactPanel";
 import { SlashCommandMenu, SlashCommandItem } from "./SlashCommandMenu";
@@ -83,6 +85,61 @@ export function ChatComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  const toggleVoiceRecording = useCallback(() => {
+    if (isListening) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (_) {}
+      }
+      setIsListening(false);
+      return;
+    }
+
+    if (typeof window === "undefined") return;
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in this browser. Please use Chrome or Edge.");
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        let transcript = "";
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (transcript) {
+          setInput(transcript);
+        }
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (_) {
+      setIsListening(false);
+    }
+  }, [isListening, setInput]);
 
   // Slash command detection (/ or /skill)
   const slashMatch = input.match(/(?:^|\s)\/([a-zA-Z0-9_-]*)$/);
@@ -274,6 +331,20 @@ export function ChatComposer({
                 </div>
               )}
             </div>
+
+            {/* Voice Dictation Button */}
+            <button
+              type="button"
+              onClick={toggleVoiceRecording}
+              className={`p-1.5 rounded-xl transition-all cursor-pointer ${
+                isListening
+                  ? "bg-rose-500 text-white animate-pulse shadow-md shadow-rose-500/30"
+                  : "text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              }`}
+              title={isListening ? "Listening... click to stop" : "Voice dictation (Speech-to-text)"}
+            >
+              {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+            </button>
 
             {/* Send / Stop Button */}
             {isStreaming ? (
