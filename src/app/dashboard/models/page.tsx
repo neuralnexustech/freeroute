@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
 import { useLiveTelemetry } from "@/hooks/useLiveTelemetry";
+import { inferModelParams, inferModelScore } from "@/lib/model-info";
 
 interface ModelRow {
   id: string;
@@ -9,6 +10,8 @@ interface ModelRow {
   displayName: string;
   provider: { slug: string; name: string };
   contextWindow: string;
+  params?: string;
+  score?: number;
   inputPrice: number;
   outputPrice: number;
   modalities: string;
@@ -112,14 +115,19 @@ function Dropdown({ label, value, options, onPick }: {
   );
 }
 
-// Best-effort param size parsed from the slug, e.g. "llama-3.3-70b" → 70.
-function paramSize(slug: string): number | null {
-  const m = slug.match(/(\d+(?:\.\d+)?)\s*b\b/i);
-  return m ? parseFloat(m[1]) : null;
+// Best-effort param size parsed from the slug or params string, e.g. "llama-3.3-70b" → 70.
+function paramSize(slug: string, paramStr?: string): number | null {
+  const target = `${slug} ${paramStr || ""}`.toLowerCase();
+  const mB = target.match(/(\d+(?:\.\d+)?)\s*b\b/i);
+  if (mB) return parseFloat(mB[1]);
+  const mM = target.match(/(\d+(?:\.\d+)?)\s*m\b/i);
+  if (mM) return parseFloat(mM[1]) / 1000; // normalized in billions
+  return null;
 }
-function paramBucket(slug: string): string {
-  const p = paramSize(slug);
+function paramBucket(slug: string, paramStr?: string): string {
+  const p = paramSize(slug, paramStr);
   if (p == null) return "Unknown";
+  if (p < 0.1) return "Tiny (<100M)";
   if (p < 10) return "Small (<10B)";
   if (p <= 70) return "Medium (10–70B)";
   return "Large (>70B)";
@@ -152,7 +160,7 @@ export default function ModelsPage() {
   const [phase, setPhase] = useState("");
   const toast = useToast();
 
-  const [sortCol, setSortCol] = useState<"name" | "spend" | "inputPrice" | "outputPrice" | "toks" | "ttft">("name");
+  const [sortCol, setSortCol] = useState<"name" | "spend" | "inputPrice" | "outputPrice" | "toks" | "ttft" | "score" | "params">("name");
   const [sortAsc, setSortAsc] = useState(true);
 
   const toggleSort = (col: typeof sortCol) => {
@@ -182,7 +190,7 @@ export default function ModelsPage() {
       (m.slug + m.displayName).toLowerCase().includes(q.toLowerCase()) &&
       (provFilter === "All" || m.provider.name === provFilter) &&
       (modFilter === "All" || m.modalities.split(",").map((s) => s.trim()).includes(modFilter)) &&
-      (paramFilter === "All" || paramBucket(m.slug) === paramFilter) &&
+      (paramFilter === "All" || paramBucket(m.slug, m.params) === paramFilter) &&
       (ctxFilter === "All" || contextBucket(m.contextWindow) === ctxFilter) &&
       (priceFilter === "All" ||
         (priceFilter === "Free"
@@ -200,6 +208,8 @@ export default function ModelsPage() {
     else if (sortCol === "outputPrice") diff = a.outputPrice - b.outputPrice;
     else if (sortCol === "toks") diff = (a.toksPerSec ?? 0) - (b.toksPerSec ?? 0);
     else if (sortCol === "ttft") diff = (a.ttftMs ?? 999999) - (b.ttftMs ?? 999999);
+    else if (sortCol === "score") diff = (a.score ?? inferModelScore(a.slug, a.params)) - (b.score ?? inferModelScore(b.slug, b.params));
+    else if (sortCol === "params") diff = (paramSize(a.slug, a.params) ?? 0) - (paramSize(b.slug, b.params) ?? 0);
     return sortAsc ? diff : -diff;
   });
 
@@ -304,7 +314,7 @@ export default function ModelsPage() {
         <Dropdown label="Modality" value={modFilter} onPick={setModFilter}
           options={[{ value: "All", label: "All modalities" }, ...modalities.map((x) => ({ value: x, label: x }))]} />
         <Dropdown label="Params" value={paramFilter} onPick={setParamFilter}
-          options={["All", "Small (<10B)", "Medium (10–70B)", "Large (>70B)", "Unknown"].map((x) => ({ value: x, label: x === "All" ? "Any size" : x }))} />
+          options={["All", "Tiny (<100M)", "Small (<10B)", "Medium (10–70B)", "Large (>70B)", "Unknown"].map((x) => ({ value: x, label: x === "All" ? "Any size" : x }))} />
         <Dropdown label="Context" value={ctxFilter} onPick={setCtxFilter}
           options={["All", "≤ 32K", "≤ 128K", "> 128K", "Unknown"].map((x) => ({ value: x, label: x === "All" ? "Any context" : x }))} />
         <Dropdown label="Price" value={priceFilter} onPick={setPriceFilter}
@@ -323,6 +333,12 @@ export default function ModelsPage() {
                   Model {sortCol === "name" ? (sortAsc ? "▲" : "▼") : ""}
                 </th>
                 <th>Providers</th>
+                <th className="num" onClick={() => toggleSort("params")} style={{ cursor: "pointer", userSelect: "none" }}>
+                  Params {sortCol === "params" ? (sortAsc ? "▲" : "▼") : ""}
+                </th>
+                <th className="num" onClick={() => toggleSort("score")} style={{ cursor: "pointer", userSelect: "none" }}>
+                  Score {sortCol === "score" ? (sortAsc ? "▲" : "▼") : ""}
+                </th>
                 <th className="num">Context</th>
                 <th className="num" onClick={() => toggleSort("inputPrice")} style={{ cursor: "pointer", userSelect: "none" }}>
                   Input $/M {sortCol === "inputPrice" ? (sortAsc ? "▲" : "▼") : ""}
@@ -351,6 +367,41 @@ export default function ModelsPage() {
                     <div className="mono" style={{ color: "var(--text-tertiary)", fontSize: 11.5, marginTop: 2 }}>{m.slug}</div>
                   </td>
                   <td><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}><span className="pill subtle">{m.provider.name.toUpperCase()}</span></div></td>
+                  <td className="num">
+                    <span
+                      className="mono pill subtle"
+                      style={{
+                        fontWeight: 600,
+                        fontSize: 11,
+                        padding: "2px 7px",
+                        background: "var(--bg-surface-elevated)",
+                      }}
+                    >
+                      {m.params || inferModelParams(m.slug)}
+                    </span>
+                  </td>
+                  <td className="num">
+                    {(() => {
+                      const s = m.score ?? inferModelScore(m.slug, m.params);
+                      const color = s >= 90 ? "#10b981" : s >= 80 ? "var(--primary)" : "var(--warning)";
+                      return (
+                        <span
+                          className="mono"
+                          style={{
+                            fontWeight: 700,
+                            fontSize: 12,
+                            color,
+                            display: "inline-flex",
+                            alignItems: "baseline",
+                            gap: 2,
+                          }}
+                        >
+                          <span>{s}</span>
+                          <span style={{ fontSize: 9.5, color: "var(--text-tertiary)", fontWeight: 400 }}>/100</span>
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td className="num mono">{m.contextWindow}</td>
                   <td className="num mono" style={{ color: "var(--primary)" }}>${m.inputPrice}</td>
                   <td className="num mono">${m.outputPrice}</td>
@@ -364,7 +415,7 @@ export default function ModelsPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={10}><div className="empty-state-box">No models yet — connect a provider and pull its live registry.</div></td></tr>
+                <tr><td colSpan={12}><div className="empty-state-box">No models yet — connect a provider and pull its live registry.</div></td></tr>
               )}
             </tbody>
           </table>

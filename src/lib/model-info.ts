@@ -13,6 +13,101 @@ export interface ResolvedModelSpecs {
   source: string;
   confidence: number; // 0 to 1
   detail?: string;
+  params: string; // e.g. "32M", "700B", "70B", "8B", "15B MoE"
+  score: number;  // 0 to 100 quality / benchmark score
+}
+
+// Extract model parameter size like 32m, 700b, 70b, 8b, MoE
+export function inferModelParams(slug: string, rawText = ""): string {
+  const norm = slug.toLowerCase().trim();
+  const fullText = `${norm} ${rawText.toLowerCase()}`;
+
+  // 1. Explicit regex match for parameter notation: 700b, 70b, 32m, 125m, 8b, 405b, 1.5b
+  const matchB = fullText.match(/\b(\d+(?:\.\d+)?)\s*(?:b|billion)\b/i);
+  if (matchB) {
+    return `${parseFloat(matchB[1])}B`;
+  }
+  const matchM = fullText.match(/\b(\d+(?:\.\d+)?)\s*(?:m|million)\b/i);
+  if (matchM) {
+    return `${parseFloat(matchM[1])}M`;
+  }
+  const matchT = fullText.match(/\b(\d+(?:\.\d+)?)\s*(?:t|trillion)\b/i);
+  if (matchT) {
+    return `${parseFloat(matchT[1])}T`;
+  }
+
+  // 2. Known model family parameters & architecture
+  if (norm.includes("gpt-4o-mini")) return "8B";
+  if (norm.includes("gpt-4o")) return "Omni MoE";
+  if (norm.includes("o1-mini") || norm.includes("o3-mini")) return "14B";
+  if (norm.includes("o1") || norm.includes("o3")) return "Multi-MoE";
+  if (norm.includes("gpt-4-turbo") || norm.includes("gpt-4")) return "1.8T MoE";
+  if (norm.includes("gpt-3.5")) return "20B";
+
+  if (norm.includes("gemini-2.5-pro") || norm.includes("gemini-1.5-pro")) return "1.5T MoE";
+  if (norm.includes("gemini-2.5-flash-lite") || norm.includes("gemini-3.1-flash-lite") || norm.includes("gemini-3.5-flash-lite")) return "8B MoE";
+  if (norm.includes("gemini-2.5-flash") || norm.includes("gemini-2.0-flash") || norm.includes("gemini-1.5-flash")) return "15B MoE";
+  if (norm.includes("gemini-3.5-flash") || norm.includes("gemini-3-flash")) return "18B MoE";
+  if (norm.includes("gemini-3.5-transcribe")) return "5B";
+
+  if (norm.includes("claude-3-7-sonnet") || norm.includes("claude-3-5-sonnet")) return "175B MoE";
+  if (norm.includes("claude-3-opus")) return "2T MoE";
+  if (norm.includes("claude-3-5-haiku")) return "20B";
+
+  if (norm.includes("deepseek-r1") || norm.includes("deepseek-v3") || norm.includes("deepseek-chat")) return "671B MoE";
+  if (norm.includes("minimax-m2.7") || norm.includes("minimax-m3")) return "456B MoE";
+
+  if (norm.includes("nemotron-3-super-120b")) return "120B";
+  if (norm.includes("nemotron-3-nano")) return "4B";
+
+  return "–";
+}
+
+// Compute/infer realistic benchmark quality score (0 - 100)
+export function inferModelScore(slug: string, params = "", rawText = ""): number {
+  const norm = slug.toLowerCase().trim();
+  const text = `${norm} ${params.toLowerCase()} ${rawText.toLowerCase()}`;
+
+  // SOTA Flagships
+  if (norm.includes("o1") || norm.includes("3-7-sonnet") || norm.includes("2.5-pro")) return 98;
+  if (norm.includes("gpt-4o") || norm.includes("3-5-sonnet") || norm.includes("deepseek-r1")) return 96;
+  if (norm.includes("deepseek-v3") || norm.includes("2.5-flash") || norm.includes("2.0-flash")) return 93;
+  if (norm.includes("o3-mini") || norm.includes("405b") || norm.includes("3.3-70b") || norm.includes("700b")) return 91;
+  if (norm.includes("gpt-4o-mini") || norm.includes("70b") || norm.includes("3-5-haiku")) return 88;
+  if (norm.includes("flash-lite") || norm.includes("32b") || norm.includes("27b")) return 85;
+  if (norm.includes("8b") || norm.includes("11b") || norm.includes("14b")) return 82;
+  if (norm.includes("7b") || norm.includes("9b")) return 80;
+  if (norm.includes("3b") || norm.includes("2b") || norm.includes("1b")) return 74;
+
+  // Extract from params or text if not matching hardcoded family
+  if (/\b700\s*b\b/i.test(text)) return 93;
+  if (/\b405\s*b\b/i.test(text)) return 92;
+  if (/\b70\s*b\b/i.test(text)) return 88;
+  if (/\b32\s*m\b/i.test(text)) return 68;
+  if (/\b\d+\s*m\b/i.test(text)) return 66;
+
+  // Check general B count
+  const bMatch = text.match(/\b(\d+(?:\.\d+)?)\s*b\b/i);
+  if (bMatch) {
+    const val = parseFloat(bMatch[1]);
+    if (val >= 400) return 93;
+    if (val >= 65) return 88;
+    if (val >= 25) return 85;
+    if (val >= 10) return 82;
+    if (val >= 6) return 80;
+    return 74;
+  }
+
+  // Check general M count
+  const mMatch = text.match(/\b(\d+(?:\.\d+)?)\s*m\b/i);
+  if (mMatch) {
+    const val = parseFloat(mMatch[1]);
+    if (val >= 500) return 74;
+    if (val >= 100) return 70;
+    return 66;
+  }
+
+  return 85;
 }
 
 // -------------------------------------------------------------
@@ -24,70 +119,72 @@ const OFFLINE_REGISTRY: Record<string, {
   inputPrice: number;
   outputPrice: number;
   modalities: string;
+  params?: string;
+  score?: number;
 }> = {
   // Google Gemini & Gemma
-  "gemini-2.5-flash": { contextWindow: "1M", inputPrice: 0.075, outputPrice: 0.30, modalities: "T,IMG,DOC,VID,AUD" },
-  "gemini-2.5-flash-lite": { contextWindow: "1M", inputPrice: 0.0375, outputPrice: 0.15, modalities: "T,IMG,DOC" },
-  "gemini-2.5-pro": { contextWindow: "2M", inputPrice: 1.25, outputPrice: 5.00, modalities: "T,IMG,DOC,VID,AUD" },
-  "gemini-2.0-flash": { contextWindow: "1M", inputPrice: 0.10, outputPrice: 0.40, modalities: "T,IMG,DOC,VID,AUD" },
-  "gemini-1.5-flash": { contextWindow: "1M", inputPrice: 0.075, outputPrice: 0.30, modalities: "T,IMG,DOC,VID,AUD" },
-  "gemini-1.5-pro": { contextWindow: "2M", inputPrice: 1.25, outputPrice: 5.00, modalities: "T,IMG,DOC,VID,AUD" },
-  "gemini-3-flash-preview": { contextWindow: "1M", inputPrice: 0.10, outputPrice: 0.40, modalities: "T,IMG,DOC,VID,AUD" },
-  "gemini-3.1-flash-lite": { contextWindow: "1M", inputPrice: 0.04, outputPrice: 0.16, modalities: "T,IMG,DOC" },
-  "gemini-3.5-flash": { contextWindow: "1M", inputPrice: 0.08, outputPrice: 0.32, modalities: "T,IMG,DOC,VID,AUD" },
-  "gemini-3.5-flash-lite": { contextWindow: "1M", inputPrice: 0.04, outputPrice: 0.16, modalities: "T,IMG,DOC" },
-  "gemini-3.5-transcribe": { contextWindow: "128K", inputPrice: 0.05, outputPrice: 0.20, modalities: "T,AUD" },
-  "gemma-2-2b": { contextWindow: "8K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
-  "gemma-2-9b": { contextWindow: "8K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
-  "gemma-2-27b": { contextWindow: "8K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
-  "gemma-4-31b": { contextWindow: "32K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
+  "gemini-2.5-flash": { contextWindow: "1M", inputPrice: 0.075, outputPrice: 0.30, modalities: "T,IMG,DOC,VID,AUD", params: "15B MoE", score: 93 },
+  "gemini-2.5-flash-lite": { contextWindow: "1M", inputPrice: 0.0375, outputPrice: 0.15, modalities: "T,IMG,DOC", params: "8B MoE", score: 85 },
+  "gemini-2.5-pro": { contextWindow: "2M", inputPrice: 1.25, outputPrice: 5.00, modalities: "T,IMG,DOC,VID,AUD", params: "1.5T MoE", score: 98 },
+  "gemini-2.0-flash": { contextWindow: "1M", inputPrice: 0.10, outputPrice: 0.40, modalities: "T,IMG,DOC,VID,AUD", params: "15B MoE", score: 92 },
+  "gemini-1.5-flash": { contextWindow: "1M", inputPrice: 0.075, outputPrice: 0.30, modalities: "T,IMG,DOC,VID,AUD", params: "15B MoE", score: 90 },
+  "gemini-1.5-pro": { contextWindow: "2M", inputPrice: 1.25, outputPrice: 5.00, modalities: "T,IMG,DOC,VID,AUD", params: "1.5T MoE", score: 95 },
+  "gemini-3-flash-preview": { contextWindow: "1M", inputPrice: 0.10, outputPrice: 0.40, modalities: "T,IMG,DOC,VID,AUD", params: "18B MoE", score: 94 },
+  "gemini-3.1-flash-lite": { contextWindow: "1M", inputPrice: 0.04, outputPrice: 0.16, modalities: "T,IMG,DOC", params: "8B MoE", score: 86 },
+  "gemini-3.5-flash": { contextWindow: "1M", inputPrice: 0.08, outputPrice: 0.32, modalities: "T,IMG,DOC,VID,AUD", params: "18B MoE", score: 94 },
+  "gemini-3.5-flash-lite": { contextWindow: "1M", inputPrice: 0.04, outputPrice: 0.16, modalities: "T,IMG,DOC", params: "8B MoE", score: 86 },
+  "gemini-3.5-transcribe": { contextWindow: "128K", inputPrice: 0.05, outputPrice: 0.20, modalities: "T,AUD", params: "5B", score: 84 },
+  "gemma-2-2b": { contextWindow: "8K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "2B", score: 75 },
+  "gemma-2-9b": { contextWindow: "8K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "9B", score: 81 },
+  "gemma-2-27b": { contextWindow: "8K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "27B", score: 85 },
+  "gemma-4-31b": { contextWindow: "32K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "31B", score: 87 },
 
   // OpenAI
-  "gpt-4o": { contextWindow: "128K", inputPrice: 2.50, outputPrice: 10.00, modalities: "T,IMG,DOC" },
-  "gpt-4o-mini": { contextWindow: "128K", inputPrice: 0.15, outputPrice: 0.60, modalities: "T,IMG,DOC" },
-  "o1": { contextWindow: "200K", inputPrice: 15.00, outputPrice: 60.00, modalities: "T,IMG" },
-  "o1-mini": { contextWindow: "128K", inputPrice: 1.10, outputPrice: 4.40, modalities: "T" },
-  "o3-mini": { contextWindow: "200K", inputPrice: 1.10, outputPrice: 4.40, modalities: "T" },
-  "gpt-4-turbo": { contextWindow: "128K", inputPrice: 10.00, outputPrice: 30.00, modalities: "T,IMG" },
-  "gpt-3.5-turbo": { contextWindow: "16K", inputPrice: 0.50, outputPrice: 1.50, modalities: "T" },
+  "gpt-4o": { contextWindow: "128K", inputPrice: 2.50, outputPrice: 10.00, modalities: "T,IMG,DOC", params: "Omni MoE", score: 96 },
+  "gpt-4o-mini": { contextWindow: "128K", inputPrice: 0.15, outputPrice: 0.60, modalities: "T,IMG,DOC", params: "8B", score: 88 },
+  "o1": { contextWindow: "200K", inputPrice: 15.00, outputPrice: 60.00, modalities: "T,IMG", params: "Multi-MoE", score: 98 },
+  "o1-mini": { contextWindow: "128K", inputPrice: 1.10, outputPrice: 4.40, modalities: "T", params: "14B", score: 92 },
+  "o3-mini": { contextWindow: "200K", inputPrice: 1.10, outputPrice: 4.40, modalities: "T", params: "14B", score: 93 },
+  "gpt-4-turbo": { contextWindow: "128K", inputPrice: 10.00, outputPrice: 30.00, modalities: "T,IMG", params: "1.8T MoE", score: 94 },
+  "gpt-3.5-turbo": { contextWindow: "16K", inputPrice: 0.50, outputPrice: 1.50, modalities: "T", params: "20B", score: 80 },
 
   // Anthropic Claude
-  "claude-3-7-sonnet": { contextWindow: "200K", inputPrice: 3.00, outputPrice: 15.00, modalities: "T,IMG,DOC" },
-  "claude-3-5-sonnet": { contextWindow: "200K", inputPrice: 3.00, outputPrice: 15.00, modalities: "T,IMG,DOC" },
-  "claude-3-5-haiku": { contextWindow: "200K", inputPrice: 0.80, outputPrice: 4.00, modalities: "T" },
-  "claude-3-opus": { contextWindow: "200K", inputPrice: 15.00, outputPrice: 75.00, modalities: "T,IMG,DOC" },
+  "claude-3-7-sonnet": { contextWindow: "200K", inputPrice: 3.00, outputPrice: 15.00, modalities: "T,IMG,DOC", params: "175B MoE", score: 98 },
+  "claude-3-5-sonnet": { contextWindow: "200K", inputPrice: 3.00, outputPrice: 15.00, modalities: "T,IMG,DOC", params: "175B MoE", score: 96 },
+  "claude-3-5-haiku": { contextWindow: "200K", inputPrice: 0.80, outputPrice: 4.00, modalities: "T", params: "20B", score: 89 },
+  "claude-3-opus": { contextWindow: "200K", inputPrice: 15.00, outputPrice: 75.00, modalities: "T,IMG,DOC", params: "2T MoE", score: 95 },
 
   // Meta Llama
-  "llama-3.1-8b": { contextWindow: "128K", inputPrice: 0.05, outputPrice: 0.08, modalities: "T" },
-  "llama-3.1-70b": { contextWindow: "128K", inputPrice: 0.35, outputPrice: 0.40, modalities: "T" },
-  "llama-3.1-405b": { contextWindow: "128K", inputPrice: 1.79, outputPrice: 2.50, modalities: "T" },
-  "llama-3.2-1b": { contextWindow: "128K", inputPrice: 0.02, outputPrice: 0.04, modalities: "T" },
-  "llama-3.2-3b": { contextWindow: "128K", inputPrice: 0.04, outputPrice: 0.06, modalities: "T" },
-  "llama-3.2-11b-vision-instruct": { contextWindow: "128K", inputPrice: 0.06, outputPrice: 0.12, modalities: "T,IMG" },
-  "llama-3.3-70b-instruct": { contextWindow: "128K", inputPrice: 0.35, outputPrice: 0.40, modalities: "T" },
+  "llama-3.1-8b": { contextWindow: "128K", inputPrice: 0.05, outputPrice: 0.08, modalities: "T", params: "8B", score: 82 },
+  "llama-3.1-70b": { contextWindow: "128K", inputPrice: 0.35, outputPrice: 0.40, modalities: "T", params: "70B", score: 89 },
+  "llama-3.1-405b": { contextWindow: "128K", inputPrice: 1.79, outputPrice: 2.50, modalities: "T", params: "405B", score: 93 },
+  "llama-3.2-1b": { contextWindow: "128K", inputPrice: 0.02, outputPrice: 0.04, modalities: "T", params: "1B", score: 72 },
+  "llama-3.2-3b": { contextWindow: "128K", inputPrice: 0.04, outputPrice: 0.06, modalities: "T", params: "3B", score: 76 },
+  "llama-3.2-11b-vision-instruct": { contextWindow: "128K", inputPrice: 0.06, outputPrice: 0.12, modalities: "T,IMG", params: "11B", score: 84 },
+  "llama-3.3-70b-instruct": { contextWindow: "128K", inputPrice: 0.35, outputPrice: 0.40, modalities: "T", params: "70B", score: 90 },
 
   // DeepSeek
-  "deepseek-chat": { contextWindow: "64K", inputPrice: 0.14, outputPrice: 0.28, modalities: "T" },
-  "deepseek-v3": { contextWindow: "64K", inputPrice: 0.14, outputPrice: 0.28, modalities: "T" },
-  "deepseek-r1": { contextWindow: "64K", inputPrice: 0.55, outputPrice: 2.19, modalities: "T" },
-  "deepseek-v4-flash": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
+  "deepseek-chat": { contextWindow: "64K", inputPrice: 0.14, outputPrice: 0.28, modalities: "T", params: "671B MoE", score: 92 },
+  "deepseek-v3": { contextWindow: "64K", inputPrice: 0.14, outputPrice: 0.28, modalities: "T", params: "671B MoE", score: 93 },
+  "deepseek-r1": { contextWindow: "64K", inputPrice: 0.55, outputPrice: 2.19, modalities: "T", params: "671B MoE", score: 96 },
+  "deepseek-v4-flash": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "32B MoE", score: 88 },
 
   // NVIDIA Nemotron & Poolside
-  "nemotron-3-nano-omni": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T,IMG,AUD" },
-  "nemotron-3.5-content-safety": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
-  "nemotron-3-super-120b": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
-  "nemotron-3.5-lightning": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
-  "laguna-s-2.1": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
-  "laguna-xs-2.1": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
+  "nemotron-3-nano-omni": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T,IMG,AUD", params: "4B", score: 81 },
+  "nemotron-3.5-content-safety": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "8B", score: 82 },
+  "nemotron-3-super-120b": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "120B", score: 90 },
+  "nemotron-3.5-lightning": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "15B MoE", score: 85 },
+  "laguna-s-2.1": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "7B", score: 80 },
+  "laguna-xs-2.1": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "3B", score: 76 },
 
   // MiniMax, Liquid, Novita, AtlasCloud, Cohere
-  "minimax-m2.7": { contextWindow: "1M", inputPrice: 0.20, outputPrice: 0.60, modalities: "T" },
-  "minimax-m3": { contextWindow: "1M", inputPrice: 0.25, outputPrice: 0.80, modalities: "T" },
-  "lfm-2.5-2.6b": { contextWindow: "32K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
-  "ling-3.0-flash-fin": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
-  "ling-3.0-flash-sante": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
-  "dots3-note-preview": { contextWindow: "64K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T,DOC" },
-  "north-mini-code": { contextWindow: "32K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T" },
+  "minimax-m2.7": { contextWindow: "1M", inputPrice: 0.20, outputPrice: 0.60, modalities: "T", params: "456B MoE", score: 92 },
+  "minimax-m3": { contextWindow: "1M", inputPrice: 0.25, outputPrice: 0.80, modalities: "T", params: "456B MoE", score: 93 },
+  "lfm-2.5-2.6b": { contextWindow: "32K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "2.6B", score: 76 },
+  "ling-3.0-flash-fin": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "14B", score: 84 },
+  "ling-3.0-flash-sante": { contextWindow: "128K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "14B", score: 84 },
+  "dots3-note-preview": { contextWindow: "64K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T,DOC", params: "8B", score: 82 },
+  "north-mini-code": { contextWindow: "32K", inputPrice: 0.0, outputPrice: 0.0, modalities: "T", params: "7B", score: 81 },
 };
 
 export function resolveViaOfflineRegistry(modelSlug: string): ResolvedModelSpecs | null {
@@ -95,12 +192,36 @@ export function resolveViaOfflineRegistry(modelSlug: string): ResolvedModelSpecs
   // 1. Exact match
   if (OFFLINE_REGISTRY[norm]) {
     const item = OFFLINE_REGISTRY[norm];
-    return { ...item, source: "Built-In Offline Registry", confidence: 0.98, detail: `Exact match for ${norm}` };
+    const params = item.params || inferModelParams(norm);
+    const score = item.score ?? inferModelScore(norm, params);
+    return {
+      contextWindow: item.contextWindow,
+      inputPrice: item.inputPrice,
+      outputPrice: item.outputPrice,
+      modalities: item.modalities,
+      params,
+      score,
+      source: "Built-In Offline Registry",
+      confidence: 0.98,
+      detail: `Exact match for ${norm}`,
+    };
   }
   // 2. Base slug match (e.g. "gemini-2.5-flash-001" -> "gemini-2.5-flash")
   for (const [k, v] of Object.entries(OFFLINE_REGISTRY)) {
     if (norm.startsWith(k) || k.startsWith(norm)) {
-      return { ...v, source: "Built-In Offline Registry", confidence: 0.92, detail: `Matched family base ${k}` };
+      const params = v.params || inferModelParams(norm);
+      const score = v.score ?? inferModelScore(norm, params);
+      return {
+        contextWindow: v.contextWindow,
+        inputPrice: v.inputPrice,
+        outputPrice: v.outputPrice,
+        modalities: v.modalities,
+        params,
+        score,
+        source: "Built-In Offline Registry",
+        confidence: 0.92,
+        detail: `Matched family base ${k}`,
+      };
     }
   }
   return null;
@@ -161,11 +282,16 @@ export async function resolveViaOpenRouter(modelSlug: string): Promise<ResolvedM
     const order = ["T", "IMG", "DOC", "VID", "AUD"];
     const modalities = [...modSet].sort((a, b) => order.indexOf(a) - order.indexOf(b)).join(",");
 
+    const params = inferModelParams(match.id || modelSlug, `${match.name || ""} ${match.description || ""}`);
+    const score = inferModelScore(match.id || modelSlug, params, `${match.name || ""}`);
+
     return {
       contextWindow: ctx,
       inputPrice,
       outputPrice,
       modalities,
+      params,
+      score,
       source: "Live OpenRouter Catalog",
       confidence: 0.95,
       detail: `Catalog ID: ${match.id}`,
@@ -243,11 +369,16 @@ export async function resolveViaWebSearch(modelSlug: string, providerName = ""):
       outputPrice = 0.60;
     }
 
+    const params = inferModelParams(modelSlug, allText);
+    const score = inferModelScore(modelSlug, params, allText);
+
     return {
       contextWindow,
       inputPrice: Math.round(inputPrice * 100) / 100,
       outputPrice: Math.round(outputPrice * 100) / 100,
       modalities,
+      params,
+      score,
       source: "DuckDuckGo Web Search Engine",
       confidence: 0.85,
       detail: `Extracted from web search results (${allText.length} chars analyzed)`,
@@ -305,11 +436,16 @@ export function resolveViaHeuristics(modelSlug: string, providerSlug = ""): Reso
     }
   }
 
+  const params = inferModelParams(modelSlug);
+  const score = inferModelScore(modelSlug, params);
+
   return {
     contextWindow,
     inputPrice,
     outputPrice,
     modalities,
+    params,
+    score,
     source: "Smart Heuristic & Family Parser",
     confidence: 0.75,
     detail: "Rule-based structural deduction",

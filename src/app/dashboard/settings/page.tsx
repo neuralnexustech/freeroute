@@ -12,6 +12,8 @@ interface TestResult {
     inputPrice: number;
     outputPrice: number;
     modalities: string;
+    params?: string;
+    score?: number;
     source: string;
     confidence?: number;
     detail?: string;
@@ -562,6 +564,28 @@ export default function SettingsPage() {
                           <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                             <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block", marginBottom: 2 }}>MODALITIES</span>
                             <ModalityIcons mods={tr.result.modalities} />
+                          </div>
+                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
+                            <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block" }}>PARAMS</span>
+                            <span className="mono" style={{ fontWeight: 700, color: "var(--text-primary)" }}>
+                              {tr.result.params || "–"}
+                            </span>
+                          </div>
+                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
+                            <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block" }}>SCORE</span>
+                            <span
+                              className="mono"
+                              style={{
+                                fontWeight: 700,
+                                color: (tr.result.score ?? 0) >= 90 ? "#10b981" : (tr.result.score ?? 0) >= 80 ? "var(--primary)" : "var(--warning)",
+                                display: "inline-flex",
+                                alignItems: "baseline",
+                                gap: 3,
+                              }}
+                            >
+                              <span>{tr.result.score ? tr.result.score : "–"}</span>
+                              {tr.result.score ? <span style={{ fontSize: 9.5, color: "var(--text-tertiary)", fontWeight: 400 }}>/100</span> : null}
+                            </span>
                           </div>
                           <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
                             <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block" }}>INPUT $/1M</span>
