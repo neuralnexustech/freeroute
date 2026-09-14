@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
 import { useLiveTelemetry } from "@/hooks/useLiveTelemetry";
-import { inferModelParams, inferModelScore } from "@/lib/model-info";
+import { inferModelParams, inferModelScore, resolveViaOfflineRegistry } from "@/lib/model-info";
 
 interface ModelRow {
   id: string;
@@ -38,20 +38,54 @@ function fmtTps(v: number | null): string {
 const MOD_ICONS: Record<string, { label: string; svg: React.ReactNode }> = {
   T: { label: "Text", svg: <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7V4h16v3M9 20h6M12 4v16" /></svg> },
   IMG: { label: "Vision / Image", svg: <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="1.8" fill="currentColor" stroke="none" /><path d="M21 15l-4.5-4.5L6 21" /></svg> },
-  DOC: { label: "Document / PDF", svg: <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /></svg> },
-  VID: { label: "Video", svg: <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5" /><path d="M10.5 9.5l4.5 2.5-4.5 2.5z" fill="currentColor" stroke="none" /></svg> },
-  AUD: { label: "Audio / Voice", svg: <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2" /></svg> },
+  DOC: { label: "Document / PDF", svg: <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="9" y1="13" x2="15" y2="13" /><line x1="9" y1="17" x2="13" y2="17" /></svg> },
+  VID: { label: "Video", svg: <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5" /><path d="M10.5 9.5l4.5 2.5-4.5 2.5z" fill="currentColor" stroke="none" /></svg> },
+  AUD: { label: "Audio / Voice", svg: <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg> },
 };
 
 function ModalityIcons({ mods }: { mods: string }) {
+  if (!mods) return <span style={{ color: "var(--text-tertiary)", fontSize: 11 }}>–</span>;
+  const rawList = mods.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+  const seen = new Set<string>();
+  const list: string[] = [];
+  for (const m of rawList) {
+    const key = m === "IMAGE" || m === "VISION" ? "IMG" : m === "DOCUMENT" ? "DOC" : m === "VIDEO" ? "VID" : m === "AUDIO" ? "AUD" : m === "TEXT" ? "T" : m;
+    if (!seen.has(key)) {
+      seen.add(key);
+      list.push(key);
+    }
+  }
+
+  const order = ["T", "IMG", "DOC", "VID", "AUD"];
+  list.sort((a, b) => {
+    const ia = order.indexOf(a);
+    const ib = order.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-      {mods.split(",").map((m) => {
-        const item = MOD_ICONS[m.trim()];
-        if (!item) return <span key={m} style={{ fontSize: 10 }}>{m}</span>;
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+      {list.map((m) => {
+        const item = MOD_ICONS[m] || { label: m, svg: null };
         return (
-          <span key={m} title={item.label} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: 6, background: "var(--bg-surface-elevated)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)", cursor: "help" }}>
-            {item.svg}
+          <span
+            key={m}
+            title={item.label}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 22,
+              height: 22,
+              borderRadius: 5,
+              background: "var(--bg-surface-elevated)",
+              border: "1px solid var(--border-subtle)",
+              color: m === "T" ? "#3b82f6" : m === "IMG" ? "#a855f7" : m === "DOC" ? "#f59e0b" : m === "VID" ? "#ef4444" : "#10b981",
+              flexShrink: 0,
+              cursor: "default",
+            }}
+          >
+            {item.svg ?? <span style={{ fontSize: 10, fontWeight: 700 }}>{m[0]}</span>}
           </span>
         );
       })}
@@ -59,7 +93,12 @@ function ModalityIcons({ mods }: { mods: string }) {
   );
 }
 
-function Dropdown({ label, value, options, onPick }: {
+function Dropdown({
+  label,
+  value,
+  options,
+  onPick,
+}: {
   label: string;
   value: string;
   options: { value: string; label: string }[];
@@ -68,46 +107,29 @@ function Dropdown({ label, value, options, onPick }: {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const close = (e: MouseEvent) => {
+    const handleClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
   }, []);
-  const active = value !== "All";
+  const cur = options.find((o) => o.value === value) ?? options[0];
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button
-        className="btn sm"
-        onClick={() => setOpen((o) => !o)}
-        style={active ? { borderColor: "var(--primary)", color: "var(--primary)" } : {}}
-      >
-        {active ? value : label} ▾
+    <div className="dropdown" ref={ref}>
+      <button className="dropdown-trigger" onClick={() => setOpen(!open)}>
+        <span>{label}: <b>{cur.label}</b></span>
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
       </button>
       {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 50,
-          minWidth: 168, maxHeight: 280, overflowY: "auto",
-          background: "var(--bg-surface-elevated)", border: "1px solid var(--border-default)",
-          borderRadius: 10, boxShadow: "var(--shadow-lg)", padding: 4,
-        }}>
+        <div className="dropdown-menu">
           {options.map((o) => (
-            <button
+            <div
               key={o.value}
+              className={`dropdown-item ${o.value === value ? "active" : ""}`}
               onClick={() => { onPick(o.value); setOpen(false); }}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-                width: "100%", textAlign: "left", padding: "7px 10px", fontSize: 12.5,
-                border: 0, borderRadius: 7, cursor: "pointer",
-                background: o.value === value ? "var(--bg-accent-soft)" : "transparent",
-                color: o.value === value ? "var(--primary)" : "var(--text-primary)",
-                fontWeight: o.value === value ? 600 : 400,
-              }}
-              onMouseEnter={(e) => { if (o.value !== value) (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-surface-hover)"; }}
-              onMouseLeave={(e) => { if (o.value !== value) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
             >
-              {o.label}{o.value === value ? " ✓" : ""}
-            </button>
+              {o.label}
+            </div>
           ))}
         </div>
       )}
@@ -115,17 +137,17 @@ function Dropdown({ label, value, options, onPick }: {
   );
 }
 
-// Best-effort param size parsed from the slug or params string, e.g. "llama-3.3-70b" → 70.
-function paramSize(slug: string, paramStr?: string): number | null {
-  const target = `${slug} ${paramStr || ""}`.toLowerCase();
+// Parameter bucket helpers
+function paramSize(slug: string, paramStr?: string, displayName = ""): number | null {
+  const target = `${slug} ${displayName} ${paramStr || inferModelParams(slug, displayName)}`.toLowerCase();
   const mB = target.match(/(\d+(?:\.\d+)?)\s*b\b/i);
   if (mB) return parseFloat(mB[1]);
   const mM = target.match(/(\d+(?:\.\d+)?)\s*m\b/i);
   if (mM) return parseFloat(mM[1]) / 1000; // normalized in billions
   return null;
 }
-function paramBucket(slug: string, paramStr?: string): string {
-  const p = paramSize(slug, paramStr);
+function paramBucket(slug: string, paramStr?: string, displayName = ""): string {
+  const p = paramSize(slug, paramStr, displayName);
   if (p == null) return "Unknown";
   if (p < 0.1) return "Tiny (<100M)";
   if (p < 10) return "Small (<10B)";
@@ -148,12 +170,22 @@ function contextBucket(ctx: string): string {
   return "> 128K";
 }
 
-function fmtModelPrice(price: number) {
-  if (price === 0) {
+function fmtModelPrice(price: number, slug = "", displayName = "", isOutput = false) {
+  const isFree = price === 0 || slug.includes("free") || displayName.toLowerCase().includes("(free)");
+  if (isFree && price === 0) {
+    const offline = resolveViaOfflineRegistry(slug || displayName);
+    const actual = isOutput ? (offline?.actualOutputPrice || offline?.outputPrice) : (offline?.actualInputPrice || offline?.inputPrice);
     return (
-      <span className="pill active" style={{ fontSize: 10.5, padding: "1px 6px", fontWeight: 700 }}>
-        Free
-      </span>
+      <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end" }}>
+        <span className="pill active" style={{ fontSize: 10.5, padding: "1px 6px", fontWeight: 700 }}>
+          Free
+        </span>
+        {actual && actual > 0 ? (
+          <span style={{ fontSize: 9.5, color: "var(--text-tertiary)", marginTop: 1 }}>
+            Base: ${actual < 0.01 ? actual.toFixed(4) : actual.toFixed(2)}
+          </span>
+        ) : null}
+      </div>
     );
   }
   const formatted =
@@ -207,7 +239,7 @@ export default function ModelsPage() {
       (m.slug + m.displayName).toLowerCase().includes(q.toLowerCase()) &&
       (provFilter === "All" || m.provider.name === provFilter) &&
       (modFilter === "All" || m.modalities.split(",").map((s) => s.trim()).includes(modFilter)) &&
-      (paramFilter === "All" || paramBucket(m.slug, m.params) === paramFilter) &&
+      (paramFilter === "All" || paramBucket(m.slug, m.params, m.displayName) === paramFilter) &&
       (ctxFilter === "All" || contextBucket(m.contextWindow) === ctxFilter) &&
       (priceFilter === "All" ||
         (priceFilter === "Free"
@@ -225,8 +257,8 @@ export default function ModelsPage() {
     else if (sortCol === "outputPrice") diff = a.outputPrice - b.outputPrice;
     else if (sortCol === "toks") diff = (a.toksPerSec ?? 0) - (b.toksPerSec ?? 0);
     else if (sortCol === "ttft") diff = (a.ttftMs ?? 999999) - (b.ttftMs ?? 999999);
-    else if (sortCol === "score") diff = (a.score ?? inferModelScore(a.slug, a.params)) - (b.score ?? inferModelScore(b.slug, b.params));
-    else if (sortCol === "params") diff = (paramSize(a.slug, a.params) ?? 0) - (paramSize(b.slug, b.params) ?? 0);
+    else if (sortCol === "score") diff = (a.score ?? inferModelScore(a.slug, a.params, a.displayName)) - (b.score ?? inferModelScore(b.slug, b.params, b.displayName));
+    else if (sortCol === "params") diff = (paramSize(a.slug, a.params, a.displayName) ?? 0) - (paramSize(b.slug, b.params, b.displayName) ?? 0);
     return sortAsc ? diff : -diff;
   });
 
@@ -394,12 +426,12 @@ export default function ModelsPage() {
                         background: "var(--bg-surface-elevated)",
                       }}
                     >
-                      {m.params || inferModelParams(m.slug)}
+                      {m.params || inferModelParams(m.slug, m.displayName)}
                     </span>
                   </td>
                   <td className="num">
                     {(() => {
-                      const s = m.score ?? inferModelScore(m.slug, m.params);
+                      const s = m.score ?? inferModelScore(m.slug, m.params, m.displayName);
                       const color = s >= 90 ? "#10b981" : s >= 80 ? "var(--primary)" : "var(--warning)";
                       return (
                         <span
@@ -420,8 +452,12 @@ export default function ModelsPage() {
                     })()}
                   </td>
                   <td className="num mono">{m.contextWindow}</td>
-                  <td className="num mono" style={{ color: m.inputPrice === 0 ? "inherit" : "var(--primary)" }}>{fmtModelPrice(m.inputPrice)}</td>
-                  <td className="num mono">{fmtModelPrice(m.outputPrice)}</td>
+                  <td className="num mono" style={{ color: m.inputPrice === 0 ? "inherit" : "var(--primary)" }}>
+                    {fmtModelPrice(m.inputPrice, m.slug, m.displayName, false)}
+                  </td>
+                  <td className="num mono">
+                    {fmtModelPrice(m.outputPrice, m.slug, m.displayName, true)}
+                  </td>
                   <td className="num mono" style={{ color: (m.spend ?? 0) > 0 ? "var(--warning)" : "var(--text-tertiary)", fontWeight: (m.spend ?? 0) > 0 ? 600 : 400 }}>
                     ${(m.spend ?? 0) < 0.0001 && (m.spend ?? 0) > 0 ? (m.spend ?? 0).toFixed(6) : (m.spend ?? 0).toFixed(4)}
                   </td>

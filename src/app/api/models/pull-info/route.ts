@@ -21,7 +21,7 @@ export async function POST() {
     await Promise.all(
       chunk.map(async (m) => {
         try {
-          const specs = await resolveModelSpecs(m.slug, m.provider?.slug || "", strategy);
+          const specs = await resolveModelSpecs(m.slug, m.provider?.slug || "", strategy, m.displayName);
           await prisma.model.update({
             where: { id: m.id },
             data: {
