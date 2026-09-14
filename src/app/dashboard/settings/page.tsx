@@ -216,6 +216,39 @@ function ModalityIcons({ mods }: { mods: string }) {
   );
 }
 
+function formatPriceBadge(price: number | undefined) {
+  if (price == null || price === 0) {
+    return (
+      <span
+        className="pill active"
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          padding: "1px 7px",
+          display: "inline-block",
+        }}
+      >
+        Free
+      </span>
+    );
+  }
+  const formatted =
+    price < 0.01
+      ? price.toFixed(4)
+      : price < 1 && (price * 100) % 1 !== 0
+      ? price.toFixed(3)
+      : price.toFixed(2);
+
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 3, flexWrap: "wrap" }}>
+      <span className="mono" style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>
+        ${formatted}
+      </span>
+      <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>/ 1M tok</span>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("Model Info Discovery");
   const [strategy, setStrategy] = useState("cascade");
@@ -469,9 +502,13 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 14 }}>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>
               Enter any model identifier to test each discovery mechanism individually or test all 4 options simultaneously:
             </p>
+            <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", background: "var(--bg-surface)", padding: "6px 12px", borderRadius: 6, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+              <span>💡</span>
+              <span><strong>Pricing Guide:</strong> Pricing is measured per 1 Million (1M) prompt (Input) &amp; completion (Output) tokens (e.g. $0.075 / 1M ≈ 0.0075¢ per 1,000 tokens). Models with zero charge display as <strong style={{ color: "#10b981" }}>Free</strong>.</span>
+            </div>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
               <input
@@ -587,13 +624,29 @@ export default function SettingsPage() {
                               {tr.result.score ? <span style={{ fontSize: 9.5, color: "var(--text-tertiary)", fontWeight: 400 }}>/100</span> : null}
                             </span>
                           </div>
-                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
-                            <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block" }}>INPUT $/1M</span>
-                            <span className="mono" style={{ fontWeight: 600, color: "var(--primary)" }}>${tr.result.inputPrice}</span>
+                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                              <span style={{ color: "var(--text-tertiary)", fontSize: 10, fontWeight: 600 }}>PROMPT (INPUT)</span>
+                              <span style={{ color: "var(--text-tertiary)", fontSize: 9.5 }}>per 1M tok</span>
+                            </div>
+                            {formatPriceBadge(tr.result.inputPrice)}
+                            {tr.result.inputPrice > 0 && (
+                              <div style={{ fontSize: 9.5, color: "var(--text-tertiary)", marginTop: 2 }}>
+                                ≈ {(tr.result.inputPrice * 0.1).toFixed(4)}¢ / 1K
+                              </div>
+                            )}
                           </div>
-                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
-                            <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block" }}>OUTPUT $/1M</span>
-                            <span className="mono" style={{ fontWeight: 600 }}>${tr.result.outputPrice}</span>
+                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                              <span style={{ color: "var(--text-tertiary)", fontSize: 10, fontWeight: 600 }}>COMPLETION (OUTPUT)</span>
+                              <span style={{ color: "var(--text-tertiary)", fontSize: 9.5 }}>per 1M tok</span>
+                            </div>
+                            {formatPriceBadge(tr.result.outputPrice)}
+                            {tr.result.outputPrice > 0 && (
+                              <div style={{ fontSize: 9.5, color: "var(--text-tertiary)", marginTop: 2 }}>
+                                ≈ {(tr.result.outputPrice * 0.1).toFixed(4)}¢ / 1K
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}

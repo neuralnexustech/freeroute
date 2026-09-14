@@ -253,10 +253,23 @@ export async function resolveViaOpenRouter(modelSlug: string): Promise<ResolvedM
     const norm = modelSlug.toLowerCase().replace(/^models\//, "");
     const basePart = norm.split("/").pop() ?? norm;
 
-    const match = list.find((m: any) => {
+    // 1. Prioritize exact ID match or exact base match
+    const exactMatch = list.find((m: any) => {
       const id = String(m.id ?? "").toLowerCase();
-      return id === norm || id.endsWith("/" + basePart) || id.includes(basePart);
+      const lastSeg = id.split("/").pop() ?? id;
+      return id === norm || lastSeg === basePart;
     });
+
+    // 2. Secondary match avoiding unwanted suffix variants like "-image" if base doesn't have it
+    const match =
+      exactMatch ||
+      list.find((m: any) => {
+        const id = String(m.id ?? "").toLowerCase();
+        const lastSeg = id.split("/").pop() ?? id;
+        if (!basePart.includes("image") && lastSeg.includes("image")) return false;
+        if (!basePart.includes("preview") && lastSeg.includes("preview")) return false;
+        return id.includes(basePart);
+      });
 
     if (!match) return null;
 
@@ -268,8 +281,8 @@ export async function resolveViaOpenRouter(modelSlug: string): Promise<ResolvedM
 
     const promptP = parseFloat(match.pricing?.prompt ?? "0");
     const compP = parseFloat(match.pricing?.completion ?? "0");
-    const inputPrice = isFinite(promptP) && promptP > 0 ? Math.round(promptP * 1_000_000 * 100) / 100 : 0;
-    const outputPrice = isFinite(compP) && compP > 0 ? Math.round(compP * 1_000_000 * 100) / 100 : 0;
+    const inputPrice = isFinite(promptP) && promptP > 0 ? Number((promptP * 1_000_000).toFixed(4)) : 0;
+    const outputPrice = isFinite(compP) && compP > 0 ? Number((compP * 1_000_000).toFixed(4)) : 0;
 
     const modSet = new Set<string>();
     const arch = match.architecture ?? {};
@@ -354,19 +367,33 @@ export async function resolveViaWebSearch(modelSlug: string, providerName = ""):
     if (/document|pdf|file/i.test(allText)) modSet.add("DOC");
     const modalities = Array.from(modSet).join(",");
 
-    // 3. Pricing
+    // 3. Pricing (Accurate extraction or fallback to verified database / heuristics)
     let inputPrice = 0.0;
     let outputPrice = 0.0;
-    const priceMatch = allText.match(/\$(\d+(?:\.\d+)?)\s*(?:per|\/)\s*(?:1m|million|m)\s*tokens?/i);
-    if (priceMatch) {
-      inputPrice = parseFloat(priceMatch[1]);
+    const price1mMatch = allText.match(/\$(\d+(?:\.\d+)?)\s*(?:per|\/)\s*(?:1m|million|m)\s*tokens?/i);
+    const price1kMatch = allText.match(/\$(\d+(?:\.\d+)?)\s*(?:per|\/)\s*(?:1k|thousand|k)\s*tokens?/i);
+
+    if (price1mMatch) {
+      inputPrice = parseFloat(price1mMatch[1]);
       outputPrice = inputPrice * 4;
-    } else if (/free\s*tier|free\s*model|no\s*charge|\$0/i.test(allText) || modelSlug.includes("free")) {
+    } else if (price1kMatch) {
+      inputPrice = parseFloat(price1kMatch[1]) * 1000;
+      outputPrice = inputPrice * 4;
+    } else if (modelSlug.includes("free") || modelSlug.includes(":free")) {
       inputPrice = 0;
       outputPrice = 0;
     } else {
-      inputPrice = 0.15;
-      outputPrice = 0.60;
+      // Use verified offline registry or heuristics instead of falsely guessing $0 from "free tier" search text
+      const offline = resolveViaOfflineRegistry(modelSlug);
+      if (offline) {
+        inputPrice = offline.inputPrice;
+        outputPrice = offline.outputPrice;
+        contextWindow = offline.contextWindow;
+      } else {
+        const heur = resolveViaHeuristics(modelSlug, providerName);
+        inputPrice = heur.inputPrice;
+        outputPrice = heur.outputPrice;
+      }
     }
 
     const params = inferModelParams(modelSlug, allText);
@@ -374,8 +401,8 @@ export async function resolveViaWebSearch(modelSlug: string, providerName = ""):
 
     return {
       contextWindow,
-      inputPrice: Math.round(inputPrice * 100) / 100,
-      outputPrice: Math.round(outputPrice * 100) / 100,
+      inputPrice: Number(inputPrice.toFixed(4)),
+      outputPrice: Number(outputPrice.toFixed(4)),
       modalities,
       params,
       score,
@@ -430,6 +457,9 @@ export function resolveViaHeuristics(modelSlug: string, providerSlug = ""): Reso
     if (norm.includes("pro") || norm.includes("opus") || norm.includes("405b") || norm.includes("o1")) {
       inputPrice = 1.25;
       outputPrice = 5.00;
+    } else if (norm.includes("gemini") && (norm.includes("flash") || norm.includes("2.5") || norm.includes("2.0") || norm.includes("1.5"))) {
+      inputPrice = 0.075;
+      outputPrice = 0.30;
     } else if (norm.includes("mini") || norm.includes("lite") || norm.includes("flash") || norm.includes("8b")) {
       inputPrice = 0.05;
       outputPrice = 0.20;
