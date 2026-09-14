@@ -17,6 +17,9 @@ interface TestResult {
     source: string;
     confidence?: number;
     detail?: string;
+    isFreeRoute?: boolean;
+    actualInputPrice?: number;
+    actualOutputPrice?: number;
   };
   error?: string;
 }
@@ -158,39 +161,33 @@ const MOD_ICONS: Record<string, { label: string; bg: string; color: string; svg:
 
 function ModalityIcons({ mods }: { mods: string }) {
   if (!mods) return <span style={{ color: "var(--text-tertiary)", fontSize: 11 }}>–</span>;
+  const rawList = mods.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+  const seen = new Set<string>();
+  const list: string[] = [];
+  for (const m of rawList) {
+    const key = m === "IMAGE" || m === "VISION" ? "IMG" : m === "DOCUMENT" ? "DOC" : m === "VIDEO" ? "VID" : m === "AUDIO" ? "AUD" : m === "TEXT" ? "T" : m;
+    if (!seen.has(key)) {
+      seen.add(key);
+      list.push(key);
+    }
+  }
 
-  const rawParts = mods
-    .split(/[,;\s]+/)
-    .map((s) => s.trim().toUpperCase())
-    .filter(Boolean);
-
-  const parsed = Array.from(new Set(rawParts));
+  const order = ["T", "IMG", "DOC", "VID", "AUD"];
+  list.sort((a, b) => {
+    const ia = order.indexOf(a);
+    const ib = order.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", minHeight: 22 }}>
-      {parsed.map((m) => {
-        const item = MOD_ICONS[m];
-        if (!item) {
-          return (
-            <span
-              key={m}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "2px 5px",
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 600,
-                background: "var(--bg-surface-elevated)",
-                border: "1px solid var(--border-subtle)",
-                color: "var(--text-secondary)",
-              }}
-            >
-              {m}
-            </span>
-          );
-        }
-
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+      {list.map((m) => {
+        const item = MOD_ICONS[m] || {
+          label: m,
+          bg: "rgba(100, 116, 139, 0.12)",
+          color: "var(--text-secondary)",
+          svg: null,
+        };
         return (
           <span
             key={m}
@@ -203,12 +200,13 @@ function ModalityIcons({ mods }: { mods: string }) {
               height: 22,
               borderRadius: 5,
               background: item.bg,
-              border: `1px solid ${item.color}33`,
               color: item.color,
-              cursor: "help",
+              border: `1px solid ${item.color}33`,
+              flexShrink: 0,
+              cursor: "default",
             }}
           >
-            {item.svg}
+            {item.svg ?? <span style={{ fontSize: 10, fontWeight: 700 }}>{m[0]}</span>}
           </span>
         );
       })}
@@ -216,20 +214,33 @@ function ModalityIcons({ mods }: { mods: string }) {
   );
 }
 
-function formatPriceBadge(price: number | undefined) {
-  if (price == null || price === 0) {
+function formatPriceBadge(price: number | null | undefined, isFreeRoute?: boolean, actualPrice?: number) {
+  if (isFreeRoute || price == null || price === 0) {
     return (
-      <span
-        className="pill active"
-        style={{
-          fontSize: 11,
-          fontWeight: 700,
-          padding: "1px 7px",
-          display: "inline-block",
-        }}
-      >
-        Free
-      </span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span
+            className="pill active"
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              padding: "2px 7px",
+              display: "inline-block",
+            }}
+          >
+            {isFreeRoute ? "FREE ROUTE ($0)" : "Free"}
+          </span>
+        </div>
+        {actualPrice !== undefined && actualPrice > 0 && (
+          <div style={{ fontSize: 11, color: "var(--text-secondary)", display: "flex", alignItems: "baseline", gap: 3 }}>
+            <span>Actual Base:</span>
+            <strong className="mono" style={{ color: "var(--text-primary)" }}>
+              ${actualPrice < 0.01 ? actualPrice.toFixed(4) : actualPrice.toFixed(2)}
+            </strong>
+            <span style={{ fontSize: 9.5, color: "var(--text-tertiary)" }}>/ 1M</span>
+          </div>
+        )}
+      </div>
     );
   }
   const formatted =
@@ -514,7 +525,7 @@ export default function SettingsPage() {
               <input
                 type="text"
                 className="input-field mono"
-                placeholder="e.g. gemini-2.5-flash, llama-3.2-11b-vision-instruct, gpt-4o"
+                placeholder="e.g. Cohere: North Mini Code (free), gemini-2.5-flash, gpt-4o"
                 value={testModel}
                 onChange={(e) => setTestModel(e.target.value)}
                 style={{ flex: "1 1 280px", minWidth: 220 }}
@@ -629,7 +640,7 @@ export default function SettingsPage() {
                               <span style={{ color: "var(--text-tertiary)", fontSize: 10, fontWeight: 600 }}>PROMPT (INPUT)</span>
                               <span style={{ color: "var(--text-tertiary)", fontSize: 9.5 }}>per 1M tok</span>
                             </div>
-                            {formatPriceBadge(tr.result.inputPrice)}
+                            {formatPriceBadge(tr.result.inputPrice, tr.result.isFreeRoute, tr.result.actualInputPrice)}
                             {tr.result.inputPrice > 0 && (
                               <div style={{ fontSize: 9.5, color: "var(--text-tertiary)", marginTop: 2 }}>
                                 ≈ {(tr.result.inputPrice * 0.1).toFixed(4)}¢ / 1K
@@ -641,7 +652,7 @@ export default function SettingsPage() {
                               <span style={{ color: "var(--text-tertiary)", fontSize: 10, fontWeight: 600 }}>COMPLETION (OUTPUT)</span>
                               <span style={{ color: "var(--text-tertiary)", fontSize: 9.5 }}>per 1M tok</span>
                             </div>
-                            {formatPriceBadge(tr.result.outputPrice)}
+                            {formatPriceBadge(tr.result.outputPrice, tr.result.isFreeRoute, tr.result.actualOutputPrice)}
                             {tr.result.outputPrice > 0 && (
                               <div style={{ fontSize: 9.5, color: "var(--text-tertiary)", marginTop: 2 }}>
                                 ≈ {(tr.result.outputPrice * 0.1).toFixed(4)}¢ / 1K
