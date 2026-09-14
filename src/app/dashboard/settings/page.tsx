@@ -19,6 +19,201 @@ interface TestResult {
   error?: string;
 }
 
+const MOD_ICONS: Record<string, { label: string; bg: string; color: string; svg: React.ReactNode }> = {
+  T: {
+    label: "Text",
+    bg: "rgba(59, 130, 246, 0.12)",
+    color: "#3b82f6",
+    svg: (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 7V4h16v3M9 20h6M12 4v16" />
+      </svg>
+    ),
+  },
+  TEXT: {
+    label: "Text",
+    bg: "rgba(59, 130, 246, 0.12)",
+    color: "#3b82f6",
+    svg: (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 7V4h16v3M9 20h6M12 4v16" />
+      </svg>
+    ),
+  },
+  IMG: {
+    label: "Vision / Image",
+    bg: "rgba(168, 85, 247, 0.12)",
+    color: "#a855f7",
+    svg: (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="9" cy="9" r="1.8" fill="currentColor" stroke="none" />
+        <path d="M21 15l-4.5-4.5L6 21" />
+      </svg>
+    ),
+  },
+  IMAGE: {
+    label: "Vision / Image",
+    bg: "rgba(168, 85, 247, 0.12)",
+    color: "#a855f7",
+    svg: (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="9" cy="9" r="1.8" fill="currentColor" stroke="none" />
+        <path d="M21 15l-4.5-4.5L6 21" />
+      </svg>
+    ),
+  },
+  VISION: {
+    label: "Vision / Image",
+    bg: "rgba(168, 85, 247, 0.12)",
+    color: "#a855f7",
+    svg: (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="9" cy="9" r="1.8" fill="currentColor" stroke="none" />
+        <path d="M21 15l-4.5-4.5L6 21" />
+      </svg>
+    ),
+  },
+  DOC: {
+    label: "Document / PDF",
+    bg: "rgba(245, 158, 11, 0.12)",
+    color: "#f59e0b",
+    svg: (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="9" y1="13" x2="15" y2="13" />
+        <line x1="9" y1="17" x2="13" y2="17" />
+      </svg>
+    ),
+  },
+  DOCUMENT: {
+    label: "Document / PDF",
+    bg: "rgba(245, 158, 11, 0.12)",
+    color: "#f59e0b",
+    svg: (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="9" y1="13" x2="15" y2="13" />
+        <line x1="9" y1="17" x2="13" y2="17" />
+      </svg>
+    ),
+  },
+  VID: {
+    label: "Video",
+    bg: "rgba(239, 68, 68, 0.12)",
+    color: "#ef4444",
+    svg: (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="4" width="20" height="16" rx="2" />
+        <path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5" />
+        <path d="M10.5 9.5l4.5 2.5-4.5 2.5z" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+  },
+  VIDEO: {
+    label: "Video",
+    bg: "rgba(239, 68, 68, 0.12)",
+    color: "#ef4444",
+    svg: (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="4" width="20" height="16" rx="2" />
+        <path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5" />
+        <path d="M10.5 9.5l4.5 2.5-4.5 2.5z" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+  },
+  AUD: {
+    label: "Audio / Voice",
+    bg: "rgba(16, 185, 129, 0.12)",
+    color: "#10b981",
+    svg: (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+        <path d="M19 10v2a7 7 0 01-14 0v-2" />
+        <line x1="12" y1="19" x2="12" y2="23" />
+        <line x1="8" y1="23" x2="16" y2="23" />
+      </svg>
+    ),
+  },
+  AUDIO: {
+    label: "Audio / Voice",
+    bg: "rgba(16, 185, 129, 0.12)",
+    color: "#10b981",
+    svg: (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+        <path d="M19 10v2a7 7 0 01-14 0v-2" />
+        <line x1="12" y1="19" x2="12" y2="23" />
+        <line x1="8" y1="23" x2="16" y2="23" />
+      </svg>
+    ),
+  },
+};
+
+function ModalityIcons({ mods }: { mods: string }) {
+  if (!mods) return <span style={{ color: "var(--text-tertiary)", fontSize: 11 }}>–</span>;
+
+  const rawParts = mods
+    .split(/[,;\s]+/)
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+
+  const parsed = Array.from(new Set(rawParts));
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", minHeight: 22 }}>
+      {parsed.map((m) => {
+        const item = MOD_ICONS[m];
+        if (!item) {
+          return (
+            <span
+              key={m}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "2px 5px",
+                borderRadius: 4,
+                fontSize: 10,
+                fontWeight: 600,
+                background: "var(--bg-surface-elevated)",
+                border: "1px solid var(--border-subtle)",
+                color: "var(--text-secondary)",
+              }}
+            >
+              {m}
+            </span>
+          );
+        }
+
+        return (
+          <span
+            key={m}
+            title={item.label}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 22,
+              height: 22,
+              borderRadius: 5,
+              background: item.bg,
+              border: `1px solid ${item.color}33`,
+              color: item.color,
+              cursor: "help",
+            }}
+          >
+            {item.svg}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("Model Info Discovery");
   const [strategy, setStrategy] = useState("cascade");
@@ -364,9 +559,9 @@ export default function SettingsPage() {
                             <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block" }}>CONTEXT</span>
                             <span className="mono" style={{ fontWeight: 600 }}>{tr.result.contextWindow}</span>
                           </div>
-                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
-                            <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block" }}>MODALITIES</span>
-                            <span className="mono" style={{ fontWeight: 600 }}>{tr.result.modalities}</span>
+                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                            <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block", marginBottom: 2 }}>MODALITIES</span>
+                            <ModalityIcons mods={tr.result.modalities} />
                           </div>
                           <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
                             <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block" }}>INPUT $/1M</span>
