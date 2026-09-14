@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { ToolResultWidget } from "./ToolResultWidget";
 import { computeUnifiedDiff } from "@/lib/designerArtifact";
+import { TerminalPanel, TerminalOutput } from "./TerminalPanel";
 
 export interface WorkspaceFile {
   name: string;
@@ -57,6 +58,12 @@ interface Props {
   onSelectFile: (name: string) => void;
   activeToolResult?: { type: string; data: any } | null;
   onSendPrompt?: (prompt: string) => void;
+  activeTab?: "file" | "terminal" | "review" | "tree" | "widget";
+  onTabChange?: (tab: "file" | "terminal" | "review" | "tree" | "widget") => void;
+  terminalOutput?: TerminalOutput | null;
+  isExecuting?: boolean;
+  onRunCode?: () => void;
+  onClearTerminal?: () => void;
 }
 
 export function ChatWorkspacePanel({
@@ -65,21 +72,26 @@ export function ChatWorkspacePanel({
   onSelectFile,
   activeToolResult,
   onSendPrompt,
+  activeTab: activeTabProp,
+  onTabChange,
+  terminalOutput: terminalOutputProp,
+  isExecuting: isExecutingProp,
+  onRunCode: onRunCodeProp,
+  onClearTerminal: onClearTerminalProp,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"file" | "review" | "tree" | "widget">("file");
+  const [internalActiveTab, setInternalActiveTab] = useState<"file" | "terminal" | "review" | "tree" | "widget">("file");
+  const activeTab = activeTabProp !== undefined ? activeTabProp : internalActiveTab;
+  const setActiveTab = onTabChange || setInternalActiveTab;
+
   const [viewMode, setViewMode] = useState<"code" | "diff">("code");
   const [copied, setCopied] = useState(false);
 
   // Execution terminal state
-  const [isRunning, setIsRunning] = useState(false);
-  const [terminalOutput, setTerminalOutput] = useState<{
-    stdout: string;
-    stderr: string;
-    exitCode: number;
-    executionTimeMs: number;
-    command: string;
-  } | null>(null);
-  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [internalIsRunning, setInternalIsRunning] = useState(false);
+  const [internalTerminalOutput, setInternalTerminalOutput] = useState<TerminalOutput | null>(null);
+
+  const terminalOutput = terminalOutputProp !== undefined ? terminalOutputProp : internalTerminalOutput;
+  const isRunning = isExecutingProp !== undefined ? isExecutingProp : internalIsRunning;
 
   // Sync active tab based on what's active
   useEffect(() => {
@@ -132,8 +144,13 @@ export function ChatWorkspacePanel({
 
   const handleRunCode = async () => {
     if (!currentFile || !isRunnable) return;
-    setIsRunning(true);
-    setTerminalOpen(true);
+    if (onRunCodeProp) {
+      onRunCodeProp();
+      setActiveTab("terminal");
+      return;
+    }
+    setInternalIsRunning(true);
+    setActiveTab("terminal");
     const cmd = language === "python" ? `python ${currentFile.name}` : `node ${currentFile.name}`;
 
     try {
@@ -147,7 +164,7 @@ export function ChatWorkspacePanel({
         }),
       });
       const data = await res.json();
-      setTerminalOutput({
+      setInternalTerminalOutput({
         stdout: data.stdout || "",
         stderr: data.stderr || "",
         exitCode: data.exitCode ?? 0,
@@ -155,7 +172,7 @@ export function ChatWorkspacePanel({
         command: cmd,
       });
     } catch (err: any) {
-      setTerminalOutput({
+      setInternalTerminalOutput({
         stdout: "",
         stderr: `Execution Request Failed: ${err.message}`,
         exitCode: 1,
@@ -163,7 +180,7 @@ export function ChatWorkspacePanel({
         command: cmd,
       });
     } finally {
-      setIsRunning(false);
+      setInternalIsRunning(false);
     }
   };
 
@@ -201,6 +218,30 @@ export function ChatWorkspacePanel({
               )}
             </button>
           )}
+
+          {/* Terminal Tab */}
+          <button
+            onClick={() => setActiveTab("terminal")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === "terminal"
+                ? "bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 shadow-2xs"
+                : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+            }`}
+          >
+            <TerminalIcon size={14} className={isRunning ? "text-emerald-500 animate-pulse" : "text-emerald-600 dark:text-emerald-400"} />
+            <span>Terminal</span>
+            {terminalOutput && (
+              <span
+                className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${
+                  terminalOutput.exitCode === 0
+                    ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400"
+                    : "bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400"
+                }`}
+              >
+                Exit {terminalOutput.exitCode}
+              </span>
+            )}
+          </button>
 
           {/* Code Review Tab */}
           {reviewData && (
@@ -393,78 +434,21 @@ export function ChatWorkspacePanel({
                 </div>
               )}
             </div>
-
-            {/* 3. DOCKABLE TERMINAL OUTPUT CONSOLE (When code is run) */}
-            {terminalOpen && (
-              <div className="border-t border-neutral-200 dark:border-neutral-800 bg-neutral-900 text-neutral-100 font-mono text-xs flex flex-col shrink-0 max-h-56">
-                <div className="flex items-center justify-between px-3 py-1.5 bg-neutral-950/80 border-b border-neutral-800 text-[11px] text-neutral-400">
-                  <div className="flex items-center gap-2">
-                    <TerminalIcon size={13} className="text-emerald-400" />
-                    <span className="font-semibold text-neutral-200">Terminal Console</span>
-                    {terminalOutput && (
-                      <>
-                        <span>·</span>
-                        <span className="text-neutral-500">{terminalOutput.command}</span>
-                        <span>·</span>
-                        <span
-                          className={`font-semibold ${
-                            terminalOutput.exitCode === 0 ? "text-emerald-400" : "text-rose-400"
-                          }`}
-                        >
-                          Exit {terminalOutput.exitCode}
-                        </span>
-                        <span>·</span>
-                        <span className="text-neutral-500">{terminalOutput.executionTimeMs}ms</span>
-                      </>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={handleRunCode}
-                      disabled={isRunning}
-                      className="hover:text-neutral-200 p-1 transition-colors"
-                      title="Re-run"
-                    >
-                      <RotateCcw size={11} className={isRunning ? "animate-spin" : ""} />
-                    </button>
-                    <button
-                      onClick={() => setTerminalOpen(false)}
-                      className="hover:text-neutral-200 px-1.5 py-0.5 rounded hover:bg-neutral-800 transition-colors text-[10px]"
-                    >
-                      Close ✕
-                    </button>
-                  </div>
-                </div>
-
-                <div className="p-3 overflow-y-auto flex-1 space-y-1 select-text">
-                  {isRunning ? (
-                    <div className="flex items-center gap-2 text-emerald-400 animate-pulse">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      <span>Executing code in isolated environment...</span>
-                    </div>
-                  ) : terminalOutput ? (
-                    <>
-                      {terminalOutput.stdout && (
-                        <pre className="whitespace-pre-wrap text-emerald-300 font-mono leading-relaxed">
-                          {terminalOutput.stdout}
-                        </pre>
-                      )}
-                      {terminalOutput.stderr && (
-                        <pre className="whitespace-pre-wrap text-rose-400 font-mono leading-relaxed">
-                          {terminalOutput.stderr}
-                        </pre>
-                      )}
-                      {!terminalOutput.stdout && !terminalOutput.stderr && (
-                        <div className="text-neutral-500 italic">Program finished with no output.</div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-neutral-500 italic">No output yet. Click &quot;Run Code&quot; to execute.</div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
+        )}
+
+        {/* TERMINAL TAB VIEW */}
+        {activeTab === "terminal" && (
+          <TerminalPanel
+            currentFile={currentFile}
+            output={terminalOutput}
+            isRunning={isRunning}
+            onRunCode={handleRunCode}
+            onClearOutput={() => {
+              if (onClearTerminalProp) onClearTerminalProp();
+              setInternalTerminalOutput(null);
+            }}
+          />
         )}
 
         {/* VULNERABILITY & SECURITY REVIEW VIEW */}
