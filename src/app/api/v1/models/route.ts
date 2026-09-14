@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { inferModelParams, inferModelScore } from "@/lib/model-info";
 
 export async function GET() {
   const [models, combos] = await Promise.all([
@@ -92,6 +93,8 @@ export async function GET() {
     inputPrice: 0,
     outputPrice: 0,
     modalities: "T,IMG,DOC",
+    params: "Combo",
+    score: 95,
     enabled: true,
     status: "ok",
     isCombo: true,
@@ -106,6 +109,8 @@ export async function GET() {
     const mSpend = (m.id && spendById.has(m.id) ? spendById.get(m.id) : null) ?? spendBySlug.get(m.slug) ?? 0;
     const mReqs = (m.id && requestsById.has(m.id) ? requestsById.get(m.id) : null) ?? requestsBySlug.get(m.slug) ?? 0;
     const mToks = (m.id && tokensById.has(m.id) ? tokensById.get(m.id) : null) ?? tokensBySlug.get(m.slug) ?? 0;
+    const params = inferModelParams(m.slug);
+    const score = inferModelScore(m.slug, params);
 
     return {
       id: m.slug,
@@ -119,6 +124,8 @@ export async function GET() {
       displayName: m.displayName,
       provider: m.provider,
       contextWindow: m.contextWindow,
+      params,
+      score,
       inputPrice: m.inputPrice,
       outputPrice: m.outputPrice,
       modalities: m.modalities,

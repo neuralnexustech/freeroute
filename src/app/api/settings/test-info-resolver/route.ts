@@ -22,6 +22,8 @@ export async function POST(req: NextRequest) {
           inputPrice: 0,
           outputPrice: 0,
           modalities: "T",
+          params: "–",
+          score: 0,
           source: name,
         },
       };
