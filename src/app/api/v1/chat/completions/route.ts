@@ -11,6 +11,7 @@ import {
 import { loadComboCursor } from "@/lib/combo-server";
 import { detectApp } from "@/lib/detect-app";
 import { broadcastTelemetry } from "@/lib/telemetryEvents";
+import { peekStreamForFailover } from "@/lib/claude-translator";
 
 function estimateCost(
   model: { inputPrice: number; outputPrice: number } | null,
@@ -79,6 +80,11 @@ interface SsePumpStats {
   totalMs: number;
 }
 
+function toSafeHeaderAscii(val: string): string {
+  if (!val) return "";
+  return val.replace(/→/g, "->").replace(/[^\x20-\x7E]/g, " ").trim();
+}
+
 /**
  * Pipes an upstream SSE (or buffered JSON) response to the client as an
  * OpenAI-compatible text/event-stream, while accumulating the full text and
@@ -86,6 +92,9 @@ interface SsePumpStats {
  */
 function createSseResponse(opts: {
   upstream: Response;
+  existingReader?: ReadableStreamDefaultReader<Uint8Array>;
+  initialChunk?: Uint8Array;
+  initialChunks?: Uint8Array[];
   isAnthropic: boolean;
   model: string;
   providerSlug: string;
@@ -95,9 +104,16 @@ function createSseResponse(opts: {
   comboStrategy?: string;
   onFinish: (stats: SsePumpStats) => Promise<void> | void;
 }): Response {
-  const { upstream, isAnthropic, model, providerSlug, started, requestId, comboHops, comboStrategy, onFinish } = opts;
+  const { upstream, existingReader, initialChunk, initialChunks, isAnthropic, model, providerSlug, started, requestId, comboHops, comboStrategy, onFinish } = opts;
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
+
+  const prependedChunks: Uint8Array[] = initialChunks
+    ? [...initialChunks]
+    : initialChunk
+      ? [initialChunk]
+      : [];
+  let prependedIdx = 0;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -180,12 +196,20 @@ function createSseResponse(opts: {
 
       try {
         const contentType = upstream.headers.get("content-type") || "";
-        const reader = upstream.body!.getReader();
+        const reader = existingReader || upstream.body!.getReader();
         const isSse = contentType.includes("text/event-stream");
-
         for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
+          let value: Uint8Array | undefined;
+          if (prependedIdx < prependedChunks.length) {
+            value = prependedChunks[prependedIdx++];
+          } else if (reader) {
+            const res = await reader.read();
+            if (res.done) break;
+            value = res.value;
+          } else {
+            break;
+          }
+          if (!value) continue;
           if (ttftMs === null) {
             ttftMs = Date.now() - started;
             broadcastTelemetry({
@@ -274,7 +298,7 @@ function createSseResponse(opts: {
       "x-request-id": requestId,
       "x-model-slug": model,
       "x-provider": providerSlug,
-      ...(comboHops ? { "x-combo-hops": comboHops } : {}),
+      ...(comboHops ? { "x-combo-hops": toSafeHeaderAscii(comboHops) } : {}),
       ...(comboStrategy ? { "x-combo-strategy": comboStrategy } : {}),
     },
   });
@@ -322,7 +346,7 @@ export async function POST(req: NextRequest) {
     : rawModel;
 
   // 1. Check if model name matches a configured Combo
-  const combo = await prisma.combo.findFirst({
+  let combo = await prisma.combo.findFirst({
     where: {
       OR: [{ name: rawModel }, { name: cleanModelName }],
     },
@@ -332,6 +356,42 @@ export async function POST(req: NextRequest) {
       },
     },
   });
+
+  // If not matching a combo directly, fallback to configured Claude default combo / powerfull / first combo
+  if (!combo) {
+    const isClaudeSlot =
+      rawModel.includes("claude") ||
+      rawModel.includes("sonnet") ||
+      rawModel.includes("opus") ||
+      rawModel.includes("haiku") ||
+      rawModel.startsWith("cc/");
+
+    if (isClaudeSlot) {
+      const defaultSetting = await prisma.setting
+        .findUnique({
+          where: { key: "claude_default_combo" },
+        })
+        .catch(() => null);
+
+      if (defaultSetting?.value) {
+        combo = await prisma.combo.findFirst({
+          where: { OR: [{ name: defaultSetting.value }, { id: defaultSetting.value }] },
+          include: { targets: { orderBy: { priority: "asc" } } },
+        });
+      }
+
+      if (!combo) {
+        combo =
+          (await prisma.combo.findFirst({
+            where: { OR: [{ name: "powerfull" }, { name: "default" }] },
+            include: { targets: { orderBy: { priority: "asc" } } },
+          })) ||
+          (await prisma.combo.findFirst({
+            include: { targets: { orderBy: { priority: "asc" } } },
+          }));
+      }
+    }
+  }
 
   if (combo) {
     // Resolve combo targets
@@ -455,14 +515,35 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // Streaming combo request: commit to this target and pipe SSE deltas.
+        // Streaming combo request: peek stream to ensure it is valid and has tokens before committing headers
         if (wantsStream) {
+          const reader = upstreamRes.body?.getReader();
+          if (!reader) {
+            if (i < orderedTargets.length - 1) {
+              lastError = `${m.slug} (${m.provider.name}) -> empty stream body`;
+              attemptedHops.push(lastError);
+              continue;
+            }
+          }
+
+          const peekResult = reader
+            ? await peekStreamForFailover(reader)
+            : { isFailed: true, chunks: [], reason: "no stream reader" };
+
+          if (peekResult.isFailed && i < orderedTargets.length - 1) {
+            lastError = `${m.slug} (${m.provider.name}) -> ${peekResult.reason || "empty/invalid stream"}`;
+            attemptedHops.push(lastError);
+            continue;
+          }
+
           const servedModel = m;
           const comboHopsStr =
             attemptedHops.length > 0
-              ? [...attemptedHops, `${m.slug} (served)`].join(" → ")
-              : m.slug;
+              ? toSafeHeaderAscii([...attemptedHops, `${m.slug} (served)`].join(" -> "))
+              : toSafeHeaderAscii(m.slug);
           return createSseResponse({
+            existingReader: reader,
+            initialChunks: peekResult.chunks,
             upstream: upstreamRes,
             isAnthropic,
             model: m.slug,
@@ -529,6 +610,12 @@ export async function POST(req: NextRequest) {
           data = null;
         }
 
+        if ((!data || !data.choices) && i < orderedTargets.length - 1) {
+          lastError = `${m.slug} (${m.provider.name}) -> non-JSON or invalid response`;
+          attemptedHops.push(lastError);
+          continue;
+        }
+
         const usage = data?.usage ?? {};
         const pt = usage.prompt_tokens ?? usage.input_tokens ?? 0;
         const ct = usage.completion_tokens ?? usage.output_tokens ?? 0;
@@ -585,7 +672,7 @@ export async function POST(req: NextRequest) {
             "x-model-slug": m.slug,
             "x-provider": m.provider.slug,
             "openai-processing-ms": String(totalMs),
-            ...(attemptedHops.length > 0 ? { "x-combo-hops": [...attemptedHops, `${m.slug} (served)`].join(" → ") } : { "x-combo-hops": m.slug }),
+            ...(attemptedHops.length > 0 ? { "x-combo-hops": toSafeHeaderAscii([...attemptedHops, `${m.slug} (served)`].join(" -> ")) } : { "x-combo-hops": toSafeHeaderAscii(m.slug) }),
             "x-combo-strategy": combo.strategy,
           },
         });

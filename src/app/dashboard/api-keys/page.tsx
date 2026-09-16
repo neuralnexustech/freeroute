@@ -21,7 +21,7 @@ export default function ApiKeysPage() {
   const [originUrl, setOriginUrl] = useState("");
   const toast = useToast();
 
-  const load = () => fetch("/api/api-keys").then((r) => r.json()).then((d) => setRows(d.keys ?? [])).catch(() => {});
+  const load = () => fetch("/api/api-keys?all=true").then((r) => r.json()).then((d) => setRows(d.keys ?? [])).catch(() => {});
   useEffect(() => {
     load();
     if (typeof window !== "undefined") {
@@ -49,6 +49,12 @@ export default function ApiKeysPage() {
   const revoke = async (id: string) => {
     await fetch(`/api/api-keys/${id}`, { method: "DELETE" });
     toast.show("Key revoked");
+    load();
+  };
+
+  const deletePermanently = async (id: string) => {
+    await fetch(`/api/api-keys/${id}?permanent=true`, { method: "DELETE" });
+    toast.show("Key permanently deleted");
     load();
   };
 
@@ -149,7 +155,14 @@ export default function ApiKeysPage() {
                   <td className="num mono">$0.00</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                     <button className="btn sm" onClick={() => toast.show(`Editing limits for key: ${k.name}`)}>Limits</button>{" "}
-                    {!k.revoked && (<><button className="btn sm" onClick={() => rotate(k.id, k.name)}>Rotate</button>{" "}<button className="btn sm danger" onClick={() => revoke(k.id)}>Revoke</button></>)}
+                    {!k.revoked ? (
+                      <>
+                        <button className="btn sm" onClick={() => rotate(k.id, k.name)}>Rotate</button>{" "}
+                        <button className="btn sm danger" onClick={() => revoke(k.id)}>Revoke</button>
+                      </>
+                    ) : (
+                      <button className="btn sm danger" onClick={() => deletePermanently(k.id)}>Delete</button>
+                    )}
                   </td>
                 </tr>
               ))}

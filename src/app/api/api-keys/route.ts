@@ -10,8 +10,11 @@ function expiry(expire: string): Date | null {
   return null;
 }
 
-export async function GET() {
-  const keys = await prisma.apiKey.findMany({ orderBy: { createdAt: "desc" } });
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const includeRevoked = url.searchParams.get("revoked") === "true" || url.searchParams.get("all") === "true";
+  const where = includeRevoked ? {} : { revoked: false };
+  const keys = await prisma.apiKey.findMany({ where, orderBy: { createdAt: "desc" } });
   return NextResponse.json({
     keys: keys.map((k) => ({ id: k.id, name: k.name, prefix: k.prefix, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt, expiresAt: k.expiresAt, revoked: k.revoked })),
   });

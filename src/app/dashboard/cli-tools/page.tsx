@@ -75,8 +75,12 @@ export default function CLIToolsPage() {
         fetch("/api/v1/models").then((r) => r.json()).catch(() => ({ data: [] })),
       ]);
 
+      const activeKeys = (keysRes?.keys || []).filter((k: any) => !k.revoked);
       setStatuses(allRes || {});
-      setApiKeys(keysRes?.keys || []);
+      setApiKeys(activeKeys);
+      if (activeKeys.length > 0 && !modalApiKey) {
+        setModalApiKey(activeKeys[0].id);
+      }
       setCombos(combosRes?.combos || []);
       const rawModels = modelsRes?.data || [];
       setModels(rawModels.filter((m: any) => m.provider?.slug !== "combo"));
@@ -91,9 +95,9 @@ export default function CLIToolsPage() {
       fetch("/api/api-keys")
         .then((r) => r.json())
         .then((d) => {
-          const keys = d.keys || [];
+          const keys = (d.keys || []).filter((k: any) => !k.revoked);
           setApiKeys(keys);
-          if (keys.length > 0) setModalApiKey(keys[0].prefix || keys[0].id);
+          if (keys.length > 0) setModalApiKey(keys[0].id);
         })
         .catch(() => {}),
       fetch("/api/combos")
@@ -143,9 +147,15 @@ export default function CLIToolsPage() {
   // Open settings modal for a tool
   const handleOpenSettings = (tool: ToolCard) => {
     setSelectedTool(tool);
-    setModalBaseUrl(gatewayBaseUrl);
-    if (apiKeys.length > 0 && !modalApiKey) {
-      setModalApiKey(apiKeys[0].prefix || apiKeys[0].id);
+    // Anthropic SDK / Claude Code automatically appends /v1 to baseURL.
+    // Display origin without /v1 for Claude Code.
+    const base = tool.id === "claude"
+      ? (typeof window !== "undefined" ? window.location.origin : "")
+      : gatewayBaseUrl;
+    setModalBaseUrl(base);
+
+    if (apiKeys.length > 0 && (!modalApiKey || !apiKeys.some((k) => k.id === modalApiKey))) {
+      setModalApiKey(apiKeys[0].id);
     }
 
     // Initialize Claude settings
@@ -894,12 +904,15 @@ export default function CLIToolsPage() {
                         <option value="xpl_gateway_key">Default Key (xpl_gateway_key)</option>
                       ) : (
                         apiKeys.map((k) => (
-                          <option key={k.id} value={k.prefix || k.id}>
-                            {k.name} ({k.prefix}…)
+                          <option key={k.id} value={k.id}>
+                            {k.name} ({k.prefix}••••••••)
                           </option>
                         ))
                       )}
                     </select>
+                    <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 4 }}>
+                      Full 52-character key is securely decrypted and applied to config
+                    </div>
                   </div>
                 </div>
               </div>
