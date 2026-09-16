@@ -74,6 +74,7 @@ export default function ProviderDetailPage() {
   const [models, setModels] = useState<ModelRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [pulling, setPulling] = useState(false);
+  const [pullStep, setPullStep] = useState<string>("Connecting to provider API…");
   const [pullError, setPullError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
@@ -157,17 +158,44 @@ export default function ProviderDetailPage() {
   const pullModels = async () => {
     setPulling(true);
     setPullError(null);
-    const r = await fetch(`/api/providers/${slug}/pull`, { method: "POST" });
-    const d = await r.json().catch(() => ({}));
-    setPulling(false);
-    if (!r.ok) {
-      const msg = d.error ?? "Pull models failed";
+    setPullStep("Connecting to provider endpoint…");
+
+    const t1 = setTimeout(() => {
+      setPullStep("Fetching model registry & capabilities…");
+    }, 1200);
+
+    const t2 = setTimeout(() => {
+      setPullStep("Enriching context windows, modalities & pricing metadata…");
+    }, 3200);
+
+    const t3 = setTimeout(() => {
+      setPullStep("Upserting models into database & synchronizing catalog…");
+    }, 6000);
+
+    try {
+      const r = await fetch(`/api/providers/${slug}/pull`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      setPulling(false);
+      if (!r.ok) {
+        const msg = d.error ?? "Pull models failed";
+        setPullError(msg);
+        return toast.show(msg);
+      }
+      setPullError(null);
+      toast.show(`Pulled and synced ${d.count ?? 0} models (${d.enriched ?? 0} enriched)`);
+      load();
+    } catch (err: any) {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      setPulling(false);
+      const msg = err?.message || "Failed to pull models";
       setPullError(msg);
-      return toast.show(msg);
+      toast.show(msg);
     }
-    setPullError(null);
-    toast.show(`Pulled and synced ${d.count ?? 0} models (${d.enriched ?? 0} enriched)`);
-    load();
   };
 
   const deleteKey = async () => {
@@ -386,8 +414,28 @@ export default function ProviderDetailPage() {
               Get API Key ↗
             </a>
           )}
-          <button className="btn sm" onClick={() => pullModels()} disabled={pulling}>
-            {pulling ? "Pulling Models…" : "Pull Models"}
+          <button
+            className="btn sm"
+            onClick={() => pullModels()}
+            disabled={pulling}
+            style={{ display: "flex", alignItems: "center", gap: 7 }}
+          >
+            {pulling ? (
+              <>
+                <svg className="animate-spin" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" />
+                  <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeLinecap="round" />
+                </svg>
+                <span>Pulling Models…</span>
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                </svg>
+                <span>Pull Models</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -793,6 +841,141 @@ export default function ProviderDetailPage() {
           </div>
         );
       })()}
+
+      {/* Pulling Models Animation Popup Modal */}
+      {pulling && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            background: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <div
+            className="card animate-modal-in"
+            style={{
+              maxWidth: 460,
+              width: "100%",
+              margin: 0,
+              padding: "28px 24px",
+              textAlign: "center",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "16px",
+              boxShadow: "0 20px 45px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)",
+            }}
+          >
+            {/* Animated Logo / Icon Glow Ring */}
+            <div style={{ position: "relative", width: 84, height: 84, margin: "0 auto 18px" }}>
+              {/* Outer Rotating Conic Spinner */}
+              <div
+                className="animate-spin"
+                style={{
+                  position: "absolute",
+                  inset: -6,
+                  borderRadius: "50%",
+                  border: "3px solid transparent",
+                  borderTopColor: "var(--primary)",
+                  borderRightColor: "rgba(14, 165, 233, 0.35)",
+                }}
+              />
+              {/* Pulsing Soft Glow */}
+              <div
+                className="animate-pulse-soft"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  borderRadius: "50%",
+                  background: "radial-gradient(circle, rgba(14, 165, 233, 0.25) 0%, transparent 70%)",
+                }}
+              />
+              {/* Center Logo/Icon Badge */}
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  borderRadius: "50%",
+                  background: "var(--bg-surface-elevated)",
+                  border: "1px solid var(--border-subtle)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                }}
+              >
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt={`${name} logo`}
+                    style={{ width: 46, height: 46, objectFit: "contain" }}
+                  />
+                ) : (
+                  <span className="material-symbols-outlined" style={{ fontSize: 36, color: "var(--primary)" }}>
+                    {icon && /^[a-z0-9_]+$/.test(icon) ? icon : "hub"}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Title & Status */}
+            <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px", color: "var(--text-primary)" }}>
+              Pulling Models from {name}
+            </h3>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 20px", minHeight: 20 }}>
+              {pullStep}
+            </p>
+
+            {/* Animated Loading Bar with Gradient */}
+            <div
+              style={{
+                height: 6,
+                borderRadius: 999,
+                background: "var(--border-subtle)",
+                overflow: "hidden",
+                position: "relative",
+                marginBottom: 16,
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  width: "45%",
+                  borderRadius: 999,
+                  background: "linear-gradient(90deg, transparent, var(--primary), #38bdf8, transparent)",
+                  animation: "shimmer-sweep 1.6s infinite ease-in-out",
+                }}
+              />
+            </div>
+
+            {/* Hint & Endpoint Details */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 12px",
+                borderRadius: 8,
+                background: "var(--bg-surface-elevated)",
+                border: "1px solid var(--border-subtle)",
+                fontSize: 11.5,
+                color: "var(--text-tertiary)",
+              }}
+            >
+              <span className="live-indicator" />
+              <span>Fetching live catalog and enriching tokens &amp; modalities</span>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
