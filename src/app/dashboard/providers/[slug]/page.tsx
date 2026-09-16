@@ -19,6 +19,16 @@ interface ModelRow {
   outputPrice: number;
 }
 
+interface BenchResult {
+  ttftMs: number | null;
+  toksPerSec: number | null;
+  totalTokens: number;
+  latencyMs: number;
+  text: string;
+}
+
+type BenchPhase = "idle" | "connecting" | "waiting" | "streaming" | "done" | "error";
+
 function fmtTtft(ms: number | null): string {
   if (ms == null) return "–";
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(2)}s`;
@@ -86,6 +96,21 @@ export default function ProviderDetailPage() {
   const [inspect, setInspect] = useState<ModelRow | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
+
+  // ── Live Benchmark (TTFT / Tok/s calculator) ──────────────────────────────
+  const [benchModel, setBenchModel] = useState("");
+  const [benchPrompt, setBenchPrompt] = useState("Say hello in exactly 5 words.");
+  const [benchPhase, setBenchPhase] = useState<BenchPhase>("idle");
+  const [benchTtftMs, setBenchTtftMs] = useState<number | null>(null);
+  const [benchToksPerSec, setBenchToksPerSec] = useState<number | null>(null);
+  const [benchTokens, setBenchTokens] = useState(0);
+  const [benchElapsed, setBenchElapsed] = useState(0);
+  const [benchPartial, setBenchPartial] = useState("");
+  const [benchResult, setBenchResult] = useState<BenchResult | null>(null);
+  const [benchError, setBenchError] = useState("");
+  // Client-side elapsed ticker (for the "waiting for first token" animation)
+  const benchTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const benchT0Ref = useRef<number>(0);
 
   // Auto-scroll the test log box to bottom whenever a new model result arrives
   useEffect(() => {
@@ -361,6 +386,96 @@ export default function ProviderDetailPage() {
     );
     toast.show(`Disabled all ${targets.length} models`);
     load();
+  };
+
+  // ── Bench runner ──────────────────────────────────────────────────────────
+  const runBench = async () => {
+    const target = benchModel || models.find((m) => m.enabled)?.slug || "";
+    if (!target) return toast.show("Pull and enable at least one model first");
+
+    setBenchPhase("connecting");
+    setBenchTtftMs(null);
+    setBenchToksPerSec(null);
+    setBenchTokens(0);
+    setBenchElapsed(0);
+    setBenchPartial("");
+    setBenchResult(null);
+    setBenchError("");
+
+    // Start a client-side elapsed ticker for the "waiting" phase animation
+    benchT0Ref.current = Date.now();
+    if (benchTickRef.current) clearInterval(benchTickRef.current);
+    benchTickRef.current = setInterval(() => {
+      setBenchElapsed(Date.now() - benchT0Ref.current);
+    }, 50);
+
+    try {
+      const r = await fetch(`/api/providers/${slug}/bench`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelSlug: target, prompt: benchPrompt }),
+      });
+
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        if (benchTickRef.current) clearInterval(benchTickRef.current);
+        setBenchPhase("error");
+        setBenchError(d.error ?? `HTTP ${r.status}`);
+        return;
+      }
+
+      const reader = r.body!.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split("\n\n");
+        buf = parts.pop()!;
+        for (const part of parts) {
+          const lines = part.split("\n");
+          let event = "";
+          let data = "";
+          for (const line of lines) {
+            if (line.startsWith("event: ")) event = line.slice(7).trim();
+            if (line.startsWith("data: ")) data = line.slice(6).trim();
+          }
+          if (!event || !data) continue;
+          try {
+            const p = JSON.parse(data);
+            if (event === "progress") {
+              setBenchPhase(p.phase as BenchPhase);
+              if (p.ttftMs != null) setBenchTtftMs(p.ttftMs);
+            } else if (event === "chunk") {
+              if (p.ttftMs != null) setBenchTtftMs(p.ttftMs);
+              setBenchToksPerSec(p.toksPerSec);
+              setBenchTokens(p.tokensReceived);
+              setBenchElapsed(p.elapsedMs);
+              setBenchPartial(p.partialText ?? "");
+            } else if (event === "result") {
+              if (benchTickRef.current) clearInterval(benchTickRef.current);
+              setBenchResult(p as BenchResult);
+              setBenchTtftMs(p.ttftMs);
+              setBenchToksPerSec(p.toksPerSec);
+              setBenchTokens(p.totalTokens);
+              setBenchElapsed(p.latencyMs);
+              setBenchPartial(p.text ?? "");
+              setBenchPhase("done");
+            } else if (event === "error") {
+              if (benchTickRef.current) clearInterval(benchTickRef.current);
+              setBenchPhase("error");
+              setBenchError(p.message ?? "Unknown error");
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch (e: any) {
+      if (benchTickRef.current) clearInterval(benchTickRef.current);
+      setBenchPhase("error");
+      setBenchError(e?.message ?? "Network error");
+    }
   };
 
   return (
@@ -802,6 +917,229 @@ export default function ProviderDetailPage() {
           </table>
         </div>
         {loading && <div style={{ padding: 16 }}><div className="skeleton-row" /><div className="skeleton-row" /><div className="skeleton-row" /></div>}
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          LIVE BENCHMARK — TTFT & TOK/S CALCULATOR
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div style={{ marginTop: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>⚡ Live Benchmark</span>
+          <span style={{ fontSize: 11.5, color: "var(--text-muted)", fontStyle: "italic" }}>Measures real TTFT & tokens/sec from a live streaming request</span>
+        </div>
+
+        <div className="card" style={{ padding: "20px 22px" }}>
+          {/* Controls row */}
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 18 }}>
+            {/* Model selector */}
+            <div style={{ flex: "0 0 auto", minWidth: 220 }}>
+              <div className="card-label" style={{ marginBottom: 5 }}>Model</div>
+              <select
+                className="input-field"
+                value={benchModel || models.find((m) => m.enabled)?.slug || ""}
+                onChange={(e) => setBenchModel(e.target.value)}
+                style={{ fontSize: 12.5 }}
+                disabled={benchPhase !== "idle" && benchPhase !== "done" && benchPhase !== "error"}
+              >
+                {models.filter((m) => m.enabled).map((m) => (
+                  <option key={m.id} value={m.slug}>{m.slug}</option>
+                ))}
+                {models.filter((m) => m.enabled).length === 0 && (
+                  <option value="">— Pull & enable models first —</option>
+                )}
+              </select>
+            </div>
+
+            {/* Prompt input */}
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div className="card-label" style={{ marginBottom: 5 }}>Prompt</div>
+              <input
+                type="text"
+                className="input-field"
+                value={benchPrompt}
+                onChange={(e) => setBenchPrompt(e.target.value)}
+                placeholder="Say hello in exactly 5 words."
+                style={{ fontSize: 12.5 }}
+                disabled={benchPhase !== "idle" && benchPhase !== "done" && benchPhase !== "error"}
+              />
+            </div>
+
+            {/* Run / Stop button */}
+            <button
+              className="btn primary sm"
+              onClick={runBench}
+              disabled={benchPhase !== "idle" && benchPhase !== "done" && benchPhase !== "error"}
+              style={{ display: "flex", alignItems: "center", gap: 7, whiteSpace: "nowrap" }}
+            >
+              {benchPhase === "connecting" || benchPhase === "waiting" || benchPhase === "streaming" ? (
+                <>
+                  <svg className="animate-spin" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" />
+                    <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeLinecap="round" />
+                  </svg>
+                  Running…
+                </>
+              ) : (
+                <>
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+                    <polygon points="5,3 19,12 5,21" />
+                  </svg>
+                  {benchPhase === "done" || benchPhase === "error" ? "Run Again" : "Run Benchmark"}
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* ── Live metrics display ── */}
+          {(benchPhase !== "idle") && (
+            <div>
+              {/* Phase indicator */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, fontSize: 12 }}>
+                {["connecting", "waiting", "streaming", "done"].map((phase, i) => {
+                  const phaseOrder = { connecting: 0, waiting: 1, streaming: 2, done: 3, error: 4, idle: -1 } as any;
+                  const currentOrder = phaseOrder[benchPhase] ?? -1;
+                  const thisOrder = i;
+                  const isActive = benchPhase !== "done" && benchPhase !== "error" && phaseOrder[benchPhase] === thisOrder;
+                  const isDone = currentOrder > thisOrder || benchPhase === "done";
+                  const isError = benchPhase === "error";
+                  return (
+                    <>
+                      <span
+                        key={phase}
+                        style={{
+                          padding: "3px 10px",
+                          borderRadius: 99,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          background: isError && i < 2 ? "rgba(239,68,68,0.12)" : isDone ? "rgba(16,185,129,0.12)" : isActive ? "rgba(14,165,233,0.15)" : "rgba(255,255,255,0.04)",
+                          color: isError && i < 2 ? "var(--danger)" : isDone ? "#10b981" : isActive ? "var(--primary)" : "var(--text-muted)",
+                          border: `1px solid ${isError && i < 2 ? "rgba(239,68,68,0.3)" : isDone ? "rgba(16,185,129,0.3)" : isActive ? "rgba(14,165,233,0.35)" : "var(--border-subtle)"}`,
+                          transition: "all 0.25s",
+                        }}
+                      >
+                        {isDone ? "✓ " : isActive ? "● " : ""}{phase}
+                      </span>
+                      {i < 3 && <span style={{ color: "var(--border)", fontSize: 10 }}>›</span>}
+                    </>
+                  );
+                })}
+                {benchPhase === "error" && (
+                  <span style={{ padding: "3px 10px", borderRadius: 99, fontSize: 11, fontWeight: 600, background: "rgba(239,68,68,0.12)", color: "var(--danger)", border: "1px solid rgba(239,68,68,0.3)" }}>✕ error</span>
+                )}
+              </div>
+
+              {benchPhase === "error" ? (
+                <div style={{ padding: "12px 14px", background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, fontSize: 12.5, color: "#f87171" }}>
+                  {benchError}
+                </div>
+              ) : (
+                <>
+                  {/* Live metrics grid */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 16 }}>
+                    {/* TTFT */}
+                    <div style={{
+                      padding: "14px 16px",
+                      background: "var(--bg-surface-elevated)",
+                      border: `1px solid ${benchTtftMs != null ? "rgba(16,185,129,0.35)" : "var(--border-subtle)"}`,
+                      borderRadius: 10,
+                      textAlign: "center",
+                    }}>
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>TTFT</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, fontFamily: "var(--font-mono, monospace)", color: benchTtftMs != null ? "#10b981" : benchPhase === "waiting" ? "var(--primary)" : "var(--text-secondary)", letterSpacing: "-0.02em", transition: "color 0.3s" }}>
+                        {benchTtftMs != null
+                          ? (benchTtftMs < 1000 ? `${benchTtftMs}` : `${(benchTtftMs / 1000).toFixed(2)}k`)
+                          : (benchPhase === "waiting" || benchPhase === "streaming" ? `${benchElapsed}` : "—")
+                        }
+                      </div>
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                        {benchTtftMs != null ? (benchTtftMs < 1000 ? "ms (locked)" : "s (locked)") : (benchPhase === "done" ? "ms (none)" : "ms (ticking…)")}
+                      </div>
+                    </div>
+
+                    {/* Tok/s */}
+                    <div style={{
+                      padding: "14px 16px",
+                      background: "var(--bg-surface-elevated)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: 10,
+                      textAlign: "center",
+                    }}>
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>Tok / s</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, fontFamily: "var(--font-mono, monospace)", color: benchToksPerSec != null ? "var(--primary)" : "var(--text-secondary)", letterSpacing: "-0.02em" }}>
+                        {benchToksPerSec != null ? benchToksPerSec.toFixed(1) : "—"}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>tokens / sec</div>
+                    </div>
+
+                    {/* Tokens */}
+                    <div style={{
+                      padding: "14px 16px",
+                      background: "var(--bg-surface-elevated)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: 10,
+                      textAlign: "center",
+                    }}>
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>Tokens</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, fontFamily: "var(--font-mono, monospace)", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+                        {benchTokens > 0 ? benchTokens : "—"}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>generated</div>
+                    </div>
+
+                    {/* Total latency */}
+                    <div style={{
+                      padding: "14px 16px",
+                      background: "var(--bg-surface-elevated)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: 10,
+                      textAlign: "center",
+                    }}>
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>Total Time</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, fontFamily: "var(--font-mono, monospace)", color: "var(--text-secondary)", letterSpacing: "-0.02em" }}>
+                        {benchElapsed >= 1000 ? `${(benchElapsed / 1000).toFixed(2)}` : benchElapsed > 0 ? `${benchElapsed}` : "—"}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                        {benchElapsed >= 1000 ? "s" : "ms"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Streaming text preview */}
+                  {benchPartial && (
+                    <div style={{
+                      padding: "10px 14px",
+                      background: "var(--bg-surface-elevated)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: 8,
+                      fontSize: 12.5,
+                      color: benchPhase === "done" ? "var(--text-primary)" : "var(--text-secondary)",
+                      fontFamily: "var(--font-mono, monospace)",
+                      lineHeight: 1.7,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}>
+                      {benchPartial}
+                      {benchPhase === "streaming" && <span style={{ opacity: 0.5, animation: "blink 1s step-end infinite" }}>▊</span>}
+                    </div>
+                  )}
+
+                  {/* Final result summary */}
+                  {benchPhase === "done" && benchResult && (
+                    <div style={{ marginTop: 14, padding: "12px 16px", background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: 9, fontSize: 12.5 }}>
+                      <div style={{ fontWeight: 700, color: "#10b981", marginBottom: 6 }}>✓ Benchmark complete</div>
+                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", color: "var(--text-secondary)", fontFamily: "var(--font-mono, monospace)" }}>
+                        <span>TTFT: <strong style={{ color: "#10b981" }}>{benchResult.ttftMs != null ? (benchResult.ttftMs < 1000 ? `${benchResult.ttftMs}ms` : `${(benchResult.ttftMs / 1000).toFixed(2)}s`) : "–"}</strong></span>
+                        <span>Speed: <strong style={{ color: "var(--primary)" }}>{benchResult.toksPerSec != null ? `${benchResult.toksPerSec.toFixed(1)} tok/s` : "–"}</strong></span>
+                        <span>Tokens: <strong>{benchResult.totalTokens}</strong></span>
+                        <span>Latency: <strong>{benchResult.latencyMs >= 1000 ? `${(benchResult.latencyMs / 1000).toFixed(2)}s` : `${benchResult.latencyMs}ms`}</strong></span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Reason popup */}
