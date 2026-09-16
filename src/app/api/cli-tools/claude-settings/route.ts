@@ -67,16 +67,51 @@ export async function GET(req: NextRequest) {
 }
 
 // POST - Configure Claude CLI with portal endpoint & key
+import { resolveFullApiKey } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+function normalizeClaudeCliModel(m?: string): string {
+  if (!m) return "";
+  const clean = m.replace(/^anthropic\//i, "").trim();
+  if (clean.includes("3-7-sonnet") || clean === "claude-3-7-sonnet") {
+    return "claude-3-7-sonnet-20250219";
+  }
+  if (clean.includes("3-5-sonnet") || clean === "claude-3-5-sonnet") {
+    return "claude-3-5-sonnet-20241022";
+  }
+  if (clean.includes("3-opus") || clean === "claude-3-opus") {
+    return "claude-3-opus-20240229";
+  }
+  if (clean.includes("3-5-haiku") || clean === "claude-3-5-haiku") {
+    return "claude-3-5-haiku-latest";
+  }
+  if (clean.startsWith("claude-") || clean.startsWith("cc/")) {
+    return clean;
+  }
+  return "";
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const { baseUrl, apiKey, defaultModel, model, opusModel, sonnetModel, haikuModel, maxContextTokens } = body;
 
-    const primaryModel = defaultModel || model;
+    const primaryModel = (defaultModel || model || "").trim();
     const defaultBaseUrl = getGatewayBaseUrl(req);
     const targetBaseUrl = (baseUrl || defaultBaseUrl).replace(/\/+$/, "");
-    const normalizedUrl = targetBaseUrl.endsWith("/v1") ? targetBaseUrl : `${targetBaseUrl}/v1`;
-    const tokenToUse = apiKey || "xpl_gateway_key";
+    // Anthropic SDK / Claude Code automatically appends /v1 to baseURL.
+    // Strip trailing /v1 so requests target /v1/messages instead of /v1/v1/messages
+    const normalizedUrl = targetBaseUrl.replace(/\/v1\/?$/, "");
+    const tokenToUse = (await resolveFullApiKey(apiKey)) || "xpl_gateway_key";
+
+    // Store user's selected model/combo in DB Setting for Claude Code routing
+    if (primaryModel) {
+      await prisma.setting.upsert({
+        where: { key: "claude_default_combo" },
+        update: { value: primaryModel },
+        create: { key: "claude_default_combo", value: primaryModel },
+      }).catch(() => {});
+    }
 
     const settingsPath = getClaudeSettingsPath();
     const claudeDir = path.dirname(settingsPath);
@@ -90,19 +125,40 @@ export async function POST(req: NextRequest) {
       currentSettings = {};
     }
 
+    // Claude Code CLI model configuration:
+    // If primaryModel is a custom combo (e.g. 'powerfull') or custom model,
+    // Claude Code has built-in support for custom models via ANTHROPIC_CUSTOM_MODEL_OPTION.
+    // Setting ANTHROPIC_CUSTOM_MODEL_OPTION makes Claude Code's internal model validator
+    // treat the model as valid, preventing: "There's an issue with the selected model (...)".
+    const normalizedCliModel = normalizeClaudeCliModel(primaryModel);
+    const modelToSet = normalizedCliModel || primaryModel || "claude-3-5-sonnet-20241022";
+
+    const sonnetVal = normalizeClaudeCliModel(sonnetModel) || normalizedCliModel || "claude-3-5-sonnet-20241022";
+    const opusVal = normalizeClaudeCliModel(opusModel) || normalizedCliModel || "claude-3-5-sonnet-20241022";
+    const haikuVal = normalizeClaudeCliModel(haikuModel) || normalizedCliModel || "claude-3-5-haiku-latest";
+
+    const updatedEnv: Record<string, any> = {
+      ...(currentSettings.env || {}),
+      ANTHROPIC_BASE_URL: normalizedUrl,
+      ANTHROPIC_AUTH_TOKEN: tokenToUse,
+      ANTHROPIC_MODEL: modelToSet,
+      ANTHROPIC_DEFAULT_SONNET_MODEL: sonnetVal,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: opusVal,
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: haikuVal,
+      CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT: "1",
+      ...(maxContextTokens ? { CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(maxContextTokens) } : {}),
+    };
+
+    if (primaryModel) {
+      updatedEnv.ANTHROPIC_CUSTOM_MODEL_OPTION = primaryModel;
+      updatedEnv.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME = `Freeroute: ${primaryModel}`;
+      updatedEnv.ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION = "Multi-tier AI Fallback Combo via Freeroute";
+    }
+
     const newSettings = {
       ...currentSettings,
       hasCompletedOnboarding: true,
-      env: {
-        ...(currentSettings.env || {}),
-        ANTHROPIC_BASE_URL: normalizedUrl,
-        ANTHROPIC_AUTH_TOKEN: tokenToUse,
-        ...(primaryModel ? { ANTHROPIC_MODEL: primaryModel } : {}),
-        ...(opusModel ? { ANTHROPIC_DEFAULT_OPUS_MODEL: opusModel } : primaryModel ? { ANTHROPIC_DEFAULT_OPUS_MODEL: primaryModel } : {}),
-        ...(sonnetModel ? { ANTHROPIC_DEFAULT_SONNET_MODEL: sonnetModel } : primaryModel ? { ANTHROPIC_DEFAULT_SONNET_MODEL: primaryModel } : {}),
-        ...(haikuModel ? { ANTHROPIC_DEFAULT_HAIKU_MODEL: haikuModel } : primaryModel ? { ANTHROPIC_DEFAULT_HAIKU_MODEL: primaryModel } : {}),
-        ...(maxContextTokens ? { CLAUDE_CODE_MAX_CONTEXT_TOKENS: maxContextTokens } : {}),
-      },
+      env: updatedEnv,
     };
 
     await fs.writeFile(settingsPath, JSON.stringify(newSettings, null, 2), "utf-8");
@@ -134,10 +190,14 @@ export async function DELETE() {
       const keysToRemove = [
         "ANTHROPIC_BASE_URL",
         "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_MODEL",
         "ANTHROPIC_DEFAULT_OPUS_MODEL",
         "ANTHROPIC_DEFAULT_SONNET_MODEL",
         "ANTHROPIC_DEFAULT_HAIKU_MODEL",
         "ANTHROPIC_DEFAULT_FABLE_MODEL",
+        "ANTHROPIC_CUSTOM_MODEL_OPTION",
+        "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME",
+        "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION",
       ];
       for (const k of keysToRemove) {
         delete currentSettings.env[k];

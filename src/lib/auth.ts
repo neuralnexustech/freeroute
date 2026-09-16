@@ -61,3 +61,52 @@ export function checkRateLimit(keyId: string, rpmLimit: number): boolean {
   return true;
 }
 
+import { decSecret } from "@/lib/secretbox";
+
+/**
+ * Resolves a key identifier, prefix, or raw key into the full vaulted secret token.
+ * Ensures tools like Claude Code, OpenCode, and Codex receive the full unmasked key.
+ */
+export async function resolveFullApiKey(rawKey?: string | null): Promise<string> {
+  const findEncryptedSecret = async (whereCondition: any) => {
+    const row = await prisma.apiKey.findFirst({
+      where: whereCondition,
+      orderBy: { createdAt: "desc" },
+    });
+    if (row?.secretEnc) {
+      try {
+        const full = decSecret(row.secretEnc);
+        if (full && full.startsWith("xpl_")) return full;
+      } catch {}
+    }
+    return null;
+  };
+
+  if (!rawKey || !rawKey.trim()) {
+    const defaultSecret = await findEncryptedSecret({ revoked: false });
+    return defaultSecret || "";
+  }
+
+  let trimmed = rawKey.trim().replace(/[.…\s]+$/, "");
+  if (trimmed.startsWith("xpl_") && trimmed.length >= 32) {
+    return trimmed;
+  }
+
+  // 1. Try exact ID or prefix match
+  const match = await findEncryptedSecret({
+    OR: [
+      { id: trimmed },
+      { prefix: trimmed },
+      { prefix: { startsWith: trimmed.slice(0, 8) } },
+    ],
+    revoked: false,
+  });
+  if (match) return match;
+
+  // 2. Fallback to any active key with vaulted secret
+  const fallback = await findEncryptedSecret({ revoked: false, secretEnc: { not: "" } });
+  if (fallback) return fallback;
+
+  return trimmed;
+}
+

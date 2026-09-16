@@ -103,8 +103,25 @@ export default function CombosPage() {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
 
   const toast = useToast();
+  const [showAllProviders, setShowAllProviders] = useState(false);
 
-  const uniqueProviders = Array.from(
+  const connectedProviders = Array.from(
+    new Map(
+      availableModels
+        .filter((m) => m.provider.connected)
+        .map((m) => [
+          m.provider.slug,
+          {
+            slug: m.provider.slug,
+            name: m.provider.name,
+            icon: m.provider.icon || "⏣",
+            connected: true,
+          },
+        ]),
+    ).values(),
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  const allProviders = Array.from(
     new Map(
       availableModels.map((m) => [
         m.provider.slug,
@@ -112,10 +129,16 @@ export default function CombosPage() {
           slug: m.provider.slug,
           name: m.provider.name,
           icon: m.provider.icon || "⏣",
+          connected: !!m.provider.connected,
         },
       ]),
     ).values(),
   ).sort((a, b) => a.name.localeCompare(b.name));
+
+  const uniqueProviders =
+    !showAllProviders && connectedProviders.length > 0
+      ? connectedProviders
+      : allProviders;
 
   const providerFilteredModels = availableModels.filter(
     (m) => !selectedProvider || m.provider.slug === selectedProvider,
@@ -777,9 +800,40 @@ curl ${activeOrigin}/v1/chat/completions \\
 
               {/* Add Models to Chain: 1st Select Provider, then Select Model */}
               <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 16 }}>
-                <label className="card-label" style={{ marginBottom: 8, display: "block" }}>
-                  Add Model to Fallback Chain
-                </label>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <label className="card-label" style={{ marginBottom: 0 }}>
+                    Add Model to Fallback Chain
+                  </label>
+                  {connectedProviders.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !showAllProviders;
+                        setShowAllProviders(next);
+                        const list = !next && connectedProviders.length > 0 ? connectedProviders : allProviders;
+                        const nextProv = list.find((p) => p.slug === selectedProvider)?.slug || list[0]?.slug || "";
+                        setSelectedProvider(nextProv);
+                        const nextModels = availableModels.filter((m) => m.provider.slug === nextProv);
+                        if (nextModels.length > 0) {
+                          setSelectedModelToAppend(nextModels[0].modelId || nextModels[0].id);
+                        }
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        fontSize: 11,
+                        color: "var(--primary)",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        padding: 0,
+                      }}
+                    >
+                      {showAllProviders
+                        ? `Show connected only (${connectedProviders.length})`
+                        : `Show all providers (${allProviders.length})`}
+                    </button>
+                  )}
+                </div>
                 <div style={{ display: "grid", gridTemplateColumns: "160px 1fr auto", gap: 8, alignItems: "flex-end" }}>
                   {/* Step 1: Select Provider */}
                   <div>

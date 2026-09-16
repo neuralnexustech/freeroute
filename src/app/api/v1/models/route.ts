@@ -145,8 +145,50 @@ export async function GET() {
     };
   });
 
+  const claudeVirtualModels = [
+    "claude-opus-4-8",
+    "claude-opus-4-8[1m]",
+    "claude-opus-5",
+    "claude-opus-5[1m]",
+    "claude-sonnet-5",
+    "claude-sonnet-5[1m]",
+    "claude-sonnet-4-5-20250929",
+    "claude-sonnet-4-5-20250929[1m]",
+    "claude-haiku-4-5-20251001",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-7-sonnet-20250219",
+  ].map((slug) => ({
+    id: slug,
+    modelId: slug,
+    object: "model",
+    created: 1780000000,
+    owned_by: "anthropic",
+    permission: [],
+    root: slug,
+    parent: null,
+    displayName: slug,
+    provider: { slug: "anthropic", name: "Anthropic", icon: "✳", connected: true },
+    contextWindow: slug.includes("[1m]") ? "1M" : "200K",
+    params: "Claude",
+    score: 98,
+    inputPrice: 3,
+    outputPrice: 15,
+    modalities: "T,IMG,DOC",
+    enabled: true,
+    status: "ok",
+    isCombo: false,
+    spend: 0,
+    requests: 0,
+    tokens: 0,
+    ttftMs: 120,
+    httpStatus: 200,
+  }));
+
+  const allModels = [...comboEntries, ...claudeVirtualModels, ...modelEntries];
+  const uniqueModels = Array.from(new Map(allModels.map((m) => [m.id, m])).values());
+
   return NextResponse.json({
     object: "list",
-    data: [...comboEntries, ...modelEntries],
+    data: uniqueModels,
   });
 }

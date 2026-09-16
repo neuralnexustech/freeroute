@@ -60,6 +60,7 @@ export async function GET() {
 }
 
 import { getGatewayBaseUrl } from "@/lib/config";
+import { resolveFullApiKey } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
     const defaultBaseUrl = getGatewayBaseUrl(req);
     const targetBaseUrl = (baseUrl || defaultBaseUrl).replace(/\/+$/, "");
     const normalizedUrl = targetBaseUrl.endsWith("/v1") ? targetBaseUrl : `${targetBaseUrl}/v1`;
-    const keyToUse = apiKey || "xpl_gateway_key";
+    const keyToUse = (await resolveFullApiKey(apiKey)) || "xpl_gateway_key";
 
     const configDir = getConfigDir();
     const configPath = getConfigPath();

@@ -54,6 +54,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
+import { resolveFullApiKey } from "@/lib/auth";
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -62,7 +64,7 @@ export async function POST(req: NextRequest) {
     const defaultBaseUrl = getGatewayBaseUrl(req);
     const targetBaseUrl = (baseUrl || defaultBaseUrl).replace(/\/+$/, "");
     const normalizedUrl = targetBaseUrl.endsWith("/v1") ? targetBaseUrl : `${targetBaseUrl}/v1`;
-    const keyToUse = apiKey || "xpl_gateway_key";
+    const keyToUse = (await resolveFullApiKey(apiKey)) || "xpl_gateway_key";
     const modelToUse = model || "meta/llama-3.2-11b-vision-instruct";
 
     const configDir = getCodexDir();
