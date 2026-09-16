@@ -46,6 +46,7 @@ async function ensureProviders() {
         data: {
           name: def.name,
           icon: def.icon,
+          ...(def.logoUrl ? { logoUrl: def.logoUrl } : {}),
           ...(isOutdatedBase && def.baseUrl ? { baseUrl: def.baseUrl } : {}),
         },
       }).catch(() => {});
@@ -83,7 +84,7 @@ export async function GET() {
         website: def?.website || "",
         apiKeyUrl: def?.apiKeyUrl || "",
         docUrl: def?.docUrl || def?.website || "",
-        logoUrl: logos[p.id] || `/providers/${p.slug}.png`,
+        logoUrl: logos[p.id] || def?.logoUrl || `/providers/${p.slug}.png`,
         connected: p.connected,
         modelCount: p._count.models,
         serviceKinds: def?.serviceKinds || ["llm"],

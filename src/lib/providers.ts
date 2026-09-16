@@ -5,6 +5,7 @@ export interface ProviderDef {
   name: string;
   category: "apikey" | "freeTier" | "free" | "oauth" | "webCookie";
   icon: string;
+  logoUrl?: string;
   color?: string;
   baseUrl: string;
   chatPath: string;
@@ -198,6 +199,7 @@ export const RAW_PROVIDERS_DATA = [
     name: "HCNSec AI",
     category: "apikey" as const,
     icon: "security",
+    logoUrl: "https://hcnote.cn/ailogo.png",
     color: "#10b981",
     baseUrl: "https://api.hcnsec.cn/v1",
     chatPath: "/chat/completions",
@@ -230,6 +232,7 @@ export const RAW_PROVIDERS_DATA = [
     name: "OneRouter Pro",
     category: "apikey" as const,
     icon: "hub",
+    logoUrl: "https://framerusercontent.com/images/Dg6E9JPblFr0Q5yq0ouso2uGeok.png?scale-down-to=512&width=1072&height=208",
     color: "#f97316",
     baseUrl: "https://llm.onerouter.pro/v1",
     chatPath: "/chat/completions",

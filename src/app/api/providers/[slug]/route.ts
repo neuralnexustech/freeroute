@@ -55,7 +55,7 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
       apiKey: provider.apiKey || "",
       maskedKey,
       hasKey,
-      logoUrl: logoUrl || `/providers/${provider.slug}.png`,
+      logoUrl: logoUrl || def?.logoUrl || `/providers/${provider.slug}.png`,
       website: def?.website || "",
       docUrl: def?.docUrl || def?.website || "",
       apiKeyUrl: def?.apiKeyUrl || "",
