@@ -32,11 +32,17 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
       url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(provider.apiKey)}&pageSize=1000`;
     }
 
+    const reqHeaders: Record<string, string> = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "application/json, text/plain, */*",
+      ...def.authHeader(provider.apiKey),
+    };
+
     try {
-      let upstream = await fetch(url, { headers: { ...def.authHeader(provider.apiKey) }, signal: AbortSignal.timeout(10000) });
+      let upstream = await fetch(url, { headers: reqHeaders, signal: AbortSignal.timeout(30000) });
       if (!upstream.ok && provider.slug === "google") {
         url = "https://generativelanguage.googleapis.com/v1beta/openai/models";
-        upstream = await fetch(url, { headers: { Authorization: `Bearer ${provider.apiKey}` }, signal: AbortSignal.timeout(10000) });
+        upstream = await fetch(url, { headers: { ...reqHeaders, Authorization: `Bearer ${provider.apiKey}` }, signal: AbortSignal.timeout(30000) });
       }
 
       if (upstream.ok) {
