@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     return NextResponse.json({ error: "Provider not found" }, { status: 404 });
   }
 
-  const isNoAuth = def?.authType === "none";
+  const isNoAuth = def?.authType === "none" || params.slug === "onerouter";
   if (!isNoAuth && (!provider.apiKey || provider.apiKey.trim().length === 0)) {
     return NextResponse.json({ error: "Save a provider API key first" }, { status: 400 });
   }
