@@ -1,4 +1,4 @@
-// Curated Provider Registry: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, Kilo, HCNSec AI, Tokenin, and OneRouter Pro
+// Curated Provider Registry: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, Kilo, HCNSec AI, Tokenin, and Infron
 
 export interface ProviderDef {
   slug: string;
@@ -229,7 +229,7 @@ export const RAW_PROVIDERS_DATA = [
   },
   {
     slug: "onerouter",
-    name: "OneRouter Pro",
+    name: "Infron",
     category: "apikey" as const,
     icon: "hub",
     logoUrl: "https://framerusercontent.com/images/Dg6E9JPblFr0Q5yq0ouso2uGeok.png?scale-down-to=512&width=1072&height=208",
