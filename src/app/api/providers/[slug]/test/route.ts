@@ -85,6 +85,8 @@ async function probe(
         let ttftMs: number | null = null;
         let tokens = 0;
         let response = "";
+        let inStreamError: string | null = null;
+        let inStreamStatus: number | null = null;
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -96,7 +98,12 @@ async function probe(
             if (!text || text === "[DONE]") continue;
             let evt: any;
             try { evt = JSON.parse(text); } catch { continue; }
-            const delta = evt?.choices?.[0]?.delta?.content ?? evt?.choices?.[0]?.message?.content ?? "";
+            if (evt?.error) {
+              inStreamError = evt.error?.message || evt.error?.detail || (typeof evt.error === "string" ? evt.error : "Upstream error");
+              if (typeof evt?.error?.upstream_status === "number") inStreamStatus = evt.error.upstream_status;
+              continue;
+            }
+            const delta = evt?.choices?.[0]?.delta?.content ?? evt?.choices?.[0]?.message?.content ?? evt?.choices?.[0]?.text ?? "";
             if (delta && ttftMs == null) ttftMs = Date.now() - started;
             if (delta && response.length < 150) response += delta;
             const u = evt?.usage;
@@ -104,8 +111,25 @@ async function probe(
           }
         }
         const latencyMs = Date.now() - started;
+
+        // If an in-stream error occurred and no content tokens were emitted, mark as failed
+        if (inStreamError && !response) {
+          const status = inStreamStatus ?? 502;
+          return noResult("fail", `HTTP ${status} · ${inStreamError.slice(0, 120)}`, attempt + 1, status);
+        }
+
+        // If no content tokens and no error were emitted (empty stream), treat as failing
+        if (!response) {
+          return noResult("fail", `HTTP 502 · No content generated`, attempt + 1, 502);
+        }
+
+        // Approximate token count if provider didn't return usage object
+        if (tokens === 0 && response.length > 0) {
+          tokens = Math.max(1, Math.round(response.length / 4));
+        }
+
         const toksPerSec = tokens > 0 && latencyMs > 0 ? Math.round((tokens / latencyMs) * 100000) / 100 : null;
-        return { verdict: "ok", latencyMs, httpStatus: r.status, ttftMs, toksPerSec, detail: `${r.status}`, tokens, response: response.slice(0, 150), attempts: attempt + 1 };
+        return { verdict: "ok", latencyMs, httpStatus: r.status, ttftMs: ttftMs ?? latencyMs, toksPerSec, detail: `${r.status}`, tokens, response: response.slice(0, 150), attempts: attempt + 1 };
       }
     } catch (e: any) {
       const timedOut = e?.name === "AbortError" || e?.name === "TimeoutError";
