@@ -7,7 +7,7 @@ import { Topbar } from "@/components/Topbar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isFullscreenApp = pathname?.startsWith("/playground") || pathname?.startsWith("/designer");
+  const isFullscreenApp = pathname?.startsWith("/designer");
 
   if (isFullscreenApp) {
     return <div className="w-screen h-screen overflow-hidden bg-[#fafafa] dark:bg-[#0c0d12]">{children}</div>;

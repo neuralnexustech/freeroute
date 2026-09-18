@@ -41,26 +41,6 @@ export function Topbar() {
           <div className="ticker-item">Health: <span style={{ color: "var(--primary)" }}>99.98%</span></div>
         </div>
 
-        <Link
-          href="/playground"
-          className="btn sm"
-          style={{
-            gap: 6,
-            fontWeight: 600,
-            color: "var(--primary)",
-            borderColor: "rgba(139,124,248,0.35)",
-            background: "var(--bg-accent-soft)",
-          }}
-          title="Open AI Playground & Design Studio"
-        >
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2">
-            <path d="M12 19l7-7 3 3-7 7-3-3z" />
-            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-            <path d="M2 2l7.586 7.586" />
-            <circle cx="11" cy="11" r="2" />
-          </svg>
-          Playground
-        </Link>
 
         <button className="theme-toggle-btn" title="Toggle Light/Dark Theme" aria-label="Toggle dark/light theme" onClick={() => { toggle(); toast.show(`Switched to ${theme === "dark" ? "light" : "dark"} theme`); }}>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: theme === "light" ? "block" : "none" }}><circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" /></svg>
