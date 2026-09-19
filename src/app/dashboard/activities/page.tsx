@@ -8,6 +8,7 @@ interface OverviewData {
   promptTokens: number;
   completionTokens: number;
   requests: number;
+  rtkTokensSaved?: number;
   usedModels: Array<{
     slug: string;
     name: string;
@@ -108,6 +109,8 @@ export default function ActivitiesPage() {
   const totalRequests = data?.requests ?? 0;
   const totalTokens = data?.tokens ?? 0;
   const tokenVolumeDisplay = totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}K` : `${totalTokens}`;
+  const rtkTokensSaved = data?.rtkTokensSaved ?? 0;
+  const rtkTokensDisplay = rtkTokensSaved >= 1000 ? `${(rtkTokensSaved / 1000).toFixed(1)}K` : `${rtkTokensSaved}`;
   const cacheHitRate = "0.0%";
   const blendedRate = "$0.00";
 
@@ -136,8 +139,8 @@ export default function ActivitiesPage() {
 
   return (
     <div style={{ maxWidth: 1240, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20, paddingBottom: 48 }}>
-      {/* 1. TOP ROW: 5 METRIC CARDS WITH SPARKLINE */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14 }}>
+      {/* 1. TOP ROW: 6 METRIC CARDS WITH SPARKLINE */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
         {/* Card 1: Total spend */}
         <div
           className="card"
@@ -250,6 +253,34 @@ export default function ActivitiesPage() {
               <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", marginTop: 4 }}>– No prior data</div>
             </div>
             <Sparkline variant="flat" />
+          </div>
+        </div>
+
+        {/* Card 6: RTK Tokens Saved */}
+        <div
+          className="card"
+          style={{
+            background: "var(--bg-surface)",
+            border: "1px solid rgba(16, 185, 129, 0.35)",
+            borderRadius: 12,
+            padding: "18px 20px",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 12.5, color: "#10b981", fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
+                <span>⚡ RTK Saved</span>
+                <span style={{ fontSize: 10, background: "rgba(16, 185, 129, 0.15)", color: "#10b981", padding: "1px 5px", borderRadius: 4 }}>LIVE</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)", marginTop: 6, letterSpacing: "-0.02em" }}>
+                {rtkTokensDisplay}
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", marginTop: 4 }}>
+                {rtkTokensSaved > 0 ? "Tool results compressed" : "Active (awaiting tools)"}
+              </div>
+            </div>
+            <Sparkline variant={rtkTokensSaved > 0 ? "spike" : "flat"} />
           </div>
         </div>
       </div>

@@ -17,12 +17,12 @@ export async function validateApiKey(raw?: string | null) {
     const existing = await prisma.apiKey.findFirst({ where: { revoked: false } });
     if (existing) return existing;
     return await prisma.apiKey.upsert({
-      where: { keyHash: hashKey("freeroute-designer") },
+      where: { keyHash: hashKey(token) },
       update: {},
       create: {
         name: "Designer Internal Key",
         prefix: "xpl_design",
-        keyHash: hashKey("freeroute-designer"),
+        keyHash: hashKey(token),
       },
     });
   }

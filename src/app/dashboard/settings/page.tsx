@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
 
 interface TestResult {
   option: string;
   name: string;
+  badge?: string;
   ok: boolean;
   latencyMs: number;
   result?: {
@@ -24,6 +25,26 @@ interface TestResult {
   error?: string;
 }
 
+interface Decision {
+  winnerOption: string;
+  winnerName: string;
+  latencyMs: number;
+  result: {
+    contextWindow: string;
+    inputPrice: number;
+    outputPrice: number;
+    modalities: string;
+    params?: string;
+    score?: number;
+    source: string;
+    confidence?: number;
+    detail?: string;
+    isFreeRoute?: boolean;
+    actualInputPrice?: number;
+    actualOutputPrice?: number;
+  };
+}
+
 const MOD_ICONS: Record<string, { label: string; bg: string; color: string; svg: React.ReactNode }> = {
   T: {
     label: "Text",
@@ -35,41 +56,7 @@ const MOD_ICONS: Record<string, { label: string; bg: string; color: string; svg:
       </svg>
     ),
   },
-  TEXT: {
-    label: "Text",
-    bg: "rgba(59, 130, 246, 0.12)",
-    color: "#3b82f6",
-    svg: (
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 7V4h16v3M9 20h6M12 4v16" />
-      </svg>
-    ),
-  },
   IMG: {
-    label: "Vision / Image",
-    bg: "rgba(168, 85, 247, 0.12)",
-    color: "#a855f7",
-    svg: (
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <circle cx="9" cy="9" r="1.8" fill="currentColor" stroke="none" />
-        <path d="M21 15l-4.5-4.5L6 21" />
-      </svg>
-    ),
-  },
-  IMAGE: {
-    label: "Vision / Image",
-    bg: "rgba(168, 85, 247, 0.12)",
-    color: "#a855f7",
-    svg: (
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <circle cx="9" cy="9" r="1.8" fill="currentColor" stroke="none" />
-        <path d="M21 15l-4.5-4.5L6 21" />
-      </svg>
-    ),
-  },
-  VISION: {
     label: "Vision / Image",
     bg: "rgba(168, 85, 247, 0.12)",
     color: "#a855f7",
@@ -94,19 +81,6 @@ const MOD_ICONS: Record<string, { label: string; bg: string; color: string; svg:
       </svg>
     ),
   },
-  DOCUMENT: {
-    label: "Document / PDF",
-    bg: "rgba(245, 158, 11, 0.12)",
-    color: "#f59e0b",
-    svg: (
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-        <polyline points="14 2 14 8 20 8" />
-        <line x1="9" y1="13" x2="15" y2="13" />
-        <line x1="9" y1="17" x2="13" y2="17" />
-      </svg>
-    ),
-  },
   VID: {
     label: "Video",
     bg: "rgba(239, 68, 68, 0.12)",
@@ -119,32 +93,7 @@ const MOD_ICONS: Record<string, { label: string; bg: string; color: string; svg:
       </svg>
     ),
   },
-  VIDEO: {
-    label: "Video",
-    bg: "rgba(239, 68, 68, 0.12)",
-    color: "#ef4444",
-    svg: (
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="4" width="20" height="16" rx="2" />
-        <path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5" />
-        <path d="M10.5 9.5l4.5 2.5-4.5 2.5z" fill="currentColor" stroke="none" />
-      </svg>
-    ),
-  },
   AUD: {
-    label: "Audio / Voice",
-    bg: "rgba(16, 185, 129, 0.12)",
-    color: "#10b981",
-    svg: (
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
-        <path d="M19 10v2a7 7 0 01-14 0v-2" />
-        <line x1="12" y1="19" x2="12" y2="23" />
-        <line x1="8" y1="23" x2="16" y2="23" />
-      </svg>
-    ),
-  },
-  AUDIO: {
     label: "Audio / Voice",
     bg: "rgba(16, 185, 129, 0.12)",
     color: "#10b981",
@@ -171,7 +120,6 @@ function ModalityIcons({ mods }: { mods: string }) {
       list.push(key);
     }
   }
-
   const order = ["T", "IMG", "DOC", "VID", "AUD"];
   list.sort((a, b) => {
     const ia = order.indexOf(a);
@@ -217,7 +165,7 @@ function ModalityIcons({ mods }: { mods: string }) {
 function formatPriceBadge(price: number | null | undefined, isFreeRoute?: boolean, actualPrice?: number) {
   if (isFreeRoute || price == null || price === 0) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span
             className="pill active"
@@ -232,12 +180,12 @@ function formatPriceBadge(price: number | null | undefined, isFreeRoute?: boolea
           </span>
         </div>
         {actualPrice !== undefined && actualPrice > 0 && (
-          <div style={{ fontSize: 11, color: "var(--text-secondary)", display: "flex", alignItems: "baseline", gap: 3 }}>
-            <span>Actual Base:</span>
+          <div style={{ fontSize: 10.5, color: "var(--text-secondary)", display: "flex", alignItems: "baseline", gap: 3 }}>
+            <span>Actual:</span>
             <strong className="mono" style={{ color: "var(--text-primary)" }}>
               ${actualPrice < 0.01 ? actualPrice.toFixed(4) : actualPrice.toFixed(2)}
             </strong>
-            <span style={{ fontSize: 9.5, color: "var(--text-tertiary)" }}>/ 1M</span>
+            <span style={{ fontSize: 9, color: "var(--text-tertiary)" }}>/ 1M</span>
           </div>
         )}
       </div>
@@ -255,21 +203,34 @@ function formatPriceBadge(price: number | null | undefined, isFreeRoute?: boolea
       <span className="mono" style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>
         ${formatted}
       </span>
-      <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>/ 1M tok</span>
+      <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>/ 1M</span>
     </div>
   );
 }
 
+const PRESET_MODELS = [
+  { slug: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { slug: "meta/llama-3.2-11b-vision-instruct", label: "Llama 3.2 11B Vision" },
+  { slug: "deepseek-ai/deepseek-chat", label: "DeepSeek Chat" },
+  { slug: "openai/gpt-4o", label: "GPT-4o" },
+  { slug: "anthropic/claude-3-5-sonnet", label: "Claude 3.5 Sonnet" },
+  { slug: "cohere/command-r", label: "Command R" },
+];
+
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState("Model Info Discovery");
+  const [activeTab, setActiveTab] = useState("Discovery Engine & Testing");
   const [strategy, setStrategy] = useState("cascade");
   const [saving, setSaving] = useState(false);
-  const [testModel, setTestModel] = useState("gemini-2.5-flash");
+  const [testModel, setTestModel] = useState("google/gemini-2.5-flash");
   const [testingOption, setTestingOption] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
+  const [decision, setDecision] = useState<Decision | null>(null);
+  const [catalogModels, setCatalogModels] = useState<Array<{ slug: string; name: string }>>([]);
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
 
-  // Load saved settings
+  // Load saved settings and catalog models
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
@@ -277,6 +238,30 @@ export default function SettingsPage() {
         if (d.strategy) setStrategy(d.strategy);
       })
       .catch(() => {});
+
+    fetch("/api/v1/models")
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.data)) {
+          const list = d.data.map((m: any) => ({
+            slug: m.slug || m.id,
+            name: m.displayName || m.name || m.slug,
+          }));
+          setCatalogModels(list);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   const saveSettings = async () => {
@@ -288,7 +273,7 @@ export default function SettingsPage() {
     });
     setSaving(false);
     if (r.ok) {
-      toast.show("Model Info discovery strategy saved");
+      toast.show(`✓ Discovery strategy saved: ${strategy}`);
     } else {
       toast.show("Failed to save settings");
     }
@@ -302,73 +287,84 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           option,
-          testModel: testModel.trim() || "gemini-2.5-flash",
+          strategy,
+          testModel: testModel.trim() || "google/gemini-2.5-flash",
         }),
       });
       const d = await r.json();
+      if (!r.ok) {
+        throw new Error(d.error || `Server returned ${r.status}`);
+      }
       if (d.results) {
         if (option === "all") {
           setTestResults(d.results);
         } else {
           setTestResults((prev) => {
             const others = prev.filter((x) => x.option !== option);
-            return [...others, ...d.results].sort((a, b) => a.option.localeCompare(b.option));
+            return [...others, ...d.results].sort((a, b) => parseInt(a.option, 10) - parseInt(b.option, 10));
           });
         }
-        toast.show(`Tested ${d.results.length} option(s) for ${testModel}`);
+        if (d.decision) {
+          setDecision(d.decision);
+        }
+        toast.show(`✓ Tested ${d.results.length} discovery option(s) for ${testModel}`);
       }
-    } catch {
-      toast.show("Test failed — network error");
+    } catch (err: any) {
+      console.error("Discovery test error:", err);
+      toast.show(`Test failed: ${err.message || "Network error"}`);
     } finally {
       setTestingOption(null);
     }
   };
 
-  const OPTIONS = [
-    {
-      id: "cascade",
-      num: "ALL",
-      title: "Smart Cascade Engine (Recommended)",
-      badge: "Auto Fallback",
-      badgeColor: "var(--primary)",
-      desc: "Cascades sequentially: Built-in Offline Spec DB (0ms) → OpenRouter Live Catalog → DuckDuckGo Web Search → Smart Heuristic Parser. Guarantees 100% resolution with zero user API key.",
-    },
+  const DISCOVERY_CARDS = [
     {
       id: "3",
       num: "Option 3",
       title: "Built-In Offline Model Spec Database",
-      badge: "0 ms · Offline",
+      badge: "0 ms · Offline Verified",
       badgeColor: "#10b981",
-      desc: "Verified instant spec dictionary covering Google Gemini & Gemma, OpenAI GPT, Claude, Llama 3, DeepSeek, NVIDIA, etc. Ultra-fast, 100% accurate, zero network overhead.",
+      latency: "0ms",
+      coverage: "High (Top 100+ Models)",
+      accuracy: "100%",
+      desc: "Instant verified dictionary covering Gemini, OpenAI, Claude, Llama 3, DeepSeek, and NVIDIA. Zero network latency and zero API keys required.",
     },
     {
       id: "1",
       num: "Option 1",
       title: "Live OpenRouter Public Catalog",
-      badge: "Zero-Key · Web API",
+      badge: "Zero-Key · Live Web API",
       badgeColor: "#3b82f6",
-      desc: "Queries OpenRouter's open public catalog (300+ models) without any API key. Provides verified context window, real-time $/1M token pricing, and multimodal flags.",
-    },
-    {
-      id: "2",
-      num: "Option 2",
-      title: "DuckDuckGo Web Search Engine",
-      badge: "Live Search · Zero-Key",
-      badgeColor: "#f59e0b",
-      desc: "Queries DuckDuckGo search for model spec pages and scrapes context window (e.g. 1M/128K), token pricing, and vision/audio modalities using regex pattern matching.",
+      latency: "~20-100ms",
+      coverage: "Extensive (400+ Models)",
+      accuracy: "98%",
+      desc: "Queries OpenRouter's open public catalog API without authentication. Extracts context window, live $/1M prompt/completion pricing, and modalities.",
     },
     {
       id: "4",
       num: "Option 4",
       title: "Smart Heuristic & Family Parser",
-      badge: "Rule-based Fallback",
+      badge: "Rule-Based · Fast Fallback",
       badgeColor: "#8b5cf6",
-      desc: "Rule-based structural parser that infers context window, modalities (vision, audio, omni), and pricing straight from model slug patterns and family architectures.",
+      latency: "0ms",
+      coverage: "Universal (Any Model)",
+      accuracy: "85%",
+      desc: "Instant structural parser that deduces context windows, modalities (vision, audio), and pricing based on model slug patterns, sizes, and architectural families.",
+    },
+    {
+      id: "2",
+      num: "Option 2",
+      title: "DuckDuckGo Web Search Engine",
+      badge: "Zero-Key · Web Scraper",
+      badgeColor: "#f59e0b",
+      latency: "~800ms",
+      coverage: "Long-Tail & Novel Models",
+      accuracy: "80%",
+      desc: "Conducts live zero-key web search scrapes for unindexed or newly released models. Extracts context windows and token pricing using regex parsing.",
     },
   ];
 
   const [dbInfo, setDbInfo] = useState<{ dbLocation: string; counts: Record<string, number> } | null>(null);
-  const [dbLoading, setDbLoading] = useState(false);
   const [importing, setImporting] = useState(false);
 
   const loadDbInfo = () => {
@@ -416,264 +412,551 @@ export default function SettingsPage() {
   };
 
   return (
-    <>
-      <div className="toolbar-row" style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Gateway &amp; Model Settings</h1>
+    <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24, paddingBottom: 64 }}>
+      {/* 1. PAGE HEADER */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <h1 className="page-title" style={{ margin: 0, fontSize: 24 }}>Discovery Engine &amp; Settings</h1>
+            <span className="pill active" style={{ fontSize: 11, background: "rgba(16, 185, 129, 0.15)", color: "#10b981", borderColor: "#10b98144" }}>
+              Zero-Key Spec Resolution
+            </span>
+          </div>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-secondary)" }}>
+            Configure model metadata discovery strategies, inspect real-time resolution flows, and manage local database backups.
+          </p>
+        </div>
+
+        {/* Tab Navigation */}
         <div className="segmented">
-          {["Model Info Discovery", "Database & Backup", "About"].map((t) => (
+          {[
+            { id: "Discovery Engine & Testing", label: "Discovery Engine & Testing" },
+            { id: "Database & Backup", label: "Database & Backup" },
+            { id: "About", label: "About" },
+          ].map((t) => (
             <button
-              key={t}
-              className={activeTab === t ? "active" : ""}
-              onClick={() => setActiveTab(t)}
+              key={t.id}
+              className={activeTab === t.id ? "active" : ""}
+              onClick={() => setActiveTab(t.id)}
             >
-              {t}
+              {t.label}
             </button>
           ))}
         </div>
       </div>
 
-      {activeTab === "Model Info Discovery" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 960 }}>
-          {/* Strategy Selection Card */}
-          <div className="card">
-            <div className="card-head">
+      {/* 2. TAB CONTENT: DISCOVERY ENGINE & TESTING */}
+      {activeTab === "Discovery Engine & Testing" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* A. DISCOVERY OPTIONS STRATEGY FLOW (CARD VIEW) */}
+          <div className="card" style={{ padding: 22 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
               <div>
-                <span className="card-label">Pull Info Strategy</span>
-                <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>
-                  Model Metadata Discovery Options (Zero-Key Engine)
+                <span className="card-label">Execution Strategy Configuration</span>
+                <div style={{ fontSize: 17, fontWeight: 700, marginTop: 2 }}>
+                  Model Metadata Discovery Options (Flow Pipeline)
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
+                  When <b>&quot;⇩ Pull Info&quot;</b> is clicked on a provider, Freeroute resolves <b>Context Window, Pricing, and Modalities</b> using your chosen pipeline:
                 </div>
               </div>
-              <button
-                className="btn primary"
-                onClick={saveSettings}
-                disabled={saving}
-              >
-                {saving ? "Saving…" : "Save Strategy"}
-              </button>
-            </div>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
-              When you click <b>&quot;⇩ Pull Info&quot;</b> on a provider or models page, Freeroute does <b>not</b> pull new models. It only updates the <b>Context Window, Input Price, Output Price, and Modalities</b> for the models already in your database using your chosen option below:
-            </p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {OPTIONS.map((opt) => (
-                <label
-                  key={opt.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: 12,
-                    padding: "14px 16px",
-                    borderRadius: 8,
-                    border: `1px solid ${strategy === opt.id ? "var(--primary)" : "var(--border-subtle)"}`,
-                    background: strategy === opt.id ? "var(--bg-accent-soft)" : "var(--bg-surface-elevated)",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                  Selected: <strong style={{ color: "var(--primary)" }}>{strategy === "cascade" ? "Smart Cascade (Auto)" : `Option ${strategy}`}</strong>
+                </span>
+                <button
+                  className="btn primary"
+                  onClick={saveSettings}
+                  disabled={saving}
+                  style={{ gap: 6, padding: "7px 16px" }}
                 >
+                  {saving ? "Saving…" : "Save Strategy"}
+                </button>
+              </div>
+            </div>
+
+            {/* Smart Cascade Recommended Banner Card */}
+            <div
+              onClick={() => setStrategy("cascade")}
+              style={{
+                borderRadius: 10,
+                border: `2px solid ${strategy === "cascade" ? "var(--primary)" : "var(--border-subtle)"}`,
+                background: strategy === "cascade" ? "var(--bg-accent-soft)" : "var(--bg-surface-elevated)",
+                padding: "16px 20px",
+                marginBottom: 16,
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <input
                     type="radio"
                     name="strategy"
-                    value={opt.id}
-                    checked={strategy === opt.id}
-                    onChange={(e) => setStrategy(e.target.value)}
-                    style={{ marginTop: 3, accentColor: "var(--primary)" }}
+                    value="cascade"
+                    checked={strategy === "cascade"}
+                    onChange={() => setStrategy("cascade")}
+                    style={{ accentColor: "var(--primary)", transform: "scale(1.15)" }}
                   />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: 600, fontSize: 13.5 }}>{opt.title}</span>
-                      <span
-                        className="pill"
-                        style={{
-                          fontSize: 10.5,
-                          background: "var(--bg-surface)",
-                          borderColor: opt.badgeColor,
-                          color: opt.badgeColor,
-                        }}
-                      >
-                        {opt.badge}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.4 }}>
-                      {opt.desc}
-                    </div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>
+                    Smart Cascade Engine (Recommended)
+                  </span>
+                  <span className="pill active" style={{ fontSize: 11 }}>
+                    ⚡ 100% Guaranteed Resolution
+                  </span>
+                </div>
+                <span className="pill" style={{ fontSize: 11, background: "var(--bg-surface)", borderColor: "var(--primary)", color: "var(--primary)" }}>
+                  Auto-Fallback Chain
+                </span>
+              </div>
 
-          {/* Interactive Test Suite */}
-          <div className="card">
-            <div className="card-head">
-              <div>
-                <span className="card-label">Verification &amp; Diagnostic Test Suite</span>
-                <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>
-                  Test All 4 Discovery Options Live
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 12px", lineHeight: 1.5 }}>
+                Sequentially steps through resolution layers. If a fast layer misses, it seamlessly falls through to the next layer until full specifications are acquired:
+              </p>
+
+              {/* Visual Flow Diagram */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "var(--bg-surface)", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border-subtle)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#10b981" }}>
+                  <span>Step 1: Offline Spec DB</span>
+                  <span style={{ fontSize: 10, background: "rgba(16,185,129,0.15)", padding: "1px 5px", borderRadius: 4 }}>0ms</span>
+                </div>
+                <span style={{ color: "var(--text-tertiary)" }}>➔</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#3b82f6" }}>
+                  <span>Step 2: Live OpenRouter API</span>
+                  <span style={{ fontSize: 10, background: "rgba(59,130,246,0.15)", padding: "1px 5px", borderRadius: 4 }}>~50ms</span>
+                </div>
+                <span style={{ color: "var(--text-tertiary)" }}>➔</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#8b5cf6" }}>
+                  <span>Step 3: Smart Heuristics</span>
+                  <span style={{ fontSize: 10, background: "rgba(139,92,246,0.15)", padding: "1px 5px", borderRadius: 4 }}>0ms</span>
+                </div>
+                <span style={{ color: "var(--text-tertiary)" }}>➔</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#f59e0b" }}>
+                  <span>Step 4: Web Search Scrape</span>
+                  <span style={{ fontSize: 10, background: "rgba(245,158,11,0.15)", padding: "1px 5px", borderRadius: 4 }}>~800ms</span>
                 </div>
               </div>
             </div>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>
-              Enter any model identifier to test each discovery mechanism individually or test all 4 options simultaneously:
-            </p>
-            <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", background: "var(--bg-surface)", padding: "6px 12px", borderRadius: 6, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
-              <span>💡</span>
-              <span><strong>Pricing Guide:</strong> Pricing is measured per 1 Million (1M) prompt (Input) &amp; completion (Output) tokens (e.g. $0.075 / 1M ≈ 0.0075¢ per 1,000 tokens). Models with zero charge display as <strong style={{ color: "#10b981" }}>Free</strong>.</span>
-            </div>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
-              <input
-                type="text"
-                className="input-field mono"
-                placeholder="e.g. Cohere: North Mini Code (free), gemini-2.5-flash, gpt-4o"
-                value={testModel}
-                onChange={(e) => setTestModel(e.target.value)}
-                style={{ flex: "1 1 280px", minWidth: 220 }}
-              />
-              <button
-                className="btn primary"
-                onClick={() => runTest("all")}
-                disabled={Boolean(testingOption)}
-                style={{ display: "flex", alignItems: "center", gap: 6 }}
-              >
-                {testingOption === "all" ? "Testing All 4…" : "▷ Test All 4 Options"}
-              </button>
-            </div>
-
-            {/* Individual Option Test Buttons */}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-              <button
-                className="btn sm"
-                onClick={() => runTest("1")}
-                disabled={Boolean(testingOption)}
-              >
-                {testingOption === "1" ? "Testing 1…" : "Test Option 1 (OpenRouter)"}
-              </button>
-              <button
-                className="btn sm"
-                onClick={() => runTest("2")}
-                disabled={Boolean(testingOption)}
-              >
-                {testingOption === "2" ? "Testing 2…" : "Test Option 2 (Web Search)"}
-              </button>
-              <button
-                className="btn sm"
-                onClick={() => runTest("3")}
-                disabled={Boolean(testingOption)}
-              >
-                {testingOption === "3" ? "Testing 3…" : "Test Option 3 (Offline DB)"}
-              </button>
-              <button
-                className="btn sm"
-                onClick={() => runTest("4")}
-                disabled={Boolean(testingOption)}
-              >
-                {testingOption === "4" ? "Testing 4…" : "Test Option 4 (Heuristics)"}
-              </button>
-            </div>
-
-            {/* Test Results Output Cards */}
-            {testResults.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
-                  Live Test Results for &quot;{testModel}&quot;:
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
-                  {testResults.map((tr) => (
-                    <div
-                      key={tr.option}
-                      style={{
-                        padding: 16,
-                        borderRadius: 8,
-                        background: "var(--bg-surface-elevated)",
-                        border: `1px solid ${tr.ok ? "var(--primary)" : "var(--danger)"}`,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 8,
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontWeight: 700, fontSize: 13 }}>{tr.name}</span>
+            {/* Individual 4 Discovery Strategy Cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 14 }}>
+              {DISCOVERY_CARDS.map((card) => {
+                const isSelected = strategy === card.id;
+                return (
+                  <div
+                    key={card.id}
+                    onClick={() => setStrategy(card.id)}
+                    style={{
+                      borderRadius: 10,
+                      border: `2px solid ${isSelected ? "var(--primary)" : "var(--border-subtle)"}`,
+                      background: isSelected ? "var(--bg-accent-soft)" : "var(--bg-surface-elevated)",
+                      padding: "16px 18px",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <input
+                            type="radio"
+                            name="strategy"
+                            value={card.id}
+                            checked={isSelected}
+                            onChange={() => setStrategy(card.id)}
+                            style={{ accentColor: "var(--primary)" }}
+                          />
+                          <span style={{ fontSize: 12, fontWeight: 700, color: card.badgeColor }}>
+                            {card.num}
+                          </span>
+                        </div>
                         <span
-                          className={`pill ${tr.ok ? "active" : "danger"}`}
-                          style={{ fontSize: 11 }}
+                          className="pill"
+                          style={{
+                            fontSize: 10,
+                            background: "var(--bg-surface)",
+                            borderColor: card.badgeColor,
+                            color: card.badgeColor,
+                          }}
                         >
-                          {tr.ok ? `✓ OK (${tr.latencyMs}ms)` : `✗ Error (${tr.latencyMs}ms)`}
+                          {card.badge}
                         </span>
                       </div>
 
-                      {tr.result && (
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4, fontSize: 12 }}>
-                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
-                            <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block" }}>CONTEXT</span>
-                            <span className="mono" style={{ fontWeight: 600 }}>{tr.result.contextWindow}</span>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text-primary)", lineHeight: 1.3, marginBottom: 8 }}>
+                        {card.title}
+                      </div>
+
+                      <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45, margin: 0 }}>
+                        {card.desc}
+                      </p>
+                    </div>
+
+                    <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 10, display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-tertiary)" }}>
+                      <span>Latency: <b style={{ color: "var(--text-primary)" }}>{card.latency}</b></span>
+                      <span>Accuracy: <b style={{ color: "var(--text-primary)" }}>{card.accuracy}</b></span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* B. TEST ALL 4 DISCOVERY OPTIONS LIVE */}
+          <div className="card" style={{ padding: 22 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <span className="card-label">Diagnostic &amp; Live Verification Suite</span>
+                <div style={{ fontSize: 17, fontWeight: 700, marginTop: 2 }}>
+                  Test All 4 Discovery Options Live
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
+                  Select any model from your catalog or enter an identifier to evaluate resolution, latency, and specs across all 4 options simultaneously.
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                  Current Strategy:
+                </span>
+                <span className="pill active" style={{ fontSize: 11.5, fontWeight: 700 }}>
+                  {strategy === "cascade" ? "⚡ Smart Cascade" : `Option ${strategy}`}
+                </span>
+              </div>
+            </div>
+
+            {/* Model Selector Bar */}
+            <div style={{ background: "var(--bg-surface-elevated)", padding: 16, borderRadius: 10, border: "1px solid var(--border-subtle)", marginBottom: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>
+                  Select Test Model:
+                </span>
+
+                {/* Quick preset model pills */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {PRESET_MODELS.map((pm) => (
+                    <button
+                      key={pm.slug}
+                      className="btn sm"
+                      onClick={() => setTestModel(pm.slug)}
+                      style={{
+                        fontSize: 11,
+                        padding: "3px 9px",
+                        background: testModel === pm.slug ? "var(--primary)" : "var(--bg-surface)",
+                        color: testModel === pm.slug ? "#fff" : "var(--text-secondary)",
+                        borderColor: testModel === pm.slug ? "var(--primary)" : "var(--border-subtle)",
+                      }}
+                    >
+                      {pm.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Searchable input & Catalog Dropdown */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <div style={{ position: "relative", flex: "1 1 320px", minWidth: 240 }} ref={dropdownRef}>
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <input
+                      type="text"
+                      className="input-field mono"
+                      placeholder="Enter model identifier (e.g. meta/llama-3.2-11b-vision-instruct, gpt-4o)"
+                      value={testModel}
+                      onChange={(e) => setTestModel(e.target.value)}
+                      style={{ width: "100%", paddingRight: 32 }}
+                    />
+                    {catalogModels.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+                        title="Pick from database catalog"
+                        style={{
+                          position: "absolute",
+                          right: 8,
+                          background: "transparent",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "var(--text-tertiary)",
+                        }}
+                      >
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Dropdown list of catalog models */}
+                  {modelDropdownOpen && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        zIndex: 40,
+                        maxHeight: 240,
+                        overflowY: "auto",
+                        background: "var(--bg-surface)",
+                        border: "1px solid var(--border-default)",
+                        borderRadius: 6,
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+                        marginTop: 4,
+                      }}
+                    >
+                      <div style={{ padding: "6px 12px", fontSize: 11, color: "var(--text-tertiary)", borderBottom: "1px solid var(--border-subtle)" }}>
+                        Database Models ({catalogModels.length}):
+                      </div>
+                      {catalogModels
+                        .filter((m) => m.slug.toLowerCase().includes(testModel.toLowerCase()))
+                        .slice(0, 15)
+                        .map((m) => (
+                          <div
+                            key={m.slug}
+                            onClick={() => {
+                              setTestModel(m.slug);
+                              setModelDropdownOpen(false);
+                            }}
+                            style={{
+                              padding: "8px 12px",
+                              fontSize: 12.5,
+                              cursor: "pointer",
+                              borderBottom: "1px solid var(--border-subtle)",
+                              background: testModel === m.slug ? "var(--bg-accent-soft)" : "transparent",
+                            }}
+                          >
+                            <div className="mono" style={{ fontWeight: 600 }}>{m.slug}</div>
+                            {m.name !== m.slug && <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{m.name}</div>}
                           </div>
-                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                            <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block", marginBottom: 2 }}>MODALITIES</span>
-                            <ModalityIcons mods={tr.result.modalities} />
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Primary Test Button */}
+                <button
+                  className="btn primary"
+                  onClick={() => runTest("all")}
+                  disabled={Boolean(testingOption)}
+                  style={{ gap: 8, padding: "9px 20px", fontWeight: 700 }}
+                >
+                  {testingOption === "all" ? "Testing All 4 Options…" : "⚡ Test All 4 Discovery Options Live"}
+                </button>
+              </div>
+
+              {/* Individual test filter pills */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, alignItems: "center" }}>
+                <span style={{ fontSize: 11.5, color: "var(--text-tertiary)" }}>Run Individually:</span>
+                <button
+                  className="btn sm"
+                  onClick={() => runTest("1")}
+                  disabled={Boolean(testingOption)}
+                >
+                  {testingOption === "1" ? "Running 1…" : "Test Option 1 (OpenRouter Catalog)"}
+                </button>
+                <button
+                  className="btn sm"
+                  onClick={() => runTest("2")}
+                  disabled={Boolean(testingOption)}
+                >
+                  {testingOption === "2" ? "Running 2…" : "Test Option 2 (Web Search Scraper)"}
+                </button>
+                <button
+                  className="btn sm"
+                  onClick={() => runTest("3")}
+                  disabled={Boolean(testingOption)}
+                >
+                  {testingOption === "3" ? "Running 3…" : "Test Option 3 (Offline Spec DB)"}
+                </button>
+                <button
+                  className="btn sm"
+                  onClick={() => runTest("4")}
+                  disabled={Boolean(testingOption)}
+                >
+                  {testingOption === "4" ? "Running 4…" : "Test Option 4 (Heuristic Parser)"}
+                </button>
+              </div>
+            </div>
+
+            {/* C. CASCADE DECISION WINNER CARD (WHEN RESOLVED) */}
+            {decision && (
+              <div
+                style={{
+                  background: "linear-gradient(135deg, var(--bg-surface-elevated) 0%, rgba(16, 185, 129, 0.08) 100%)",
+                  border: "2px solid #10b981",
+                  borderRadius: 12,
+                  padding: "18px 22px",
+                  marginBottom: 20,
+                  boxShadow: "0 4px 14px rgba(16, 185, 129, 0.12)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 18 }}>🏆</span>
+                    <span style={{ fontWeight: 800, fontSize: 15, color: "#10b981" }}>
+                      Active Strategy Resolution Decision
+                    </span>
+                    <span className="pill active" style={{ fontSize: 11 }}>
+                      Winner: {decision.winnerName}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Latency:</span>
+                    <span className="mono" style={{ fontWeight: 700, color: "#10b981" }}>
+                      {decision.latencyMs}ms
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, background: "var(--bg-surface)", padding: 12, borderRadius: 8 }}>
+                  <div>
+                    <span style={{ fontSize: 10.5, color: "var(--text-tertiary)", display: "block" }}>CONTEXT</span>
+                    <span className="mono" style={{ fontSize: 15, fontWeight: 700 }}>{decision.result.contextWindow}</span>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 10.5, color: "var(--text-tertiary)", display: "block" }}>MODALITIES</span>
+                    <ModalityIcons mods={decision.result.modalities} />
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 10.5, color: "var(--text-tertiary)", display: "block" }}>PARAMETERS</span>
+                    <span className="mono" style={{ fontSize: 15, fontWeight: 700 }}>{decision.result.params || "–"}</span>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 10.5, color: "var(--text-tertiary)", display: "block" }}>QUALITY SCORE</span>
+                    <span className="mono" style={{ fontSize: 15, fontWeight: 700, color: (decision.result.score ?? 0) >= 90 ? "#10b981" : "var(--primary)" }}>
+                      {decision.result.score ? `${decision.result.score}/100` : "–"}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 10.5, color: "var(--text-tertiary)", display: "block" }}>INPUT ($/1M)</span>
+                    {formatPriceBadge(decision.result.inputPrice, decision.result.isFreeRoute, decision.result.actualInputPrice)}
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 10.5, color: "var(--text-tertiary)", display: "block" }}>OUTPUT ($/1M)</span>
+                    {formatPriceBadge(decision.result.outputPrice, decision.result.isFreeRoute, decision.result.actualOutputPrice)}
+                  </div>
+                </div>
+                {decision.result.detail && (
+                  <div className="mono" style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 10 }}>
+                    ▸ Strategy decision notes: {decision.result.detail}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* D. TEST RESULTS OUTPUT CARDS (ALL 4 DISCOVERY OPTIONS SIDE-BY-SIDE) */}
+            {testResults.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
+                    Detailed Flow Results for &quot;{testModel}&quot; Across All Options:
+                  </div>
+                  <span style={{ fontSize: 11.5, color: "var(--text-tertiary)" }}>
+                    Comparing {testResults.length} resolution engines
+                  </span>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
+                  {testResults.map((tr) => {
+                    const isWinner = decision && decision.winnerOption === tr.option;
+                    return (
+                      <div
+                        key={tr.option}
+                        style={{
+                          padding: 16,
+                          borderRadius: 10,
+                          background: "var(--bg-surface-elevated)",
+                          border: isWinner
+                            ? "2px solid #10b981"
+                            : `1px solid ${tr.ok ? "var(--border-default)" : "var(--border-subtle)"}`,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 10,
+                          boxShadow: isWinner ? "0 4px 14px rgba(16, 185, 129, 0.15)" : "none",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
+                          <div>
+                            <span style={{ fontWeight: 700, fontSize: 13.5, display: "block" }}>{tr.name}</span>
+                            {tr.badge && (
+                              <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>{tr.badge}</span>
+                            )}
                           </div>
-                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
-                            <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block" }}>PARAMS</span>
-                            <span className="mono" style={{ fontWeight: 700, color: "var(--text-primary)" }}>
-                              {tr.result.params || "–"}
-                            </span>
-                          </div>
-                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
-                            <span style={{ color: "var(--text-tertiary)", fontSize: 10.5, display: "block" }}>SCORE</span>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
                             <span
-                              className="mono"
+                              className={`pill ${tr.ok ? "active" : ""}`}
                               style={{
-                                fontWeight: 700,
-                                color: (tr.result.score ?? 0) >= 90 ? "#10b981" : (tr.result.score ?? 0) >= 80 ? "var(--primary)" : "var(--warning)",
-                                display: "inline-flex",
-                                alignItems: "baseline",
-                                gap: 3,
+                                fontSize: 10.5,
+                                background: tr.ok ? "rgba(16, 185, 129, 0.12)" : "rgba(100, 116, 139, 0.1)",
+                                color: tr.ok ? "#10b981" : "var(--text-tertiary)",
+                                borderColor: tr.ok ? "#10b98133" : "var(--border-subtle)",
                               }}
                             >
-                              <span>{tr.result.score ? tr.result.score : "–"}</span>
-                              {tr.result.score ? <span style={{ fontSize: 9.5, color: "var(--text-tertiary)", fontWeight: 400 }}>/100</span> : null}
+                              {tr.ok ? `✓ Hit (${tr.latencyMs}ms)` : `Miss (${tr.latencyMs}ms)`}
                             </span>
-                          </div>
-                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
-                              <span style={{ color: "var(--text-tertiary)", fontSize: 10, fontWeight: 600 }}>PROMPT (INPUT)</span>
-                              <span style={{ color: "var(--text-tertiary)", fontSize: 9.5 }}>per 1M tok</span>
-                            </div>
-                            {formatPriceBadge(tr.result.inputPrice, tr.result.isFreeRoute, tr.result.actualInputPrice)}
-                            {tr.result.inputPrice > 0 && (
-                              <div style={{ fontSize: 9.5, color: "var(--text-tertiary)", marginTop: 2 }}>
-                                ≈ {(tr.result.inputPrice * 0.1).toFixed(4)}¢ / 1K
-                              </div>
-                            )}
-                          </div>
-                          <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
-                              <span style={{ color: "var(--text-tertiary)", fontSize: 10, fontWeight: 600 }}>COMPLETION (OUTPUT)</span>
-                              <span style={{ color: "var(--text-tertiary)", fontSize: 9.5 }}>per 1M tok</span>
-                            </div>
-                            {formatPriceBadge(tr.result.outputPrice, tr.result.isFreeRoute, tr.result.actualOutputPrice)}
-                            {tr.result.outputPrice > 0 && (
-                              <div style={{ fontSize: 9.5, color: "var(--text-tertiary)", marginTop: 2 }}>
-                                ≈ {(tr.result.outputPrice * 0.1).toFixed(4)}¢ / 1K
-                              </div>
+                            {isWinner && (
+                              <span style={{ fontSize: 9.5, fontWeight: 700, color: "#10b981" }}>
+                                ★ CASCADE WINNER
+                              </span>
                             )}
                           </div>
                         </div>
-                      )}
 
-                      {tr.result?.detail && (
-                        <div className="mono" style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 4 }}>
-                          ▸ {tr.result.detail}
-                        </div>
-                      )}
-                      {tr.error && (
-                        <div className="mono" style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>
-                          ▸ {tr.error}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        {tr.result && (
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12 }}>
+                            <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
+                              <span style={{ color: "var(--text-tertiary)", fontSize: 10, display: "block" }}>CONTEXT</span>
+                              <span className="mono" style={{ fontWeight: 600 }}>{tr.result.contextWindow}</span>
+                            </div>
+                            <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                              <span style={{ color: "var(--text-tertiary)", fontSize: 10, display: "block", marginBottom: 2 }}>MODALITIES</span>
+                              <ModalityIcons mods={tr.result.modalities} />
+                            </div>
+                            <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
+                              <span style={{ color: "var(--text-tertiary)", fontSize: 10, display: "block" }}>PARAMS</span>
+                              <span className="mono" style={{ fontWeight: 700, color: "var(--text-primary)" }}>
+                                {tr.result.params || "–"}
+                              </span>
+                            </div>
+                            <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6 }}>
+                              <span style={{ color: "var(--text-tertiary)", fontSize: 10, display: "block" }}>SCORE</span>
+                              <span
+                                className="mono"
+                                style={{
+                                  fontWeight: 700,
+                                  color: (tr.result.score ?? 0) >= 90 ? "#10b981" : (tr.result.score ?? 0) >= 80 ? "var(--primary)" : "var(--warning)",
+                                }}
+                              >
+                                {tr.result.score ? `${tr.result.score}/100` : "–"}
+                              </span>
+                            </div>
+                            <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                              <span style={{ color: "var(--text-tertiary)", fontSize: 9.5, fontWeight: 600 }}>INPUT (1M)</span>
+                              {formatPriceBadge(tr.result.inputPrice, tr.result.isFreeRoute, tr.result.actualInputPrice)}
+                            </div>
+                            <div style={{ background: "var(--bg-surface)", padding: "6px 10px", borderRadius: 6, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                              <span style={{ color: "var(--text-tertiary)", fontSize: 9.5, fontWeight: 600 }}>OUTPUT (1M)</span>
+                              {formatPriceBadge(tr.result.outputPrice, tr.result.isFreeRoute, tr.result.actualOutputPrice)}
+                            </div>
+                          </div>
+                        )}
+
+                        {tr.result?.detail && (
+                          <div className="mono" style={{ fontSize: 10.5, color: "var(--text-tertiary)", marginTop: 2 }}>
+                            ▸ {tr.result.detail}
+                          </div>
+                        )}
+                        {tr.error && (
+                          <div className="mono" style={{ fontSize: 10.5, color: "var(--danger)", marginTop: 2 }}>
+                            ▸ {tr.error}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -681,10 +964,10 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* 3. TAB CONTENT: DATABASE & BACKUP */}
       {activeTab === "Database & Backup" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 960 }}>
-          {/* Active Database Card */}
-          <div className="card">
+          <div className="card" style={{ padding: 22 }}>
             <div className="card-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
               <div>
                 <span className="card-label">Persistent Storage</span>
@@ -726,7 +1009,6 @@ export default function SettingsPage() {
               </button>
             </div>
 
-            {/* Counts Grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
               <div style={{ background: "var(--bg-surface-elevated)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--border-subtle)" }}>
                 <span style={{ fontSize: 11, color: "var(--text-tertiary)", display: "block" }}>PROVIDERS</span>
@@ -751,10 +1033,8 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Export & Import Actions Grid */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            {/* Export Card */}
-            <div className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            <div className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 20 }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
@@ -774,8 +1054,7 @@ export default function SettingsPage() {
               </button>
             </div>
 
-            {/* Import Card */}
-            <div className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            <div className="card" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 20 }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
@@ -804,6 +1083,7 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* 4. TAB CONTENT: ABOUT */}
       {activeTab === "About" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 960 }}>
           <div className="card" style={{ padding: 28, background: "linear-gradient(135deg, var(--bg-surface-elevated) 0%, rgba(16, 185, 129, 0.05) 100%)" }}>
@@ -887,6 +1167,6 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

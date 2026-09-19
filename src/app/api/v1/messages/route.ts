@@ -5,6 +5,9 @@ import { getProvider } from "@/lib/providers";
 import {
   pickTargets,
   checkFallbackError,
+  setLkgpTarget,
+  clearLkgpTarget,
+  markTargetCooldown,
   ComboCandidate,
   ComboStrategy,
 } from "@/lib/combo";
@@ -236,7 +239,9 @@ export async function POST(req: NextRequest) {
 
     const candidates: ComboCandidate[] = combo.targets.map((t) => {
       const m = modelMap.get(t.modelId);
-      const isConnected = !!(m && m.enabled && m.provider.connected && m.provider.apiKey);
+      const def = m?.provider ? getProvider(m.provider.slug) : null;
+      const isNoAuth = def?.authType === "none" || m?.provider?.slug === "onerouter";
+      const isConnected = !!(m && m.enabled && m.provider.connected && (m.provider.apiKey || isNoAuth));
       return {
         modelId: t.modelId,
         modelSlug: m?.slug ?? "",
@@ -333,6 +338,11 @@ export async function POST(req: NextRequest) {
         // Failover check
         if (!upstreamRes.ok) {
           const errText = await upstreamRes.text().catch(() => "");
+          if (upstreamRes.status === 429) {
+            markTargetCooldown(m.id, 60000);
+            markTargetCooldown(m.provider.slug, 60000);
+            clearLkgpTarget(combo.id);
+          }
           if (checkFallbackError(upstreamRes.status, errText) && i < orderedTargets.length - 1) {
             lastError = `${m.slug} (${m.provider.name}) -> HTTP ${upstreamRes.status}: ${errText.slice(0, 100)}`;
             attemptedHops.push(lastError);
@@ -365,6 +375,7 @@ export async function POST(req: NextRequest) {
             continue;
           }
 
+          setLkgpTarget(combo.id, m.id);
           const servedModel = m;
           const comboHopsStr =
             attemptedHops.length > 0
@@ -537,7 +548,11 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const usable = candidates.filter((m) => m.provider.connected && m.provider.apiKey);
+  const usable = candidates.filter((m) => {
+    const def = getProvider(m.provider.slug);
+    const isNoAuth = def?.authType === "none" || m.provider.slug === "onerouter";
+    return m.provider.connected && (Boolean(m.provider.apiKey) || isNoAuth);
+  });
   if (usable.length === 0) {
     const notAvailMsg =
       candidates.length === 0
@@ -576,16 +591,15 @@ export async function POST(req: NextRequest) {
       const rawBase = (m.provider.baseUrl || def.baseUrl || "").replace(/\/+$/, "");
       const isAnthropicNative = m.provider.slug === "anthropic";
 
-      const chatPath = def.chatPath.startsWith("/") ? def.chatPath : `/${def.chatPath}`;
-      const url =
-        m.provider.slug === "azure" && m.provider.baseUrl
-          ? `${rawBase}${chatPath.replace("{model}", m.slug)}`
-          : `${rawBase}${chatPath}`;
+      let url = `${rawBase}${def.chatPath || "/chat/completions"}`;
+      if (m.provider.slug === "azure" && m.provider.baseUrl) {
+        url = `${rawBase}${def.chatPath.replace("{model}", m.slug)}`;
+      }
 
       const upstreamHeaders: Record<string, string> = {
         "content-type": "application/json",
         "x-request-id": requestId,
-        ...def.authHeader(m.provider.apiKey),
+        ...def.authHeader(m.provider.apiKey || ""),
       };
 
       const upstreamBody = isAnthropicNative

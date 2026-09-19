@@ -1,5 +1,6 @@
 // Translation utilities between Anthropic Claude Messages API and OpenAI Chat Completions API.
 // Follows open-sse / 9router patterns for Claude Code CLI and Anthropic SDK compatibility.
+import { compressToolResults } from "./rtk/compressToolResults";
 
 const CONTEXT_MARKER = /\[1m\]$/i;
 
@@ -36,6 +37,12 @@ export function fromOpenAIFinish(reason?: string | null): string {
  * Convert Anthropic Messages request body to OpenAI Chat Completions payload
  */
 export function claudeToOpenAI(body: any = {}): any {
+  // Apply RTK compression to tool results and messages
+  if (Array.isArray(body.messages)) {
+    const rtk = compressToolResults(body.messages);
+    body.messages = rtk.messages;
+  }
+
   const result: any = {
     model: body.model,
     messages: [],

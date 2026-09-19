@@ -75,6 +75,9 @@ export default function ProviderDetailPage() {
   const [baseUrl, setBaseUrl] = useState("");
   const [baseUrlInput, setBaseUrlInput] = useState("");
   const [baseUrlSaved, setBaseUrlSaved] = useState(false);
+  const [accountId, setAccountId] = useState("");
+  const [accountIdInput, setAccountIdInput] = useState("");
+  const [accountIdSaved, setAccountIdSaved] = useState(false);
   const [website, setWebsite] = useState("");
   const [docUrl, setDocUrl] = useState("");
   const [apiKeyUrl, setApiKeyUrl] = useState("");
@@ -133,6 +136,16 @@ export default function ProviderDetailPage() {
     if (!logoInput) setLogoInput(d.provider.logoUrl ?? "");
     setBaseUrl(d.provider.baseUrl ?? "");
     setBaseUrlInput(d.provider.baseUrl ?? "");
+    if (d.provider.accountId) {
+      setAccountId(d.provider.accountId);
+      setAccountIdInput(d.provider.accountId);
+    } else if (d.provider.baseUrl) {
+      const m = d.provider.baseUrl.match(/\/accounts\/([a-zA-Z0-9_-]+)\//);
+      if (m && m[1] !== "{account_id}") {
+        setAccountId(m[1]);
+        setAccountIdInput(m[1]);
+      }
+    }
     setWebsite(d.provider.website ?? "");
     setDocUrl(d.provider.docUrl ?? "");
     setApiKeyUrl(d.provider.apiKeyUrl ?? "");
@@ -149,6 +162,22 @@ export default function ProviderDetailPage() {
     );
   };
   useEffect(() => { load(); }, [slug]);
+
+  const saveAccountId = async () => {
+    const clean = accountIdInput.trim();
+    if (!clean) return toast.show("Please enter your Cloudflare Account ID");
+    const r = await fetch(`/api/providers/${slug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: clean }),
+    });
+    if (!r.ok) return toast.show("Failed to save Account ID");
+    setAccountId(clean);
+    setAccountIdSaved(true);
+    setTimeout(() => setAccountIdSaved(false), 2800);
+    toast.show("✓ Cloudflare Account ID saved and endpoint mapped");
+    load();
+  };
 
   const saveKey = async () => {
     if (!key.trim()) return toast.show("Please enter an API key");
@@ -577,11 +606,70 @@ export default function ProviderDetailPage() {
         </div>
       )}
 
+      {slug === "cloudflare-ai" && (
+        <div style={{
+          marginBottom: 16,
+          padding: "14px 18px",
+          background: "rgba(243, 128, 32, 0.08)",
+          border: "1px solid rgba(243, 128, 32, 0.25)",
+          borderRadius: 10,
+          fontSize: 13,
+          color: "var(--text-secondary)",
+          lineHeight: 1.6,
+        }}>
+          <div style={{ fontWeight: 700, color: "#f97316", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+            <span>☁️</span> Cloudflare Workers AI Setup Guide
+          </div>
+          <div>
+            Cloudflare Workers AI requires <strong>two credentials</strong> to connect:
+            <br />
+            1. <strong>Cloudflare Account ID:</strong> Enter your 32-character Account ID (e.g. <code>0123456789abcdef0123456789abcdef</code>) below.
+            <br />
+            2. <strong>Workers AI API Token:</strong> Generate a token with <code>Workers AI: Read</code> &amp; <code>Edit</code> permissions in the{" "}
+            <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" style={{ color: "#f97316", textDecoration: "underline", fontWeight: 600 }}>
+              Cloudflare API Tokens Dashboard ↗
+            </a>.
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16, marginBottom: 20, maxWidth: 900 }}>
+        {/* Cloudflare Account ID Card */}
+        {slug === "cloudflare-ai" && (
+          <div className="card">
+            <div className="card-label" style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>Cloudflare Account ID</span>
+              {accountId ? (
+                <span className="pill active" style={{ fontSize: 11 }}>● Configured</span>
+              ) : (
+                <span className="pill danger" style={{ fontSize: 11 }}>Required</span>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="text"
+                className="input-field mono"
+                placeholder="e.g. 0123456789abcdef0123456789abcdef"
+                value={accountIdInput}
+                onChange={(e) => setAccountIdInput(e.target.value)}
+                style={{ flex: 1, fontSize: 12.5 }}
+              />
+              <button className="btn primary sm" onClick={saveAccountId} style={{ whiteSpace: "nowrap" }}>
+                Save Account ID
+              </button>
+            </div>
+            {accountIdSaved && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--primary)", fontSize: 12, fontWeight: 600, marginTop: 8 }}>
+                ✓ Account ID saved and endpoint mapped
+              </div>
+            )}
+          </div>
+        )}
+
         {/* API Key Card */}
         <div className="card">
           <div className="card-label" style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>{authType === "cookie" ? "Session Cookie" : "Provider API Key"}</span>
+            <span>{slug === "cloudflare-ai" ? "Workers AI API Token" : authType === "cookie" ? "Session Cookie" : "Provider API Key"}</span>
             {hasKey && <span className="pill active" style={{ fontSize: 11 }}>● Active &amp; Stored</span>}
           </div>
           {authType === "none" ? (
@@ -708,7 +796,7 @@ export default function ProviderDetailPage() {
                 <input
                   type={showKey ? "text" : "password"}
                   className="input-field mono"
-                  placeholder={authType === "cookie" ? "Paste cookie value..." : "sk-••••••••••••••••••••••••••••"}
+                  placeholder={slug === "cloudflare-ai" ? "cfut_••••••••••••••••••••••••••••" : authType === "cookie" ? "Paste cookie value..." : "sk-••••••••••••••••••••••••••••"}
                   value={key}
                   onChange={(e) => setKey(e.target.value)}
                   style={{ flex: 1 }}

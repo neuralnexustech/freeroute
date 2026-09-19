@@ -3,15 +3,31 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTheme } from "./ThemeProvider";
 import { useToast } from "./Toast";
+import { useLiveTelemetry } from "@/hooks/useLiveTelemetry";
 
 export function Topbar() {
   const { theme, toggle } = useTheme();
   const toast = useToast();
-  const [stats, setStats] = useState<{ spend: number; tokens: number } | null>(null);
+  const [stats, setStats] = useState<{ spend: number; tokens: number; rtkTokensSaved: number } | null>(null);
+
+  const fetchStats = () => {
+    fetch("/api/overview")
+      .then((r) => r.json())
+      .then((d) =>
+        setStats({
+          spend: d.spend ?? 0,
+          tokens: d.tokens ?? 0,
+          rtkTokensSaved: d.rtkTokensSaved ?? 0,
+        })
+      )
+      .catch(() => {});
+  };
 
   useEffect(() => {
-    fetch("/api/overview").then((r) => r.json()).then((d) => setStats({ spend: d.spend ?? 0, tokens: d.tokens ?? 0 })).catch(() => {});
+    fetchStats();
   }, []);
+
+  useLiveTelemetry(fetchStats);
 
   return (
     <header className="topbar">
@@ -38,8 +54,15 @@ export function Topbar() {
         <div className="stats-ticker">
           <div className="ticker-item">Spend (30d): <span>${(stats?.spend ?? 0).toFixed(2)}</span></div>
           <div className="ticker-item">Tokens: <span>{stats?.tokens ?? 0}</span></div>
+          <div className="ticker-item" title="RTK: Real-Time Context Token Compression active">
+            <span style={{ color: "#10b981", fontWeight: 600 }}>⚡ RTK Saved:</span>{" "}
+            <span style={{ color: "#10b981", fontWeight: 700 }}>
+              {(stats?.rtkTokensSaved ?? 0).toLocaleString()} tok
+            </span>
+          </div>
           <div className="ticker-item">Health: <span style={{ color: "var(--primary)" }}>99.98%</span></div>
         </div>
+
 
 
         <button className="theme-toggle-btn" title="Toggle Light/Dark Theme" aria-label="Toggle dark/light theme" onClick={() => { toggle(); toast.show(`Switched to ${theme === "dark" ? "light" : "dark"} theme`); }}>
