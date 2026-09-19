@@ -1,4 +1,4 @@
-// Curated Provider Registry: Groq, OpenCode, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, Kilo, HCNSec AI, Tokenin, Infron, and UnoRouter
+// Curated Provider Registry: Groq, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, Kilo, HCNSec AI, Tokenin, Infron, and UnoRouter
 
 export interface ProviderDef {
   slug: string;
@@ -66,28 +66,8 @@ export const RAW_PROVIDERS_DATA = [
     serviceKinds: ["llm"],
     thinkingConfig: null,
   },
-  {
-    slug: "opencode",
-    name: "OpenCode",
-    category: "freeTier" as const,
-    icon: "code",
-    color: "#0EA5E9",
-    baseUrl: "https://api.opencode.ai/v1",
-    chatPath: "/chat/completions",
-    modelsPath: "/models",
-    apiKeyUrl: "https://opencode.ai",
-    website: "https://opencode.ai",
-    docUrl: "https://opencode.ai/docs",
-    authType: "bearer" as const,
-    // Inject a spoofed OpenCode user-agent so the free tier check passes.
-    // OpenCode's gateway blocks requests that don't originate from the official client.
-    extraHeaders: {
-      "User-Agent": "opencode/0.1.125 (linux; x64)",
-      "X-OpenCode-Client": "opencode-cli",
-    },
-    serviceKinds: ["llm"],
-    thinkingConfig: null,
-  },
+
+
   {
     slug: "google",
     name: "Google Gemini",
