@@ -136,6 +136,7 @@ export async function POST(
           headers: {
             "Content-Type": "application/json",
             ...def.authHeader(m.provider.apiKey),
+            ...(def.extraHeaders ?? {}),
           },
           body: JSON.stringify(upstreamBody),
           signal: AbortSignal.timeout(15000),

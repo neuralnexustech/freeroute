@@ -191,6 +191,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
           
           const authHeaders: Record<string, string> = {
             ...def.authHeader(provider.apiKey || ""),
+            ...(def.extraHeaders ?? {}),
           };
 
           const probeResult = await probe(chatUrl, authHeaders, body, !isAnthropic);

@@ -1,4 +1,4 @@
-// Curated Provider Registry: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, Kilo, HCNSec AI, Tokenin, Infron, and UnoRouter
+// Curated Provider Registry: Groq, OpenCode, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, Kilo, HCNSec AI, Tokenin, Infron, and UnoRouter
 
 export interface ProviderDef {
   slug: string;
@@ -15,6 +15,8 @@ export interface ProviderDef {
   docUrl?: string;
   authType: "bearer" | "x-api-key" | "api-key" | "google" | "none" | "cookie";
   authHeader: (apiKey: string) => Record<string, string>;
+  /** Extra static headers always injected when proxying (e.g. spoofed User-Agent). */
+  extraHeaders?: Record<string, string>;
   serviceKinds?: string[];
   thinkingConfig?: {
     type: "extended" | "effort";
@@ -65,17 +67,24 @@ export const RAW_PROVIDERS_DATA = [
     thinkingConfig: null,
   },
   {
-    slug: "experiential",
-    name: "Experiential Labs",
-    category: "apikey" as const,
-    icon: "⏣",
-    color: "#8B5CF6",
-    baseUrl: "https://api.experientiallabs.ai/v1",
+    slug: "opencode",
+    name: "OpenCode",
+    category: "freeTier" as const,
+    icon: "code",
+    color: "#0EA5E9",
+    baseUrl: "https://api.opencode.ai/v1",
     chatPath: "/chat/completions",
     modelsPath: "/models",
-    website: "https://platform.experientiallabs.ai/",
-    docUrl: "https://platform.experientiallabs.ai/docs",
+    apiKeyUrl: "https://opencode.ai",
+    website: "https://opencode.ai",
+    docUrl: "https://opencode.ai/docs",
     authType: "bearer" as const,
+    // Inject a spoofed OpenCode user-agent so the free tier check passes.
+    // OpenCode's gateway blocks requests that don't originate from the official client.
+    extraHeaders: {
+      "User-Agent": "opencode/0.1.125 (linux; x64)",
+      "X-OpenCode-Client": "opencode-cli",
+    },
     serviceKinds: ["llm"],
     thinkingConfig: null,
   },

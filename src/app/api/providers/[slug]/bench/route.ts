@@ -63,6 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   const apiKey = provider?.apiKey ?? "";
   const authHeaders: Record<string, string> = {
     ...def.authHeader(apiKey),
+    ...(def.extraHeaders ?? {}),
   };
 
   const isAnthropic = slug === "anthropic";

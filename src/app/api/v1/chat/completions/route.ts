@@ -513,6 +513,7 @@ export async function POST(req: NextRequest) {
           "content-type": "application/json",
           "x-request-id": requestId,
           ...def.authHeader(m.provider.apiKey || ""),
+          ...(def.extraHeaders ?? {}),
         };
 
         const upstreamBody = isAnthropic
@@ -846,6 +847,7 @@ export async function POST(req: NextRequest) {
           "Content-Type": "application/json",
           "x-request-id": requestId,
           ...def.authHeader(m.provider.apiKey || ""),
+          ...(def.extraHeaders ?? {}),
         },
         body: JSON.stringify(upstreamBody),
       });

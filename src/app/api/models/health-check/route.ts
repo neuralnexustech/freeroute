@@ -42,6 +42,7 @@ export async function POST(_req: NextRequest) {
           headers: {
             "Content-Type": "application/json",
             ...def.authHeader(m.provider.apiKey || ""),
+            ...(def.extraHeaders ?? {}),
           },
           body: JSON.stringify({
             model: m.slug,
