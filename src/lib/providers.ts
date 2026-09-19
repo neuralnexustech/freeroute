@@ -173,7 +173,7 @@ export const RAW_PROVIDERS_DATA = [
     name: "BazaarLink",
     category: "free" as const,
     icon: "link",
-    logoUrl: "https://bazaarlink.ai/logos/Bazzrlink_cube_final.svg",
+    logoUrl: "/providers/bazaarlink.png",
     color: "#059669",
     baseUrl: "https://api.bazaarlink.ai/v1",
     chatPath: "/chat/completions",
