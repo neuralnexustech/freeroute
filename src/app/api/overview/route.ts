@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     const where = since ? { createdAt: { gte: since } } : {};
 
     // 1. Fetch real logs and aggregates
-    const [logs, allLogs, totalSpendAgg, totalTokensAgg, allCatalogModels, apiKeys] = await Promise.all([
+    const [logs, allLogs, totalSpendAgg, totalTokensAgg, allCatalogModels, apiKeys, rtkSetting] = await Promise.all([
       prisma.requestLog.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -59,7 +59,12 @@ export async function GET(req: NextRequest) {
         where: { revoked: false },
         orderBy: { createdAt: "desc" },
       }),
+      prisma.setting.findUnique({
+        where: { key: "rtk_total_tokens_saved" },
+      }),
     ]);
+
+    const rtkTokensSaved = rtkSetting ? parseInt(rtkSetting.value, 10) || 0 : 0;
 
     // 2. Map catalog models by slug
     const catalogMap = new Map<string, { displayName: string; providerName: string; providerSlug: string; inputPrice: number; outputPrice: number }>();
@@ -517,6 +522,7 @@ export async function GET(req: NextRequest) {
       successfulRequests,
       failedRequests,
       successRate,
+      rtkTokensSaved,
       usedModels: topDisplayModels,
       allModels: allModelsForDrawer,
       dailyChart,

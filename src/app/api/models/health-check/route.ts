@@ -17,7 +17,11 @@ export async function POST(_req: NextRequest) {
     },
   });
 
-  const enabled = models.filter((m) => m.provider.connected && m.provider.apiKey);
+  const enabled = models.filter((m) => {
+    const def = getProvider(m.provider.slug);
+    const isNoAuth = def?.authType === "none" || m.provider.slug === "onerouter";
+    return m.provider.connected && (Boolean(m.provider.apiKey) || isNoAuth);
+  });
 
   const results = await Promise.allSettled(
     enabled.map(async (m) => {
@@ -37,7 +41,7 @@ export async function POST(_req: NextRequest) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...def.authHeader(m.provider.apiKey),
+            ...def.authHeader(m.provider.apiKey || ""),
           },
           body: JSON.stringify({
             model: m.slug,

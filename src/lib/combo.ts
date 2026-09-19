@@ -3,7 +3,8 @@ export type ComboStrategy =
   | "weighted"
   | "failover"
   | "latency-based"
-  | "cost-optimized";
+  | "cost-optimized"
+  | "lkgp";
 
 export interface ComboCandidate {
   modelId: string;
@@ -28,6 +29,12 @@ export const COMBO_STRATEGIES = [
     desc: "Tries Tier 1 first; automatically falls back to Tier 2, then Tier 3 on rate-limits (429), quota limits (403), or provider errors (5xx).",
   },
   {
+    value: "lkgp",
+    label: "Last Good (LKGP)",
+    sub: "Stick until error",
+    desc: "Sticks to the last-known-good healthy provider until an error occurs, then seamlessly moves to the next candidate.",
+  },
+  {
     value: "round-robin",
     label: "Round-Robin",
     sub: "Rotate across calls",
@@ -40,6 +47,34 @@ export const COMBO_STRATEGIES = [
     desc: "Distributes traffic across models according to configured capacity, with automatic fallback.",
   },
 ] as const;
+
+// LKGP (Last-Known-Good-Provider) state cache
+const lkgpCache = new Map<string, string>(); // comboId -> modelId
+
+export function setLkgpTarget(comboId: string, modelId: string) {
+  lkgpCache.set(comboId, modelId);
+}
+
+export function clearLkgpTarget(comboId: string) {
+  lkgpCache.delete(comboId);
+}
+
+// Circuit Breaker / Cooldown tracker (prevents thrashing rate-limited free tiers)
+const cooldownMap = new Map<string, number>(); // targetKey -> expiration timestamp
+
+export function markTargetCooldown(targetKey: string, durationMs = 60000) {
+  cooldownMap.set(targetKey, Date.now() + durationMs);
+}
+
+export function isTargetInCooldown(targetKey: string): boolean {
+  const until = cooldownMap.get(targetKey);
+  if (!until) return false;
+  if (Date.now() > until) {
+    cooldownMap.delete(targetKey);
+    return false;
+  }
+  return true;
+}
 
 const rrCursor = new Map<string, number>();
 
@@ -143,9 +178,28 @@ export function pickTargets(
   strategy: ComboStrategy,
   candidates: ComboCandidate[],
 ): ComboCandidate[] {
-  const active = candidates.filter((c) => c.enabled);
+  let active = candidates.filter((c) => c.enabled);
   if (active.length === 0) return [];
+
+  // Cooldown filter: prefer targets that are not currently rate-limited
+  const nonCooled = active.filter((c) => !isTargetInCooldown(c.modelId) && !isTargetInCooldown(c.providerSlug));
+  if (nonCooled.length > 0) {
+    active = nonCooled;
+  }
+
   switch (strategy) {
+    case "lkgp": {
+      const lastGoodId = lkgpCache.get(comboId);
+      const ordered = [...active].sort((a, b) => a.priority - b.priority);
+      if (lastGoodId) {
+        const foundIdx = ordered.findIndex((c) => c.modelId === lastGoodId);
+        if (foundIdx > 0) {
+          const [found] = ordered.splice(foundIdx, 1);
+          ordered.unshift(found);
+        }
+      }
+      return ordered;
+    }
     case "failover": {
       // Primary order: Priority 0 (Tier 1) -> Priority 1 (Tier 2) -> Priority 2 (Tier 3)
       return [...active].sort((a, b) => a.priority - b.priority);

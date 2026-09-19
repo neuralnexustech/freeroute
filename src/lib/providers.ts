@@ -1,4 +1,4 @@
-// Curated Provider Registry: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, Kilo, HCNSec AI, Tokenin, and Infron
+// Curated Provider Registry: Groq, Experiential Labs, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, Kilo, HCNSec AI, Tokenin, Infron, and UnoRouter
 
 export interface ProviderDef {
   slug: string;
@@ -243,6 +243,62 @@ export const RAW_PROVIDERS_DATA = [
     authType: "bearer" as const,
     serviceKinds: ["llm"],
     thinkingConfig: null,
+  },
+  {
+    slug: "unorouter",
+    name: "UnoRouter",
+    category: "apikey" as const,
+    icon: "router",
+    color: "#06B6D4",
+    baseUrl: "https://api.unorouter.com/v1",
+    chatPath: "/chat/completions",
+    modelsPath: "/models",
+    apiKeyUrl: "https://unorouter.com",
+    website: "https://unorouter.com",
+    docUrl: "https://unorouter.com",
+    authType: "bearer" as const,
+    serviceKinds: ["llm"],
+    thinkingConfig: null,
+  },
+
+  {
+    slug: "glm-cn",
+    name: "Z.AI / GLM Free",
+    category: "freeTier" as const,
+    icon: "bolt",
+    color: "#2563EB",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    chatPath: "/chat/completions",
+    modelsPath: "/models",
+    apiKeyUrl: "https://bigmodel.cn",
+    website: "https://bigmodel.cn",
+    docUrl: "https://bigmodel.cn/dev/api",
+    authType: "bearer" as const,
+    serviceKinds: ["llm"],
+    thinkingConfig: null,
+  },
+  {
+    slug: "cloudflare-ai",
+    name: "Cloudflare Workers AI",
+    category: "freeTier" as const,
+    icon: "cloud",
+    color: "#F38020",
+    baseUrl: "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
+    chatPath: "/chat/completions",
+    modelsPath: "/models",
+    apiKeyUrl: "https://dash.cloudflare.com",
+    website: "https://developers.cloudflare.com/workers-ai",
+    docUrl: "https://developers.cloudflare.com/workers-ai/models",
+    authType: "bearer" as const,
+    serviceKinds: ["llm"],
+    thinkingConfig: null,
+    providerSpecificFields: [
+      {
+        key: "accountId",
+        label: "Account ID",
+        placeholder: "e.g. 0123456789abcdef0123456789abcdef",
+      },
+    ],
   },
 ];
 

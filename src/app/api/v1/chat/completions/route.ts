@@ -5,6 +5,9 @@ import { getProvider, openAIToAnthropic, anthropicToOpenAIChunk } from "@/lib/pr
 import {
   pickTargets,
   checkFallbackError,
+  setLkgpTarget,
+  clearLkgpTarget,
+  markTargetCooldown,
   ComboCandidate,
   ComboStrategy,
 } from "@/lib/combo";
@@ -12,6 +15,7 @@ import { loadComboCursor } from "@/lib/combo-server";
 import { detectApp } from "@/lib/detect-app";
 import { broadcastTelemetry } from "@/lib/telemetryEvents";
 import { peekStreamForFailover } from "@/lib/claude-translator";
+import { compressToolResults } from "@/lib/rtk/compressToolResults";
 
 function estimateCost(
   model: { inputPrice: number; outputPrice: number } | null,
@@ -27,6 +31,7 @@ async function saveLogWithApp(
   appName: string,
   errorMessage?: string,
   keyObj?: any,
+  rtkTokensSaved?: number,
 ) {
   const log = await prisma.requestLog.create({ data });
   if (appName && appName !== "Unknown") {
@@ -35,6 +40,22 @@ async function saveLogWithApp(
   if (errorMessage) {
     await prisma.$executeRaw`UPDATE "RequestLog" SET "errorMessage" = ${errorMessage} WHERE "id" = ${log.id}`.catch(() => {});
   }
+
+  // Update persistent RTK saved tokens counter in Setting
+  if (rtkTokensSaved && rtkTokensSaved > 0) {
+    prisma.setting
+      .findUnique({ where: { key: "rtk_total_tokens_saved" } })
+      .then(async (cur) => {
+        const prev = parseInt(cur?.value || "0", 10) || 0;
+        await prisma.setting.upsert({
+          where: { key: "rtk_total_tokens_saved" },
+          update: { value: String(prev + rtkTokensSaved) },
+          create: { key: "rtk_total_tokens_saved", value: String(rtkTokensSaved) },
+        });
+      })
+      .catch(() => {});
+  }
+
   // Immediately broadcast live event to all connected dashboard clients
   broadcastTelemetry({
     type: "request",
@@ -44,6 +65,7 @@ async function saveLogWithApp(
     status: log.status,
     cost: log.cost,
     app: appName,
+    rtkTokensSaved: rtkTokensSaved ?? 0,
   });
 
   // Phase 5.5: Webhook notifications on request complete
@@ -102,9 +124,11 @@ function createSseResponse(opts: {
   requestId: string;
   comboHops?: string;
   comboStrategy?: string;
+  rtkTokensSaved?: number;
+  rtkCompressedCount?: number;
   onFinish: (stats: SsePumpStats) => Promise<void> | void;
 }): Response {
-  const { upstream, existingReader, initialChunk, initialChunks, isAnthropic, model, providerSlug, started, requestId, comboHops, comboStrategy, onFinish } = opts;
+  const { upstream, existingReader, initialChunk, initialChunks, isAnthropic, model, providerSlug, started, requestId, comboHops, comboStrategy, rtkTokensSaved, rtkCompressedCount, onFinish } = opts;
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
@@ -298,6 +322,8 @@ function createSseResponse(opts: {
       "x-request-id": requestId,
       "x-model-slug": model,
       "x-provider": providerSlug,
+      "x-rtk-tokens-saved": String(rtkTokensSaved ?? 0),
+      "x-rtk-compressed": String(rtkCompressedCount ?? 0),
       ...(comboHops ? { "x-combo-hops": toSafeHeaderAscii(comboHops) } : {}),
       ...(comboStrategy ? { "x-combo-strategy": comboStrategy } : {}),
     },
@@ -335,6 +361,10 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+
+  // Apply RTK (Reduce Token Konversion) to compress verbose tool outputs (git diff, grep, ls)
+  const rtk = compressToolResults(body.messages);
+  body.messages = rtk.messages;
 
   const detectedApp = detectApp(req, key.name, body);
   const wantsStream = body?.stream === true;
@@ -411,7 +441,9 @@ export async function POST(req: NextRequest) {
 
     const candidates: ComboCandidate[] = combo.targets.map((t) => {
       const m = modelMap.get(t.modelId);
-      const isConnected = !!(m && m.enabled && m.provider.connected && m.provider.apiKey);
+      const def = m?.provider ? getProvider(m.provider.slug) : null;
+      const isNoAuth = def?.authType === "none" || m?.provider?.slug === "onerouter";
+      const isConnected = !!(m && m.enabled && m.provider.connected && (m.provider.apiKey || isNoAuth));
       return {
         modelId: t.modelId,
         modelSlug: m?.slug ?? "",
@@ -471,17 +503,16 @@ export async function POST(req: NextRequest) {
       const started = Date.now();
       try {
         const rawBase = (m.provider.baseUrl || def.baseUrl || "").replace(/\/+$/, "");
-        const chatPath = def.chatPath.startsWith("/") ? def.chatPath : `/${def.chatPath}`;
-        const url =
-          m.provider.slug === "azure" && m.provider.baseUrl
-            ? `${rawBase}${chatPath.replace("{model}", m.slug)}`
-            : `${rawBase}${chatPath}`;
+        let url = `${rawBase}${def.chatPath || "/chat/completions"}`;
+        if (m.provider.slug === "azure" && m.provider.baseUrl) {
+          url = `${rawBase}${def.chatPath.replace("{model}", m.slug)}`;
+        }
 
         const isAnthropic = m.provider.slug === "anthropic";
         const upstreamHeaders: Record<string, string> = {
           "content-type": "application/json",
           "x-request-id": requestId,
-          ...def.authHeader(m.provider.apiKey),
+          ...def.authHeader(m.provider.apiKey || ""),
         };
 
         const upstreamBody = isAnthropic
@@ -504,6 +535,11 @@ export async function POST(req: NextRequest) {
         // Check if status triggers fallback (e.g. 429 rate limit, 403 quota, 5xx error)
         if (!upstreamRes.ok) {
           const errText = await upstreamRes.text().catch(() => "");
+          if (upstreamRes.status === 429) {
+            markTargetCooldown(m.id, 60000);
+            markTargetCooldown(m.provider.slug, 60000);
+            clearLkgpTarget(combo.id);
+          }
           if (checkFallbackError(upstreamRes.status, errText) && i < orderedTargets.length - 1) {
             lastError = `${m.slug} (${m.provider.name}) -> HTTP ${upstreamRes.status}: ${errText.slice(0, 100)}`;
             attemptedHops.push(lastError);
@@ -536,6 +572,7 @@ export async function POST(req: NextRequest) {
             continue;
           }
 
+          setLkgpTarget(combo.id, m.id);
           const servedModel = m;
           const comboHopsStr =
             attemptedHops.length > 0
@@ -552,6 +589,8 @@ export async function POST(req: NextRequest) {
             requestId,
             comboHops: comboHopsStr,
             comboStrategy: combo.strategy,
+            rtkTokensSaved: rtk.tokensSaved,
+            rtkCompressedCount: rtk.compressedCount,
             onFinish: async (stats) => {
               const pt = stats.promptTokens;
               const ct = stats.completionTokens;
@@ -576,6 +615,7 @@ export async function POST(req: NextRequest) {
                 detectedApp,
                 undefined,
                 key,
+                rtk.tokensSaved,
               );
               await prisma.apiKey.update({
                 where: { id: key.id },
@@ -616,6 +656,8 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
+        setLkgpTarget(combo.id, m.id);
+
         const usage = data?.usage ?? {};
         const pt = usage.prompt_tokens ?? usage.input_tokens ?? 0;
         const ct = usage.completion_tokens ?? usage.output_tokens ?? 0;
@@ -640,6 +682,7 @@ export async function POST(req: NextRequest) {
           detectedApp,
           undefined,
           key,
+          rtk.tokensSaved,
         );
         await prisma.apiKey.update({
           where: { id: key.id },
@@ -671,6 +714,8 @@ export async function POST(req: NextRequest) {
             "x-request-id": requestId,
             "x-model-slug": m.slug,
             "x-provider": m.provider.slug,
+            "x-rtk-tokens-saved": String(rtk.tokensSaved),
+            "x-rtk-compressed": String(rtk.compressedCount),
             "openai-processing-ms": String(totalMs),
             ...(attemptedHops.length > 0 ? { "x-combo-hops": toSafeHeaderAscii([...attemptedHops, `${m.slug} (served)`].join(" -> ")) } : { "x-combo-hops": toSafeHeaderAscii(m.slug) }),
             "x-combo-strategy": combo.strategy,
@@ -741,7 +786,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const usable = candidates.filter((m) => m.provider.connected && m.provider.apiKey);
+  const usable = candidates.filter((m) => {
+    const def = getProvider(m.provider.slug);
+    const isNoAuth = def?.authType === "none" || m.provider.slug === "onerouter";
+    return m.provider.connected && (Boolean(m.provider.apiKey) || isNoAuth);
+  });
   if (usable.length === 0) {
     const notAvailMsg =
       candidates.length === 0
@@ -774,11 +823,10 @@ export async function POST(req: NextRequest) {
     const started = Date.now();
     try {
       const rawBase = (m.provider.baseUrl || def.baseUrl || "").replace(/\/+$/, "");
-      const chatPath = def.chatPath.startsWith("/") ? def.chatPath : `/${def.chatPath}`;
-      const url =
-        m.provider.slug === "azure" && m.provider.baseUrl
-          ? `${rawBase}${chatPath.replace("{model}", m.slug)}`
-          : `${rawBase}${chatPath}`;
+      let url = `${rawBase}${def.chatPath || "/chat/completions"}`;
+      if (m.provider.slug === "azure" && m.provider.baseUrl) {
+        url = `${rawBase}${def.chatPath.replace("{model}", m.slug)}`;
+      }
 
       const isAnthropic = m.provider.slug === "anthropic";
       const upstreamBody = isAnthropic
@@ -797,7 +845,7 @@ export async function POST(req: NextRequest) {
         headers: {
           "Content-Type": "application/json",
           "x-request-id": requestId,
-          ...def.authHeader(m.provider.apiKey),
+          ...def.authHeader(m.provider.apiKey || ""),
         },
         body: JSON.stringify(upstreamBody),
       });
@@ -817,6 +865,8 @@ export async function POST(req: NextRequest) {
           providerSlug: m.provider.slug,
           started,
           requestId,
+          rtkTokensSaved: rtk.tokensSaved,
+          rtkCompressedCount: rtk.compressedCount,
           onFinish: async (stats) => {
             const pt = stats.promptTokens;
             const ct = stats.completionTokens;
@@ -830,7 +880,7 @@ export async function POST(req: NextRequest) {
                 apiKeyId: key.id,
                 modelId: servedModel.id,
                 providerId: servedModel.provider.id,
-                modelSlug,
+                modelSlug: m.slug,
                 route: "openai-compatible",
                 status: 200,
                 promptTokens: pt,
@@ -841,6 +891,7 @@ export async function POST(req: NextRequest) {
               detectedApp,
               undefined,
               key,
+              rtk.tokensSaved,
             );
             await prisma.apiKey.update({
               where: { id: key.id },
@@ -911,7 +962,7 @@ export async function POST(req: NextRequest) {
           apiKeyId: key.id,
           modelId: m.id,
           providerId: m.provider.id,
-          modelSlug,
+          modelSlug: m.slug,
           route: "openai-compatible",
           status: 200,
           promptTokens: pt,
@@ -922,6 +973,7 @@ export async function POST(req: NextRequest) {
         detectedApp,
         undefined,
         key,
+        rtk.tokensSaved,
       );
       await prisma.apiKey.update({
         where: { id: key.id },
@@ -952,6 +1004,8 @@ export async function POST(req: NextRequest) {
           "x-request-id": requestId,
           "x-model-slug": m.slug,
           "x-provider": m.provider.slug,
+          "x-rtk-tokens-saved": String(rtk.tokensSaved),
+          "x-rtk-compressed": String(rtk.compressedCount),
           "openai-processing-ms": String(totalMs),
         },
       });

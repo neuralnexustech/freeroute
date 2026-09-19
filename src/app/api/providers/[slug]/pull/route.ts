@@ -21,6 +21,16 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     return NextResponse.json({ error: "Save a provider API key first" }, { status: 400 });
   }
 
+  if (params.slug === "cloudflare-ai") {
+    const rawBase = provider.baseUrl?.trim() || "";
+    if (rawBase.includes("{account_id}") || !rawBase.includes("/accounts/")) {
+      return NextResponse.json(
+        { error: "Please configure and save your Cloudflare Account ID first." },
+        { status: 400 }
+      );
+    }
+  }
+
   let list: any[] = [];
   let url = "";
 
@@ -30,6 +40,14 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     url = `${rawBase}${modelsPath}`;
     if (provider.slug === "google") {
       url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(provider.apiKey)}&pageSize=1000`;
+    } else if (provider.slug === "cloudflare-ai") {
+      const match = rawBase.match(/accounts\/([a-f0-9]+)/i);
+      const accId = match ? match[1] : "";
+      if (accId) {
+        url = `https://api.cloudflare.com/client/v4/accounts/${accId}/ai/models/search?per_page=1000`;
+      } else {
+        url = rawBase.replace(/\/ai\/v1\/?$/, "") + "/ai/models/search?per_page=1000";
+      }
     }
 
     const reqHeaders: Record<string, string> = {
@@ -47,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
 
       if (upstream.ok) {
         const data = await upstream.json().catch(() => null);
-        list = data?.data ?? data?.models ?? data ?? [];
+        list = data?.data ?? data?.result ?? data?.models ?? data ?? [];
       } else {
         const errJson = await upstream.json().catch(() => null);
         const errMsg =
@@ -86,7 +104,9 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   let count = 0;
   const slugs: string[] = [];
   for (const m of list.slice(0, 800)) {
-    const rawId: string = m.id ?? m.name ?? m.slug ?? "";
+    const rawId: string = provider.slug === "cloudflare-ai"
+      ? (m.name || m.id || "")
+      : (m.id ?? m.name ?? m.slug ?? "");
     if (!rawId || typeof rawId !== "string") continue;
     const slug = rawId.replace(/^models\//, "").trim();
     if (!slug) continue;
@@ -98,12 +118,37 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
       if (!isChat) continue;
     }
 
-    const displayName = m.displayName && typeof m.displayName === "string" 
+    // For Cloudflare Workers AI, skip non-text/chat tasks (e.g. speech-to-text, dumb pipe, text-to-image)
+    if (provider.slug === "cloudflare-ai" && m.task?.name) {
+      const validTasks = ["Text Generation", "Image-to-Text", "Translation"];
+      if (!validTasks.includes(m.task.name)) continue;
+    }
+
+
+
+    let displayName = m.displayName && typeof m.displayName === "string" 
       ? m.displayName 
       : (typeof m.name === "string" && m.name ? m.name : slug);
-    const initialContext = typeof m.context_length === "number" && m.context_length > 0
-      ? fmtContext(m.context_length)
-      : (m.inputTokenLimit && typeof m.inputTokenLimit === "number" ? fmtContext(m.inputTokenLimit) : "128K");
+
+    if (provider.slug === "cloudflare-ai" && (!m.displayName || m.displayName === m.name)) {
+      const parts = slug.replace(/^@cf\//, "").split("/");
+      if (parts.length >= 2) {
+        const org = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+        const model = parts.slice(1).join("/").replace(/-/g, " ");
+        displayName = `${org}: ${model}`;
+      }
+    }
+
+    let initialContext = "128K";
+    if (typeof m.context_length === "number" && m.context_length > 0) {
+      initialContext = fmtContext(m.context_length);
+    } else if (m.inputTokenLimit && typeof m.inputTokenLimit === "number") {
+      initialContext = fmtContext(m.inputTokenLimit);
+    } else if (Array.isArray(m.properties)) {
+      const cwProp = m.properties.find((p: any) => p?.property_id === "context_window")?.value;
+      const cwNum = cwProp ? parseInt(cwProp, 10) : 0;
+      if (cwNum > 0) initialContext = fmtContext(cwNum);
+    }
 
     let inputPrice = 0;
     let outputPrice = 0;
@@ -112,6 +157,18 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
       const pOut = parseFloat(m.pricing.completion);
       if (!isNaN(pIn) && pIn > 0) inputPrice = pIn >= 0.01 ? pIn : parseFloat((pIn * 1_000_000).toFixed(4));
       if (!isNaN(pOut) && pOut > 0) outputPrice = pOut >= 0.01 ? pOut : parseFloat((pOut * 1_000_000).toFixed(4));
+    } else if (Array.isArray(m.properties)) {
+      const priceProp = m.properties.find((p: any) => p?.property_id === "price")?.value;
+      if (Array.isArray(priceProp)) {
+        for (const p of priceProp) {
+          if (typeof p?.unit === "string" && p.unit.includes("input") && typeof p?.price === "number") {
+            inputPrice = p.price;
+          }
+          if (typeof p?.unit === "string" && p.unit.includes("output") && typeof p?.price === "number") {
+            outputPrice = p.price;
+          }
+        }
+      }
     }
 
     await prisma.model.upsert({

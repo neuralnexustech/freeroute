@@ -17,6 +17,7 @@ export interface TelemetryPayload {
   toksPerSec?: number | null;
   ttftMs?: number | null;
   tokens?: number;
+  rtkTokensSaved?: number;
   status?: number;
   cost?: number;
   app?: string;

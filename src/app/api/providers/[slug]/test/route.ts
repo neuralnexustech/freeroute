@@ -123,12 +123,30 @@ async function probe(
 
 // POST { ids?: string[] } — SSE stream: pushes each model result as it completes.
 export async function POST(req: NextRequest, { params }: { params: { slug: string } }) {
-  const provider = await prisma.provider.findUnique({ where: { slug: params.slug } });
-  if (!provider || !provider.apiKey) {
+  let provider = await prisma.provider.findUnique({ where: { slug: params.slug } });
+  const def = getProvider(params.slug);
+  if (!def) return new Response(JSON.stringify({ error: "Unknown provider" }), { status: 404, headers: { "Content-Type": "application/json" } });
+
+  const isNoAuth = def.authType === "none" || params.slug === "onerouter";
+  if (!provider && isNoAuth) {
+    provider = await prisma.provider.create({
+      data: {
+        slug: def.slug,
+        name: def.name,
+        icon: def.icon || "⏣",
+        baseUrl: def.baseUrl || "",
+        connected: true,
+      },
+    });
+  }
+
+  if (!provider) {
+    return new Response(JSON.stringify({ error: "Provider not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+  }
+
+  if (!isNoAuth && (!provider.apiKey || provider.apiKey.trim().length === 0)) {
     return new Response(JSON.stringify({ error: "Save a provider API key first" }), { status: 400, headers: { "Content-Type": "application/json" } });
   }
-  const def = getProvider(provider.slug);
-  if (!def) return new Response(JSON.stringify({ error: "Unknown provider" }), { status: 404, headers: { "Content-Type": "application/json" } });
 
   const { ids } = (await req.json().catch(() => ({}))) as { ids?: string[] };
   const models = await prisma.model.findMany({
@@ -165,12 +183,17 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
       for (let i = 0; i < models.length; i += CONCURRENCY) {
         const batch = models.slice(i, i + CONCURRENCY);
         const promises = batch.map(async (m) => {
-          const chatUrl = provider.slug === "azure" ? url.replace("{model}", m.slug) : url;
+          let chatUrl = provider.slug === "azure" ? url.replace("{model}", m.slug) : url;
           const isAnthropic = provider.slug === "anthropic";
           const body = isAnthropic
             ? openAIToAnthropic({ model: m.slug, messages: [{ role: "user", content: PROMPT }], max_tokens: MAX_TOKENS, temperature: 0 })
             : { model: m.slug, messages: [{ role: "user", content: PROMPT }], max_tokens: MAX_TOKENS, temperature: 0, stream: true, stream_options: { include_usage: true } };
-          const probeResult = await probe(chatUrl, def.authHeader(provider.apiKey), body, !isAnthropic);
+          
+          const authHeaders: Record<string, string> = {
+            ...def.authHeader(provider.apiKey || ""),
+          };
+
+          const probeResult = await probe(chatUrl, authHeaders, body, !isAnthropic);
           if (probeResult.verdict !== "slow") {
             await prisma.model.update({
               where: { id: m.id },

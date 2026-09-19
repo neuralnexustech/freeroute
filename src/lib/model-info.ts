@@ -358,7 +358,11 @@ export async function resolveViaOpenRouter(modelSlug: string): Promise<ResolvedM
       const mNorm = normalizeModelIdentifier(id);
       const mNameNorm = normalizeModelIdentifier(name);
       if (mNorm.cleanSlug === cleanSlug || mNameNorm.cleanSlug === cleanSlug) return true;
-      if (mNorm.cleanSlug.includes(cleanSlug) || cleanSlug.includes(mNorm.cleanSlug)) return true;
+      if (cleanSlug.length > 5 && (mNorm.cleanSlug.includes(cleanSlug) || cleanSlug.includes(mNorm.cleanSlug))) return true;
+      // Also match core identifiers when provider prefixes vary (e.g. meta-llama vs meta)
+      const coreTarget = cleanSlug.replace(/^(meta-|google-|deepseek-|openai-|anthropic-|mistral-|cohere-|nvidia-)/, "");
+      const coreId = mNorm.cleanSlug.replace(/^(meta-|google-|deepseek-|openai-|anthropic-|mistral-|cohere-|nvidia-)/, "");
+      if (coreTarget.length > 5 && (coreId === coreTarget || coreId.includes(coreTarget) || coreTarget.includes(coreId))) return true;
       return false;
     });
 
@@ -616,8 +620,15 @@ export function resolveViaHeuristics(modelSlug: string, providerSlug = ""): Reso
     actualOutputPrice = 0.20;
   }
 
-  const inputPrice = isFree ? 0 : actualInputPrice;
-  const outputPrice = isFree ? 0 : actualOutputPrice;
+  const isFreeProvider =
+    providerSlug === "opencode" ||
+    providerPrefix === "opencode" ||
+    norm.includes("contributor-free") ||
+    norm.includes("free") ||
+    isFree;
+
+  const inputPrice = isFreeProvider ? 0 : actualInputPrice;
+  const outputPrice = isFreeProvider ? 0 : actualOutputPrice;
 
   const params = inferModelParams(modelSlug);
   const score = inferModelScore(modelSlug, params);

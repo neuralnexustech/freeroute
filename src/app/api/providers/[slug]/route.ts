@@ -49,12 +49,21 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
   const hasKey = Boolean(provider.apiKey && provider.apiKey.trim().length > 0) || def?.authType === "none";
   const maskedKey = maskApiKey(provider.apiKey);
 
+  let accountId = "";
+  if (provider.slug === "cloudflare-ai" && provider.baseUrl) {
+    const m = provider.baseUrl.match(/\/accounts\/([a-zA-Z0-9_-]+)\//);
+    if (m && m[1] !== "{account_id}") {
+      accountId = m[1];
+    }
+  }
+
   return NextResponse.json({
     provider: {
       ...provider,
       apiKey: provider.apiKey || "",
       maskedKey,
       hasKey,
+      accountId,
       logoUrl: logoUrl || def?.logoUrl || `/providers/${provider.slug}.png`,
       website: def?.website || "",
       docUrl: def?.docUrl || def?.website || "",
@@ -71,7 +80,7 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { slug: string } }) {
-  const { apiKey, logoUrl, baseUrl } = await req.json().catch(() => ({}));
+  const { apiKey, logoUrl, baseUrl, accountId } = await req.json().catch(() => ({}));
   if (typeof logoUrl === "string") {
     await prisma.$executeRaw`UPDATE "Provider" SET "logoUrl" = ${logoUrl.slice(0, 500)} WHERE "slug" = ${params.slug}`.catch(() => {});
   }
@@ -84,6 +93,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { slug: stri
   }
   if (typeof baseUrl === "string") {
     updateData.baseUrl = baseUrl.trim();
+  }
+  if (params.slug === "cloudflare-ai" && typeof accountId === "string" && accountId.trim()) {
+    const cleanId = accountId.trim();
+    updateData.baseUrl = `https://api.cloudflare.com/client/v4/accounts/${cleanId}/ai/v1`;
   }
 
   if (Object.keys(updateData).length === 0 && typeof logoUrl === "string") {

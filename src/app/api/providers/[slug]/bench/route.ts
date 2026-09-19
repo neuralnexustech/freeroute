@@ -37,8 +37,8 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   }
 
   // Allow no-auth providers (ollama, onerouter, etc.)
-  const isNoAuth = def.authType === "none" || slug === "onerouter" || slug === "openrouter";
-  if (!isNoAuth && (!provider || !provider.apiKey)) {
+  const isNoAuth = def.authType === "none" || slug === "onerouter";
+  if (!isNoAuth && (!provider || !provider.apiKey || provider.apiKey.trim().length === 0)) {
     return new Response(JSON.stringify({ error: "Save a provider API key first" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
@@ -57,15 +57,13 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     });
   }
 
-  // ── 3. Build upstream URL + headers ─────────────────────────────────────
   const rawBase = (provider?.baseUrl || def.baseUrl).replace(/\/+$/, "");
-  const chatPath = (def.chatPath || "/chat/completions").startsWith("/")
-    ? def.chatPath
-    : `/${def.chatPath}`;
-  const upstreamUrl = `${rawBase}${chatPath}`;
+  const upstreamUrl = `${rawBase}${def.chatPath || "/chat/completions"}`;
 
   const apiKey = provider?.apiKey ?? "";
-  const authHeaders = def.authHeader(apiKey);
+  const authHeaders: Record<string, string> = {
+    ...def.authHeader(apiKey),
+  };
 
   const isAnthropic = slug === "anthropic";
   const requestBody = isAnthropic
