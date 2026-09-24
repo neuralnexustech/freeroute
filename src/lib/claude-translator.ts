@@ -268,8 +268,22 @@ export async function peekStreamForFailover(
   let accumulatedText = "";
   const decoder = new TextDecoder();
 
-  while (true) {
-    const chunkRes = await reader.read();
+  // Read at most 2 chunks. Return as soon as we can make a healthy/failed decision.
+  // This minimizes TTFT: we don't buffer 4 chunks before forwarding to the client.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    // Race each read against a 10s deadline so a stalled upstream doesn't hang
+    let chunkRes: ReadableStreamReadResult<Uint8Array>;
+    try {
+      chunkRes = await Promise.race([
+        reader.read(),
+        new Promise<ReadableStreamReadResult<Uint8Array>>((_, reject) =>
+          setTimeout(() => reject(new Error("peek timeout")), 10_000),
+        ),
+      ]);
+    } catch {
+      return { isFailed: true, chunks, reason: "upstream stalled (peek timeout)" };
+    }
+
     if (chunkRes.done) {
       const hasContent =
         accumulatedText.includes('"content"') ||
@@ -288,7 +302,7 @@ export async function peekStreamForFailover(
       accumulatedText += decoder.decode(chunkRes.value, { stream: true });
     }
 
-    // 1. Detect HTML error / sign-in page
+    // 1. Detect HTML error / sign-in page → fail immediately
     if (
       accumulatedText.includes("<!DOCTYPE") ||
       accumulatedText.includes("<html") ||
@@ -298,7 +312,7 @@ export async function peekStreamForFailover(
       return { isFailed: true, chunks, reason: "upstream returned HTML error/auth page" };
     }
 
-    // 2. Detect explicit error payload in SSE or JSON
+    // 2. Detect explicit error payload in SSE or JSON → fail immediately
     if (
       accumulatedText.includes('"error":') ||
       accumulatedText.includes('"upstream_status"') ||
@@ -307,7 +321,7 @@ export async function peekStreamForFailover(
       return { isFailed: true, chunks, reason: `upstream error in stream: ${accumulatedText.slice(0, 100).trim()}` };
     }
 
-    // 3. Detect immediate [DONE] with no tokens
+    // 3. Detect immediate [DONE] with no tokens → fail
     if (
       accumulatedText.includes("data: [DONE]") &&
       !accumulatedText.includes('"delta"') &&
@@ -316,7 +330,7 @@ export async function peekStreamForFailover(
       return { isFailed: true, chunks, reason: "empty stream terminated with [DONE]" };
     }
 
-    // 4. Healthy stream detected if content delta / tokens present
+    // 4. Healthy stream — return immediately, don't buffer more
     if (
       accumulatedText.includes('"delta"') ||
       accumulatedText.includes('"content"') ||
@@ -325,11 +339,15 @@ export async function peekStreamForFailover(
       return { isFailed: false, chunks, reason: "" };
     }
 
-    // 5. Read up to 4 chunks looking for first meaningful data
-    if (chunks.length >= 4) {
+    // If first chunk was tiny (< 64 bytes) and inconclusive, read one more chunk.
+    // Otherwise commit immediately — streaming proxies should start forwarding now.
+    if (accumulatedText.length >= 64) {
       return { isFailed: false, chunks, reason: "" };
     }
   }
+
+  // After 2 chunks still inconclusive → optimistically pass through
+  return { isFailed: false, chunks, reason: "" };
 }
 
 /**
