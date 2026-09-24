@@ -24,6 +24,8 @@ export default function ProvidersPage() {
   const [search, setSearch] = useState("");
   const [pinging, setPinging] = useState(false);
   const [pingResult, setPingResult] = useState<string | null>(null);
+  const [syncingAll, setSyncingAll] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   const loadProviders = () => {
     fetch("/api/providers")
@@ -88,6 +90,52 @@ export default function ProvidersPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button
             onClick={async () => {
+              setSyncingAll(true);
+              setSyncResult(null);
+              try {
+                const res = await fetch("/api/models/sync-all", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ testHealth: true, maxTestPerProvider: 3 }),
+                });
+                const d = await res.json();
+                setSyncResult(`${d.totalModelsPulled ?? 0} models pulled`);
+                loadProviders();
+                setTimeout(() => setSyncResult(null), 6000);
+              } catch {
+                setSyncResult("Sync failed");
+                setTimeout(() => setSyncResult(null), 4000);
+              } finally {
+                setSyncingAll(false);
+              }
+            }}
+            disabled={syncingAll || pinging}
+            style={{
+              padding: "8px 14px",
+              borderRadius: "8px",
+              border: "1px solid var(--border-color, rgba(255,255,255,0.14))",
+              background: "var(--primary, #6366f1)",
+              color: "#fff",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: syncingAll ? "not-allowed" : "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              opacity: syncingAll ? 0.6 : 1,
+              transition: "all 0.2s ease",
+            }}
+            title="Auto-pull models from all connected providers and test connectivity"
+          >
+            <span>{syncingAll ? "🔄 Syncing..." : "🔄 Sync All Models"}</span>
+            {syncResult && (
+              <span style={{ color: "#fff", fontSize: 11, fontWeight: 700, opacity: 0.9 }}>
+                ({syncResult})
+              </span>
+            )}
+          </button>
+          <button
+            onClick={async () => {
               setPinging(true);
               setPingResult(null);
               try {
@@ -103,7 +151,7 @@ export default function ProvidersPage() {
                 setPinging(false);
               }
             }}
-            disabled={pinging}
+            disabled={pinging || syncingAll}
             style={{
               padding: "8px 14px",
               borderRadius: "8px",
