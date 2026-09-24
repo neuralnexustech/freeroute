@@ -4,6 +4,7 @@ import React from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
+import { AutoSyncModal } from "@/components/AutoSyncModal";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -19,6 +20,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="main-wrapper">
         <Topbar />
         <main className="page-container">{children}</main>
+        <AutoSyncModal />
       </div>
     </div>
   );

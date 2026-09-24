@@ -113,7 +113,7 @@ export default function OverviewPage() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const [metric, setMetric] = useState<Metric>("tokens");
-  const [range, setRange] = useState("Last 7 Days");
+  const [range, setRange] = useState("Last 24 Hours");
   const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
@@ -366,12 +366,13 @@ export default function OverviewPage() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
-                fontSize: 11,
+                fontSize: 10.5,
                 color: isLive ? "#10b981" : "var(--text-tertiary)",
-                fontWeight: 600,
-                background: isLive ? "rgba(16, 185, 129, 0.08)" : "rgba(255, 255, 255, 0.04)",
-                border: isLive ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid var(--border-subtle)",
-                padding: "2.5px 8px",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                background: isLive ? "rgba(16, 185, 129, 0.12)" : "rgba(255, 255, 255, 0.04)",
+                border: isLive ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid var(--border-subtle)",
+                padding: "2px 8px",
                 borderRadius: 12,
                 userSelect: "none",
               }}
@@ -384,9 +385,10 @@ export default function OverviewPage() {
                   borderRadius: "50%",
                   background: isLive ? "#10b981" : "var(--text-tertiary)",
                   boxShadow: isLive ? "0 0 6px #10b981" : "none",
+                  animation: isLive ? "pulse-live 2s infinite" : "none",
                 }}
               />
-              {isLive ? "Live" : "Connecting..."}
+              {isLive ? "LIVE" : "CONNECTING…"}
             </div>
 
             {/* Range Selector Dropdown */}
