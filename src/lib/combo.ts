@@ -6,6 +6,20 @@ export type ComboStrategy =
   | "cost-optimized"
   | "lkgp";
 
+/** Error categories that trigger different healing durations */
+export type CooldownReason = "rpm" | "quota" | "auth" | "server" | "context" | "unknown";
+
+export interface CooldownEntry {
+  /** Unix timestamp when this model will be re-activated */
+  until: number;
+  /** Human-readable error classification */
+  reason: CooldownReason;
+  /** Short description from the upstream error */
+  detail: string;
+  /** When it was placed into cooldown */
+  since: number;
+}
+
 export interface ComboCandidate {
   modelId: string;
   modelSlug: string;
@@ -105,21 +119,151 @@ export function clearLkgpTarget(comboId: string) {
   lkgpCache.delete(comboId);
 }
 
-// Circuit Breaker / Cooldown tracker (prevents thrashing rate-limited free tiers)
-const cooldownMap = new Map<string, number>(); // targetKey -> expiration timestamp
+// ─── Circuit Breaker / Intelligent Healing Tracker ───────────────────────────
+// Keys are modelId or providerSlug, values carry rich healing metadata.
+const cooldownMap = new Map<string, CooldownEntry>();
 
-export function markTargetCooldown(targetKey: string, durationMs = 60000) {
-  cooldownMap.set(targetKey, Date.now() + durationMs);
+/**
+ * Classifies an upstream HTTP status + error text into a CooldownReason
+ * and returns the appropriate healing duration in milliseconds.
+ */
+export function classifyErrorForHealing(
+  status: number,
+  errorText: string = "",
+): { reason: CooldownReason; durationMs: number; detail: string } {
+  const lower = (errorText || "").toLowerCase();
+
+  // RPM / short-window rate limits — wait 60 s then retry
+  if (
+    status === 429 ||
+    lower.includes("rate limit") ||
+    lower.includes("too many requests") ||
+    lower.includes("resource exhausted") ||
+    lower.includes("tpm") ||
+    lower.includes("rpm")
+  ) {
+    // Try to parse retry-after from the error body
+    const retryAfterMatch = lower.match(/retry.{0,10}after[^0-9]*(\d+)/);
+    const retrySeconds = retryAfterMatch ? parseInt(retryAfterMatch[1], 10) : 60;
+    const durationMs = Math.min(Math.max(retrySeconds, 30), 3600) * 1000;
+    return { reason: "rpm", durationMs, detail: errorText.slice(0, 120) };
+  }
+
+  // Daily quota / billing exhausted — wait until midnight UTC (next day)
+  if (
+    status === 403 ||
+    lower.includes("quota exceeded") ||
+    lower.includes("daily limit") ||
+    lower.includes("insufficient_quota") ||
+    lower.includes("billing") ||
+    lower.includes("credit balance") ||
+    lower.includes("trial quota")
+  ) {
+    const now = new Date();
+    const midnight = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)
+    );
+    const durationMs = Math.max(midnight.getTime() - Date.now(), 300_000); // at least 5 min
+    return { reason: "quota", durationMs, detail: errorText.slice(0, 120) };
+  }
+
+  // Auth / key issues — longer wait (5 min) as key rotation is manual
+  if (
+    status === 401 ||
+    lower.includes("invalid api key") ||
+    lower.includes("unauthorized") ||
+    lower.includes("no credentials")
+  ) {
+    return { reason: "auth", durationMs: 300_000, detail: errorText.slice(0, 120) };
+  }
+
+  // Context length — don't penalise the model long, just 30 s to allow smaller retry
+  if (
+    lower.includes("context length") ||
+    lower.includes("prompt is too long") ||
+    lower.includes("token limit") ||
+    lower.includes("too many tokens")
+  ) {
+    return { reason: "context", durationMs: 30_000, detail: errorText.slice(0, 120) };
+  }
+
+  // Upstream server errors — short wait 30 s
+  if (status === 500 || status === 502 || status === 503 || status === 504) {
+    return { reason: "server", durationMs: 30_000, detail: errorText.slice(0, 120) };
+  }
+
+  return { reason: "unknown", durationMs: 60_000, detail: errorText.slice(0, 120) };
+}
+
+/** Place a target into intelligent healing cooldown based on error classification */
+export function markTargetCooldown(
+  targetKey: string,
+  durationMsOrStatus: number = 60_000,
+  errorText?: string,
+) {
+  // If called with an HTTP status code (< 1000), classify it properly
+  if (durationMsOrStatus < 1000 && errorText !== undefined) {
+    const { reason, durationMs, detail } = classifyErrorForHealing(durationMsOrStatus, errorText);
+    cooldownMap.set(targetKey, { until: Date.now() + durationMs, reason, detail, since: Date.now() });
+  } else {
+    // Legacy call with explicit ms duration
+    cooldownMap.set(targetKey, {
+      until: Date.now() + durationMsOrStatus,
+      reason: "unknown",
+      detail: "",
+      since: Date.now(),
+    });
+  }
+}
+
+/** Place a target into cooldown with explicit classification (preferred API) */
+export function markTargetCooldownClassified(
+  targetKey: string,
+  status: number,
+  errorText: string,
+) {
+  const { reason, durationMs, detail } = classifyErrorForHealing(status, errorText);
+  cooldownMap.set(targetKey, { until: Date.now() + durationMs, reason, detail, since: Date.now() });
 }
 
 export function isTargetInCooldown(targetKey: string): boolean {
-  const until = cooldownMap.get(targetKey);
-  if (!until) return false;
-  if (Date.now() > until) {
+  const entry = cooldownMap.get(targetKey);
+  if (!entry) return false;
+  if (Date.now() > entry.until) {
     cooldownMap.delete(targetKey);
     return false;
   }
   return true;
+}
+
+/** Returns the full cooldown entry for a key (for UI display) */
+export function getCooldownEntry(targetKey: string): CooldownEntry | null {
+  const entry = cooldownMap.get(targetKey);
+  if (!entry) return null;
+  if (Date.now() > entry.until) {
+    cooldownMap.delete(targetKey);
+    return null;
+  }
+  return entry;
+}
+
+/** Manually clear a single target from cooldown (admin force-heal) */
+export function clearTargetCooldown(targetKey: string) {
+  cooldownMap.delete(targetKey);
+}
+
+/** Dumps all active (non-expired) cooldown entries for the health API */
+export function getAllCooldownState(): Record<string, CooldownEntry & { key: string; remainingMs: number }> {
+  const now = Date.now();
+  const out: Record<string, CooldownEntry & { key: string; remainingMs: number }> = {};
+  for (const [key, entry] of cooldownMap.entries()) {
+    if (now > entry.until) {
+      cooldownMap.delete(key);
+      continue;
+    }
+    out[key] = { ...entry, key, remainingMs: entry.until - now };
+  }
+  return out;
 }
 
 const rrCursor = new Map<string, number>();

@@ -8,6 +8,7 @@ import {
   setLkgpTarget,
   clearLkgpTarget,
   markTargetCooldown,
+  markTargetCooldownClassified,
   parseContextTokens,
   estimateBodyTokens,
   ComboCandidate,
@@ -345,12 +346,13 @@ export async function POST(req: NextRequest) {
         // Failover check
         if (!upstreamRes.ok) {
           const errText = await upstreamRes.text().catch(() => "");
-          if (upstreamRes.status === 429) {
-            markTargetCooldown(m.id, 60000);
-            markTargetCooldown(m.provider.slug, 60000);
+          const { shouldFallback } = checkFallbackError(upstreamRes.status, errText);
+          if (shouldFallback) {
+            markTargetCooldownClassified(m.id, upstreamRes.status, errText);
+            markTargetCooldownClassified(m.provider.slug, upstreamRes.status, errText);
             clearLkgpTarget(combo.id);
           }
-          if (checkFallbackError(upstreamRes.status, errText) && i < orderedTargets.length - 1) {
+          if (shouldFallback && i < orderedTargets.length - 1) {
             lastError = `${m.slug} (${m.provider.name}) -> HTTP ${upstreamRes.status}: ${errText.slice(0, 100)}`;
             attemptedHops.push(lastError);
             continue;

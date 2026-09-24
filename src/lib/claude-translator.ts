@@ -622,6 +622,17 @@ export function createAnthropicSseResponse(opts: {
           }
         }
       } catch (err: any) {
+        const msg = (err?.message ?? "stream_error").toLowerCase();
+        const isNormalClose =
+          msg.includes("unexpected eof") ||
+          msg.includes("stream reading error") ||
+          msg.includes("terminated") ||
+          msg.includes("aborted") ||
+          msg.includes("premature close") ||
+          msg.includes("econnreset");
+        if (!isNormalClose) {
+          console.error("[anthropic-pump] stream error:", err?.message);
+        }
         await finishStream(err?.message ?? "stream_error");
         return;
       }
