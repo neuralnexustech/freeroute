@@ -651,6 +651,19 @@ export function createAnthropicSseResponse(opts: {
         if (!isNormalClose) {
           console.error("[anthropic-pump] stream error:", err?.message);
         }
+        // Ensure Anthropic clients receive clean block stop & message stop so they don't throw unexpected EOF
+        if (!closed) {
+          if (textBlockStarted) {
+            sendEvent("content_block_stop", { type: "content_block_stop", index: textBlockIndex });
+            textBlockStarted = false;
+          }
+          sendEvent("message_delta", {
+            type: "message_delta",
+            delta: { stop_reason: "end_turn", stop_sequence: null },
+            usage: { output_tokens: completionTokens },
+          });
+          sendEvent("message_stop", { type: "message_stop" });
+        }
         await finishStream(err?.message ?? "stream_error");
         return;
       }
