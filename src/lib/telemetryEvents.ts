@@ -10,8 +10,24 @@ export const telemetryEmitter =
   globalThis.__telemetryEmitter ?? (globalThis.__telemetryEmitter = new EventEmitter());
 telemetryEmitter.setMaxListeners(500);
 
+export interface SyncProgressPayload {
+  active: boolean;
+  stage: "idle" | "starting" | "pulling" | "testing" | "complete" | "error";
+  provider?: string;
+  current: number;
+  total: number;
+  message: string;
+  pulledCount: number;
+  testedCount: number;
+  passedCount: number;
+  failedCount: number;
+  startedAt?: number;
+  completedAt?: number;
+  details?: Array<{ text: string; time: string; type: "info" | "success" | "warning" | "error" }>;
+}
+
 export interface TelemetryPayload {
-  type: "request" | "request_start" | "request_end" | "model" | "refresh" | "heartbeat";
+  type: "request" | "request_start" | "request_end" | "model" | "refresh" | "heartbeat" | "sync_progress";
   timestamp: number;
   modelSlug?: string;
   toksPerSec?: number | null;
@@ -22,6 +38,7 @@ export interface TelemetryPayload {
   cost?: number;
   app?: string;
   phase?: "prompt" | "stream" | "complete";
+  sync?: SyncProgressPayload;
 }
 
 /**

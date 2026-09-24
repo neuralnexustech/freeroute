@@ -29,6 +29,73 @@ export interface TestModelResult {
   error?: string;
 }
 
+export interface SyncDetailItem {
+  text: string;
+  time: string;
+  type: "info" | "success" | "warning" | "error";
+}
+
+export interface SyncProgressState {
+  active: boolean;
+  stage: "idle" | "starting" | "pulling" | "testing" | "complete" | "error";
+  provider?: string;
+  current: number;
+  total: number;
+  message: string;
+  pulledCount: number;
+  testedCount: number;
+  passedCount: number;
+  failedCount: number;
+  startedAt?: number;
+  completedAt?: number;
+  details: SyncDetailItem[];
+}
+
+let syncProgress: SyncProgressState = {
+  active: false,
+  stage: "idle",
+  current: 0,
+  total: 0,
+  message: "Idle",
+  pulledCount: 0,
+  testedCount: 0,
+  passedCount: 0,
+  failedCount: 0,
+  details: [],
+};
+
+export function getSyncProgress(): SyncProgressState {
+  return syncProgress;
+}
+
+function notifyProgress(
+  update: Partial<SyncProgressState>,
+  logDetail?: { text: string; type: "info" | "success" | "warning" | "error" }
+) {
+  const details = logDetail
+    ? [
+        {
+          text: logDetail.text,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+          type: logDetail.type,
+        },
+        ...syncProgress.details.slice(0, 24),
+      ]
+    : syncProgress.details;
+
+  syncProgress = {
+    ...syncProgress,
+    ...update,
+    details,
+  };
+
+  broadcastTelemetry({
+    type: "sync_progress",
+    timestamp: Date.now(),
+    sync: syncProgress,
+  });
+}
+
 export interface SyncAllResult {
   ok: boolean;
   providersChecked: number;
@@ -373,13 +440,50 @@ export async function syncAllProviders(opts?: {
   const providerResults: SyncProviderResult[] = [];
   let totalModelsPulled = 0;
 
+  notifyProgress(
+    {
+      active: true,
+      stage: "starting",
+      current: 0,
+      total: validProviders.length,
+      message: `Connecting to ${validProviders.length} active providers…`,
+      pulledCount: 0,
+      testedCount: 0,
+      passedCount: 0,
+      failedCount: 0,
+      startedAt: Date.now(),
+      completedAt: undefined,
+    },
+    { text: `Discovered ${validProviders.length} active connected providers`, type: "info" }
+  );
+
   // Pull models for each connected provider
-  for (const prov of validProviders) {
+  for (let i = 0; i < validProviders.length; i++) {
+    const prov = validProviders[i];
+    notifyProgress(
+      {
+        stage: "pulling",
+        provider: prov.name,
+        current: i + 1,
+        message: `Pulling models from ${prov.name} (${i + 1}/${validProviders.length})…`,
+      },
+      { text: `Querying ${prov.name} registry…`, type: "info" }
+    );
+
     try {
       const res = await pullProviderModels(prov.slug);
       providerResults.push(res);
       if (res.ok) {
         totalModelsPulled += res.count;
+        notifyProgress(
+          { pulledCount: totalModelsPulled },
+          { text: `✓ ${prov.name}: ${res.count} models synced (${res.enriched} enriched)`, type: "success" }
+        );
+      } else {
+        notifyProgress(
+          {},
+          { text: `⚠️ ${prov.name}: ${res.error || "Failed to pull"}`, type: "warning" }
+        );
       }
     } catch (err: any) {
       providerResults.push({
@@ -390,12 +494,24 @@ export async function syncAllProviders(opts?: {
         enriched: 0,
         error: err?.message,
       });
+      notifyProgress(
+        {},
+        { text: `⚠️ ${prov.name}: ${err?.message || "Connection failed"}`, type: "warning" }
+      );
     }
   }
 
   const testResults: TestModelResult[] = [];
 
   if (testHealth && validProviders.length > 0) {
+    notifyProgress(
+      {
+        stage: "testing",
+        message: `Testing live connectivity & response latency across models…`,
+      },
+      { text: `Running live health checks…`, type: "info" }
+    );
+
     // Pick top enabled models per provider to test connectivity without exceeding rate limits
     for (const prov of validProviders) {
       const modelsToTest = await prisma.model.findMany({
@@ -408,9 +524,32 @@ export async function syncAllProviders(opts?: {
       });
 
       for (const m of modelsToTest) {
+        notifyProgress(
+          {
+            stage: "testing",
+            provider: prov.name,
+            message: `Pinging ${m.slug} (${prov.name})…`,
+          },
+          { text: `⚡ Pinging ${m.slug}…`, type: "info" }
+        );
+
         try {
           const t = await testSingleModel(m.id);
           testResults.push(t);
+          const currentPassed = testResults.filter((r) => r.ok).length;
+          const currentFailed = testResults.filter((r) => !r.ok).length;
+
+          if (t.ok) {
+            notifyProgress(
+              { testedCount: testResults.length, passedCount: currentPassed },
+              { text: `🟢 ${m.slug}: ${t.latencyMs}ms OK`, type: "success" }
+            );
+          } else {
+            notifyProgress(
+              { testedCount: testResults.length, failedCount: currentFailed },
+              { text: `🔴 ${m.slug}: ${t.error || "Failed"}`, type: "error" }
+            );
+          }
           // 250ms subtle delay between model tests to avoid aggressive provider bursts
           await new Promise((resolve) => setTimeout(resolve, 250));
         } catch {}
@@ -420,6 +559,26 @@ export async function syncAllProviders(opts?: {
 
   const passed = testResults.filter((t) => t.ok).length;
   const failed = testResults.filter((t) => !t.ok).length;
+
+  notifyProgress(
+    {
+      active: false,
+      stage: "complete",
+      message: `Auto-sync complete: ${totalModelsPulled} models pulled, ${testResults.length} tested (${passed} healthy).`,
+      pulledCount: totalModelsPulled,
+      testedCount: testResults.length,
+      passedCount: passed,
+      failedCount: failed,
+      completedAt: Date.now(),
+    },
+    { text: `Auto-sync finished successfully`, type: "success" }
+  );
+
+  setTimeout(() => {
+    if (!syncProgress.active) {
+      notifyProgress({ stage: "idle" });
+    }
+  }, 6000);
 
   // Broadcast overall refresh to dashboard
   broadcastTelemetry({

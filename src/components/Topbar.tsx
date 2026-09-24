@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useTheme } from "./ThemeProvider";
 import { useToast } from "./Toast";
 import { useLiveTelemetry } from "@/hooks/useLiveTelemetry";
+import { useAutoSync } from "@/hooks/useAutoSync";
 
 export function Topbar() {
   const { theme, toggle } = useTheme();
   const toast = useToast();
+  const { syncState, openPopup } = useAutoSync();
   const [stats, setStats] = useState<{ spend: number; tokens: number; rtkTokensSaved: number } | null>(null);
 
   const fetchStats = () => {
@@ -61,6 +63,67 @@ export function Topbar() {
             </span>
           </div>
           <div className="ticker-item">Health: <span style={{ color: "var(--primary)" }}>99.98%</span></div>
+          {syncState.active ? (
+            <div
+              className="ticker-item"
+              onClick={openPopup}
+              style={{
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "rgba(99, 102, 241, 0.12)",
+                border: "1px solid rgba(99, 102, 241, 0.35)",
+                padding: "2px 8px",
+                borderRadius: 12,
+                color: "var(--primary, #6366f1)",
+                fontWeight: 600,
+                fontSize: 11,
+                transition: "all 0.2s ease",
+                userSelect: "none",
+              }}
+              title="Auto-Sync in progress — click to view live details"
+            >
+              <svg
+                style={{ animation: "topbar-spin 1.4s linear infinite", flexShrink: 0 }}
+                viewBox="0 0 24 24"
+                width="12"
+                height="12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              <span>
+                Auto-Syncing{syncState.total > 0 ? ` (${syncState.current}/${syncState.total})` : "…"}
+              </span>
+            </div>
+          ) : syncState.stage === "complete" ? (
+            <div
+              className="ticker-item"
+              onClick={openPopup}
+              style={{
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                background: "rgba(16, 185, 129, 0.12)",
+                border: "1px solid rgba(16, 185, 129, 0.3)",
+                padding: "2px 8px",
+                borderRadius: 12,
+                color: "#10b981",
+                fontWeight: 600,
+                fontSize: 11,
+                transition: "all 0.2s ease",
+                userSelect: "none",
+              }}
+              title="Auto-Sync finished — click to view summary"
+            >
+              <span style={{ fontSize: 11 }}>✓</span>
+              <span>Synced</span>
+            </div>
+          ) : null}
         </div>
 
 
@@ -74,6 +137,17 @@ export function Topbar() {
           <span className="mono" style={{ opacity: 0.7 }}>⌘K</span> Search
         </button>
       </div>
+
+      <style jsx>{`
+        @keyframes topbar-spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
     </header>
   );
 }
