@@ -10,7 +10,7 @@ const CreateComboSchema = z.object({
     .max(80, "Name is too long")
     .regex(VALID_COMBO_NAME_REGEX, "Name can only contain letters, numbers, -, _ and ."),
   strategy: z
-    .enum(["round-robin", "weighted", "failover", "latency-based", "cost-optimized"])
+    .enum(["round-robin", "weighted", "failover", "lkgp", "latency-based", "cost-optimized"])
     .default("failover"),
   targets: z
     .array(

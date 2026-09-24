@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { resolveModelSpecs } from "@/lib/model-info";
+import { getProvider } from "@/lib/providers";
 
 export async function POST() {
   const setting = await prisma.setting.findUnique({ where: { key: "pull_info_strategy" } });
@@ -21,7 +22,13 @@ export async function POST() {
     await Promise.all(
       chunk.map(async (m) => {
         try {
-          const specs = await resolveModelSpecs(m.slug, m.provider?.slug || "", strategy, m.displayName);
+          const provDef = m.provider?.slug ? getProvider(m.provider.slug) : null;
+          const providerUrls = {
+            website: provDef?.website,
+            docUrl: provDef?.docUrl,
+            baseUrl: m.provider?.baseUrl,
+          };
+          const specs = await resolveModelSpecs(m.slug, m.provider?.slug || "", strategy, m.displayName, providerUrls);
           await prisma.model.update({
             where: { id: m.id },
             data: {

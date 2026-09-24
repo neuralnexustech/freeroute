@@ -8,6 +8,8 @@ import {
   setLkgpTarget,
   clearLkgpTarget,
   markTargetCooldown,
+  parseContextTokens,
+  estimateBodyTokens,
   ComboCandidate,
   ComboStrategy,
 } from "@/lib/combo";
@@ -253,14 +255,18 @@ export async function POST(req: NextRequest) {
         inputPrice: m?.inputPrice ?? 0,
         outputPrice: m?.outputPrice ?? 0,
         enabled: isConnected,
+        contextTokens: parseContextTokens(m?.contextWindow),
+        contextWindow: m?.contextWindow ?? "128K",
       };
     });
 
+    const estimatedTokens = estimateBodyTokens(body);
     await loadComboCursor(combo.id);
     const orderedTargets = pickTargets(
       combo.id,
       combo.strategy as ComboStrategy,
       candidates,
+      estimatedTokens,
     );
 
     if (orderedTargets.length === 0) {
@@ -397,6 +403,10 @@ export async function POST(req: NextRequest) {
               const pt = stats.promptTokens;
               const ct = stats.completionTokens;
               const cost = estimateCost(servedModel, pt, ct);
+              const failoverTrail =
+                attemptedHops.length > 0
+                  ? `Failover hops: ${attemptedHops.join(" ➔ ")} ➔ ${servedModel.slug} (200 OK)`
+                  : undefined;
               await saveLogWithApp(
                 {
                   apiKeyId: key.id,
@@ -411,7 +421,7 @@ export async function POST(req: NextRequest) {
                   latencyMs: stats.totalMs,
                 },
                 detectedApp,
-                undefined,
+                failoverTrail,
                 key,
               );
               await prisma.apiKey.update({
@@ -460,6 +470,11 @@ export async function POST(req: NextRequest) {
         const ct = claudeResp.usage?.output_tokens ?? 0;
         const cost = estimateCost(m, pt, ct);
 
+        const failoverTrail =
+          attemptedHops.length > 0
+            ? `Failover hops: ${attemptedHops.join(" ➔ ")} ➔ ${m.slug} (200 OK)`
+            : undefined;
+
         await saveLogWithApp(
           {
             apiKeyId: key.id,
@@ -474,7 +489,7 @@ export async function POST(req: NextRequest) {
             latencyMs: totalMs,
           },
           detectedApp,
-          undefined,
+          failoverTrail,
           key,
         );
 
