@@ -546,13 +546,21 @@ export async function POST(req: NextRequest) {
           phase: "prompt",
         });
 
-        // 30s connection timeout — if provider doesn't respond, fall back to next tier
-        const upstreamRes = await fetch(url, {
-          method: "POST",
-          headers: upstreamHeaders,
-          body: JSON.stringify(upstreamBody),
-          signal: AbortSignal.timeout(30_000),
-        });
+        // 30s connection timeout for headers — cleared as soon as response headers arrive
+        // so active streaming responses are never aborted mid-generation
+        const connectAbortCtrl = new AbortController();
+        const connectTimeoutId = setTimeout(() => connectAbortCtrl.abort(new Error("upstream connection timeout (30s)")), 30_000);
+        let upstreamRes: Response;
+        try {
+          upstreamRes = await fetch(url, {
+            method: "POST",
+            headers: upstreamHeaders,
+            body: JSON.stringify(upstreamBody),
+            signal: connectAbortCtrl.signal,
+          });
+        } finally {
+          clearTimeout(connectTimeoutId);
+        }
 
         // Check if status triggers fallback (e.g. 429 rate limit, 403 quota, 5xx error)
         if (!upstreamRes.ok) {
