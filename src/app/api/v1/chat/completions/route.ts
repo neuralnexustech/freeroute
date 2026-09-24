@@ -546,10 +546,12 @@ export async function POST(req: NextRequest) {
           phase: "prompt",
         });
 
+        // 30s connection timeout — if provider doesn't respond, fall back to next tier
         const upstreamRes = await fetch(url, {
           method: "POST",
           headers: upstreamHeaders,
           body: JSON.stringify(upstreamBody),
+          signal: AbortSignal.timeout(30_000),
         });
 
         // Check if status triggers fallback (e.g. 429 rate limit, 403 quota, 5xx error)
@@ -753,7 +755,13 @@ export async function POST(req: NextRequest) {
           },
         });
       } catch (e: any) {
-        lastError = `${m.slug} (${m.provider.name}) -> ${e?.message ?? "network error"}`;
+        const isTimeout = e?.name === "AbortError" || e?.name === "TimeoutError" || e?.message?.includes("timeout");
+        if (isTimeout) {
+          // Mark provider/model in 30s cooldown so next request skips it immediately
+          markTargetCooldownClassified(m.id, 504, "upstream timeout");
+          markTargetCooldownClassified(m.provider.slug, 504, "upstream timeout");
+        }
+        lastError = `${m.slug} (${m.provider.name}) -> ${isTimeout ? "request timed out (30s)" : (e?.message ?? "network error")}`;
         attemptedHops.push(lastError);
         continue;
       }

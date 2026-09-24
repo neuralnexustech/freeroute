@@ -478,74 +478,7 @@ export default function CombosPage() {
         </button>
       </div>
 
-      {/* Healing / Health Overview Panel */}
-      {healingState && healingState.count > 0 && (
-        <div
-          style={{
-            marginBottom: 20,
-            padding: "14px 18px",
-            background: "rgba(245,158,11,0.06)",
-            border: "1px solid rgba(245,158,11,0.3)",
-            borderRadius: 10,
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 13, color: "#f59e0b" }}>
-            <span style={{ animation: "pulse 2s infinite" }}>🔄</span>
-            Auto-Healing in Progress — {healingState.count} model{healingState.count > 1 ? "s" : ""} recovering
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {Object.values(healingState.cooldowns).map((entry) => {
-              const cfg = reasonColors[entry.reason];
-              const now = Date.now();
-              const remaining = entry.until - now;
-              return (
-                <div
-                  key={entry.key}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "6px 10px",
-                    background: cfg.bg,
-                    border: `1px solid ${cfg.color}44`,
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                >
-                  <span>{cfg.icon}</span>
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    <span style={{ fontWeight: 600, color: cfg.color, fontSize: 11 }}>
-                      {entry.displayName || entry.key}
-                    </span>
-                    <span style={{ color: "var(--text-tertiary)", fontSize: 10 }}>
-                      {cfg.label} · Heals in {formatRemaining(remaining)}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => handleForceHeal(entry.key, entry.displayName || entry.key)}
-                    title="Force-heal now (skip cooldown)"
-                    style={{
-                      background: "transparent",
-                      border: `1px solid ${cfg.color}66`,
-                      borderRadius: 4,
-                      color: cfg.color,
-                      cursor: "pointer",
-                      fontSize: 10,
-                      padding: "2px 6px",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Heal Now
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Healing status is shown inline on each tier card — no top banner needed */}
 
       {/* Summary KPI Cards */}
       <div className="grid-4" style={{ marginBottom: 20 }}>
