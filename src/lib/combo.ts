@@ -17,6 +17,8 @@ export interface ComboCandidate {
   inputPrice?: number;
   outputPrice?: number;
   enabled: boolean;
+  contextTokens?: number;
+  contextWindow?: string;
 }
 
 export const VALID_COMBO_NAME_REGEX = /^[a-zA-Z0-9_.\-]+$/;
@@ -26,7 +28,7 @@ export const COMBO_STRATEGIES = [
     value: "failover",
     label: "Fallback",
     sub: "Try in order on error",
-    desc: "Tries Tier 1 first; automatically falls back to Tier 2, then Tier 3 on rate-limits (429), quota limits (403), or provider errors (5xx).",
+    desc: "Tries Tier 1 first; automatically falls back to Tier 2, then Tier 3 on rate-limits (429), quota limits (403), context limits (400), or provider errors (5xx).",
   },
   {
     value: "lkgp",
@@ -47,6 +49,50 @@ export const COMBO_STRATEGIES = [
     desc: "Distributes traffic across models according to configured capacity, with automatic fallback.",
   },
 ] as const;
+
+/**
+ * Parses human-readable context window strings like "1M", "256K", "64k", "32768" into integer tokens.
+ */
+export function parseContextTokens(str?: string | null): number {
+  if (!str) return 128000;
+  const s = String(str).trim().toUpperCase();
+  if (s.endsWith("M")) {
+    const val = parseFloat(s.slice(0, -1));
+    return isNaN(val) ? 1000000 : Math.round(val * 1000000);
+  }
+  if (s.endsWith("K")) {
+    const val = parseFloat(s.slice(0, -1));
+    return isNaN(val) ? 128000 : Math.round(val * 1000);
+  }
+  const num = parseInt(s, 10);
+  return isNaN(num) ? 128000 : num;
+}
+
+/**
+ * Fast zero-dependency estimator for request input tokens from payload body.
+ */
+export function estimateBodyTokens(body: any): number {
+  if (!body) return 0;
+  try {
+    let chars = 0;
+    if (typeof body.system === "string") chars += body.system.length;
+    else if (body.system) chars += JSON.stringify(body.system).length;
+
+    if (body.tools) chars += JSON.stringify(body.tools).length;
+
+    if (Array.isArray(body.messages)) {
+      for (const m of body.messages) {
+        if (typeof m?.content === "string") chars += m.content.length;
+        else if (m?.content) chars += JSON.stringify(m.content).length;
+      }
+    } else if (typeof body.prompt === "string") {
+      chars += body.prompt.length;
+    }
+    return Math.max(1, Math.ceil(chars / 4));
+  } catch {
+    return 0;
+  }
+}
 
 // LKGP (Last-Known-Good-Provider) state cache
 const lkgpCache = new Map<string, string>(); // comboId -> modelId
@@ -132,6 +178,19 @@ export function checkFallbackError(status: number, errorText: string = ""): {
     return { shouldFallback: true, reason: "Quota/billing limit reached (403)" };
   }
 
+  // Context length limit matches (400 or text)
+  if (
+    lower.includes("context length") ||
+    lower.includes("context_length") ||
+    lower.includes("maximum context") ||
+    lower.includes("prompt is too long") ||
+    lower.includes("token limit") ||
+    lower.includes("max_tokens") ||
+    lower.includes("too many tokens")
+  ) {
+    return { shouldFallback: true, reason: "Context length limit exceeded (Prompt too large for model)" };
+  }
+
   // Auth / Key issues on a specific provider (401 or invalid key)
   if (
     status === 401 ||
@@ -177,6 +236,7 @@ export function pickTargets(
   comboId: string,
   strategy: ComboStrategy,
   candidates: ComboCandidate[],
+  estimatedPromptTokens?: number,
 ): ComboCandidate[] {
   let active = candidates.filter((c) => c.enabled);
   if (active.length === 0) return [];
@@ -185,6 +245,15 @@ export function pickTargets(
   const nonCooled = active.filter((c) => !isTargetInCooldown(c.modelId) && !isTargetInCooldown(c.providerSlug));
   if (nonCooled.length > 0) {
     active = nonCooled;
+  }
+
+  // Context window check: if prompt tokens estimated, prioritize models capable of fitting the prompt
+  if (estimatedPromptTokens && estimatedPromptTokens > 0) {
+    const fits = active.filter((c) => (c.contextTokens ?? 128000) >= estimatedPromptTokens);
+    const doesNotFit = active.filter((c) => (c.contextTokens ?? 128000) < estimatedPromptTokens);
+    if (fits.length > 0 && doesNotFit.length > 0) {
+      active = [...fits, ...doesNotFit];
+    }
   }
 
   switch (strategy) {

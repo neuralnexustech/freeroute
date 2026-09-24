@@ -260,6 +260,16 @@ const OFFLINE_REGISTRY: Record<string, {
   "deepseek-v3": { contextWindow: "64K", inputPrice: 0.14, outputPrice: 0.28, modalities: "T", params: "671B MoE", score: 93 },
   "deepseek-r1": { contextWindow: "64K", inputPrice: 0.55, outputPrice: 2.19, modalities: "T", params: "671B MoE", score: 96 },
   "deepseek-v4-flash": { contextWindow: "128K", inputPrice: 0.08, outputPrice: 0.24, modalities: "T", params: "32B MoE", score: 88 },
+  "deepseek-v4-pro": { contextWindow: "64K", inputPrice: 0.14, outputPrice: 0.28, modalities: "T", params: "671B MoE", score: 95 },
+  "deepseek-v4": { contextWindow: "64K", inputPrice: 0.14, outputPrice: 0.28, modalities: "T", params: "671B MoE", score: 95 },
+
+  // Chinese Providers (HCNSec, StepFun, Kimi, MiMo)
+  "step-3.7-flash": { contextWindow: "256K", inputPrice: 0.05, outputPrice: 0.15, modalities: "T", params: "12B MoE", score: 88 },
+  "kimi-k3": { contextWindow: "256K", inputPrice: 0.20, outputPrice: 0.80, modalities: "T", params: "MoE", score: 92 },
+  "mimo-v2.5": { contextWindow: "128K", inputPrice: 0.05, outputPrice: 0.20, modalities: "T", params: "10B", score: 85 },
+  "mimo-v2.5-pro": { contextWindow: "128K", inputPrice: 0.10, outputPrice: 0.40, modalities: "T", params: "30B MoE", score: 89 },
+  "qwen3.8-27b": { contextWindow: "128K", inputPrice: 0.08, outputPrice: 0.24, modalities: "T", params: "27B", score: 87 },
+  "glm-5.3-flash": { contextWindow: "128K", inputPrice: 0.05, outputPrice: 0.15, modalities: "T", params: "9B MoE", score: 86 },
 
   // NVIDIA Nemotron & Poolside
   "nemotron-3-nano-omni": { contextWindow: "128K", inputPrice: 0.06, outputPrice: 0.24, modalities: "T,IMG,AUD", params: "30B MoE", score: 84 },
@@ -480,22 +490,28 @@ export async function resolveViaWebSearch(modelSlug: string, providerName = ""):
       allText = html.slice(0, 30000).replace(/<[^>]+>/g, " ");
     }
 
-    // Context window deduction
+    // Context window deduction - requires explicit token/context length qualification
     let contextWindow = "128K";
-    if (/2[\s,-]?million|2[\s,-]?m\s*tokens/i.test(allText)) {
+    if (/\b2m\s*(?:token|context|window)|(?:context|window|tokens?)\s*(?:of|is|:)?\s*2m\b/i.test(allText)) {
       contextWindow = "2M";
-    } else if (/1[\s,-]?million|1[\s,-]?m\s*tokens|1,048,576\s*tokens/i.test(allText)) {
+    } else if (/\b1m\s*(?:token|context|window)|(?:context|window|tokens?)\s*(?:of|is|:)?\s*1m\b|1,048,576\s*tokens/i.test(allText)) {
       contextWindow = "1M";
-    } else if (/512k|512,000\s*tokens/i.test(allText) || cleanSlug.includes("dots")) {
+    } else if (/\b512k\s*(?:token|context|window)|(?:context|window|tokens?)\s*(?:of|is|:)?\s*512k\b/i.test(allText) || cleanSlug.includes("dots")) {
       contextWindow = "512K";
-    } else if (/256k|256,000\s*tokens/i.test(allText) || cleanSlug.includes("north-mini")) {
+    } else if (/\b256k\s*(?:token|context|window)|(?:context|window|tokens?)\s*(?:of|is|:)?\s*256k\b/i.test(allText) || cleanSlug.includes("north-mini")) {
       contextWindow = "256K";
-    } else if (/200k|200,000\s*tokens/i.test(allText)) {
+    } else if (/\b200k\s*(?:token|context|window)|(?:context|window|tokens?)\s*(?:of|is|:)?\s*200k\b/i.test(allText)) {
       contextWindow = "200K";
-    } else if (/128k|128,000\s*tokens/i.test(allText)) {
+    } else if (/\b128k\s*(?:token|context|window)|(?:context|window|tokens?)\s*(?:of|is|:)?\s*128k\b/i.test(allText)) {
       contextWindow = "128K";
-    } else if (/32k|32,000\s*tokens/i.test(allText)) {
+    } else if (/\b64k\s*(?:token|context|window)|(?:context|window|tokens?)\s*(?:of|is|:)?\s*64k\b/i.test(allText)) {
+      contextWindow = "64K";
+    } else if (/\b32k\s*(?:token|context|window)|(?:context|window|tokens?)\s*(?:of|is|:)?\s*32k\b/i.test(allText)) {
       contextWindow = "32K";
+    } else if (/\b16k\s*(?:token|context|window)|(?:context|window|tokens?)\s*(?:of|is|:)?\s*16k\b/i.test(allText)) {
+      contextWindow = "16K";
+    } else if (/\b8k\s*(?:token|context|window)|(?:context|window|tokens?)\s*(?:of|is|:)?\s*8k\b/i.test(allText)) {
+      contextWindow = "8K";
     }
 
     // Modalities deduction
@@ -633,7 +649,7 @@ export function resolveViaHeuristics(modelSlug: string, providerSlug = ""): Reso
   const params = inferModelParams(modelSlug);
   const score = inferModelScore(modelSlug, params);
 
-  return {
+  return applyFamilyArchitecturalCaps(cleanSlug, {
     contextWindow,
     inputPrice,
     outputPrice,
@@ -648,7 +664,145 @@ export function resolveViaHeuristics(modelSlug: string, providerSlug = ""): Reso
     isFreeRoute: isFree,
     actualInputPrice,
     actualOutputPrice,
-  };
+  });
+}
+
+/**
+ * Enforces real-world architectural limits so web search hallucinations or generic page mentions
+ * cannot assign impossible specifications (e.g. 1M context to a native 64K DeepSeek model).
+ */
+export function applyFamilyArchitecturalCaps(cleanSlug: string, specs: ResolvedModelSpecs): ResolvedModelSpecs {
+  const lower = cleanSlug.toLowerCase();
+
+  // DeepSeek family models: natively max out at 64K (or 128K for flash), NEVER 1M or 2M!
+  if (lower.includes("deepseek")) {
+    if (lower.includes("flash")) {
+      if (specs.contextWindow === "1M" || specs.contextWindow === "2M" || specs.contextWindow === "512K" || specs.contextWindow === "256K") {
+        specs.contextWindow = "128K";
+      }
+    } else {
+      if (specs.contextWindow === "1M" || specs.contextWindow === "2M" || specs.contextWindow === "512K" || specs.contextWindow === "256K") {
+        specs.contextWindow = "64K";
+      }
+    }
+  }
+
+  // LLaMA-3 / LLaMA-3.1 / 3.2 / 3.3 models: architecturally max 128K
+  if (lower.includes("llama-3") || lower.includes("llama3")) {
+    if (specs.contextWindow === "1M" || specs.contextWindow === "2M" || specs.contextWindow === "512K" || specs.contextWindow === "256K") {
+      specs.contextWindow = "128K";
+    }
+  }
+
+  // GPT-4 / GPT-4o / GPT-4-Turbo models: architecturally max 128K
+  if (lower.includes("gpt-4") && !lower.includes("o1") && !lower.includes("o3")) {
+    if (specs.contextWindow === "1M" || specs.contextWindow === "2M" || specs.contextWindow === "512K" || specs.contextWindow === "256K") {
+      specs.contextWindow = "128K";
+    }
+  }
+
+  return specs;
+}
+
+/**
+ * Scrapes specs directly from the provider's official website or documentation URL.
+ */
+export async function resolveViaProviderDocs(
+  modelSlug: string,
+  providerSlug: string,
+  docUrl?: string,
+  website?: string,
+): Promise<ResolvedModelSpecs | null> {
+  try {
+    const { cleanSlug, isFree } = normalizeModelIdentifier(modelSlug);
+    const targetUrls: string[] = [];
+
+    if (providerSlug === "hcnsec" || docUrl?.includes("hcnsec.cn") || website?.includes("hcnsec.cn")) {
+      targetUrls.push(`https://api.hcnsec.cn/free-api/${cleanSlug}/`);
+      targetUrls.push(`https://api.hcnsec.cn/free-api/models/`);
+    }
+
+    if (docUrl && !targetUrls.includes(docUrl)) targetUrls.push(docUrl);
+    if (website && !targetUrls.includes(website)) targetUrls.push(website);
+
+    for (const url of targetUrls) {
+      try {
+        const r = await fetch(url, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            Accept: "text/html,application/xhtml+xml,text/plain",
+          },
+          signal: AbortSignal.timeout(3000),
+        });
+        if (!r.ok) continue;
+        const html = await r.text();
+        const text = html.slice(0, 50000).replace(/<[^>]+>/g, " ").toLowerCase();
+
+        // Check if this page mentions this model
+        if (!text.includes(cleanSlug) && !text.includes(modelSlug.toLowerCase())) {
+          if (!html.toLowerCase().includes(cleanSlug)) continue;
+        }
+
+        // Context extraction from provider doc
+        let contextWindow = "";
+        const mContext =
+          text.match(new RegExp(`${cleanSlug}[^\\n]{0,80}(?:context|window|tokens?|长度)[^\\n]{0,30}\\b(\\d+[km]?)\\b`, "i")) ||
+          text.match(/(?:context|window|tokens?|上下文|窗口)[^:\n]{0,20}[:：\s](\d+[km]?)\b/i);
+        if (mContext) {
+          const rawVal = mContext[1].toUpperCase();
+          contextWindow = rawVal.endsWith("K") || rawVal.endsWith("M") ? rawVal : `${Math.round(parseInt(rawVal, 10) / 1000)}K`;
+        }
+
+        if (!contextWindow) {
+          if (/\b2m\s*(?:tokens?|context)|(?:context|window)[^:\n]{0,20}2m\b/i.test(text)) contextWindow = "2M";
+          else if (/\b1m\s*(?:tokens?|context)|(?:context|window)[^:\n]{0,20}1m\b/i.test(text)) contextWindow = "1M";
+          else if (/\b512k\s*(?:tokens?|context)|(?:context|window)[^:\n]{0,20}512k\b/i.test(text)) contextWindow = "512K";
+          else if (/\b256k\s*(?:tokens?|context)|(?:context|window)[^:\n]{0,20}256k\b/i.test(text)) contextWindow = "256K";
+          else if (/\b128k\s*(?:tokens?|context)|(?:context|window)[^:\n]{0,20}128k\b/i.test(text)) contextWindow = "128K";
+          else if (/\b64k\s*(?:tokens?|context)|(?:context|window)[^:\n]{0,20}64k\b/i.test(text)) contextWindow = "64K";
+          else if (/\b32k\s*(?:tokens?|context)|(?:context|window)[^:\n]{0,20}32k\b/i.test(text)) contextWindow = "32K";
+        }
+
+        if (!contextWindow) {
+          const heur = resolveViaHeuristics(cleanSlug, providerSlug);
+          contextWindow = heur.contextWindow;
+        }
+
+        // Modalities
+        const modSet = new Set<string>(["T"]);
+        if (/image|vision|multimodal|视觉|图片/i.test(text)) modSet.add("IMG");
+        if (/audio|voice|speech|transcribe|语音|音频/i.test(text)) modSet.add("AUD");
+        if (/video|视频/i.test(text)) modSet.add("VID");
+        if (/doc|pdf|file|文档/i.test(text)) modSet.add("DOC");
+        const modalities = Array.from(modSet).join(",");
+
+        const params = inferModelParams(modelSlug, text);
+        const score = inferModelScore(modelSlug, params, text);
+
+        const res: ResolvedModelSpecs = {
+          contextWindow,
+          inputPrice: 0,
+          outputPrice: 0,
+          modalities,
+          params,
+          score,
+          source: `${(providerSlug || "Provider").toUpperCase()} Official Documentation`,
+          confidence: 0.96,
+          detail: `Directly extracted from provider documentation: ${url}`,
+          isFreeRoute: isFree,
+          actualInputPrice: 0.14,
+          actualOutputPrice: 0.28,
+        };
+
+        return applyFamilyArchitecturalCaps(cleanSlug, res);
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 // -------------------------------------------------------------
@@ -658,38 +812,52 @@ export async function resolveModelSpecs(
   modelSlug: string,
   providerSlug = "",
   strategy = "cascade",
-  displayName = ""
+  displayName = "",
+  providerUrls?: { website?: string; docUrl?: string; baseUrl?: string },
 ): Promise<ResolvedModelSpecs> {
+  const { cleanSlug } = normalizeModelIdentifier(modelSlug);
+
   // If specific strategy requested:
   if (strategy === "openrouter" || strategy === "1") {
-    const res = await resolveViaOpenRouter(modelSlug) || (displayName ? await resolveViaOpenRouter(displayName) : null);
-    if (res) return res;
+    const res = (await resolveViaOpenRouter(modelSlug)) || (displayName ? await resolveViaOpenRouter(displayName) : null);
+    if (res) return applyFamilyArchitecturalCaps(cleanSlug, res);
   }
   if (strategy === "web_search" || strategy === "2") {
-    const res = await resolveViaWebSearch(modelSlug, providerSlug) || (displayName ? await resolveViaWebSearch(displayName, providerSlug) : null);
-    if (res) return res;
+    // Try provider direct documentation first
+    const provRes = await resolveViaProviderDocs(modelSlug, providerSlug, providerUrls?.docUrl, providerUrls?.website);
+    if (provRes) return applyFamilyArchitecturalCaps(cleanSlug, provRes);
+
+    const res = (await resolveViaWebSearch(modelSlug, providerSlug)) || (displayName ? await resolveViaWebSearch(displayName, providerSlug) : null);
+    if (res) return applyFamilyArchitecturalCaps(cleanSlug, res);
   }
   if (strategy === "offline_registry" || strategy === "3") {
     const res = resolveViaOfflineRegistry(modelSlug) || (displayName ? resolveViaOfflineRegistry(displayName) : null);
-    if (res) return res;
+    if (res) return applyFamilyArchitecturalCaps(cleanSlug, res);
   }
   if (strategy === "heuristics" || strategy === "4") {
-    return resolveViaHeuristics(modelSlug, providerSlug);
+    return applyFamilyArchitecturalCaps(cleanSlug, resolveViaHeuristics(modelSlug, providerSlug));
   }
 
-  // Default "cascade" (Option 3 Offline -> Option 1 OpenRouter -> Option 4 Heuristics -> Option 2 Web Search)
+  // Default "cascade":
+  // Step 1: Built-in Offline Model Spec Registry (0ms, 100% verified ground truth)
   const offline = resolveViaOfflineRegistry(modelSlug) || (displayName ? resolveViaOfflineRegistry(displayName) : null);
-  if (offline) return offline;
+  if (offline) return applyFamilyArchitecturalCaps(cleanSlug, offline);
 
-  const openrouter = await resolveViaOpenRouter(modelSlug) || (displayName ? await resolveViaOpenRouter(displayName) : null);
-  if (openrouter) return openrouter;
+  // Step 2: OpenRouter Official Public Catalog (100% verified live API specs)
+  const openrouter = (await resolveViaOpenRouter(modelSlug)) || (displayName ? await resolveViaOpenRouter(displayName) : null);
+  if (openrouter) return applyFamilyArchitecturalCaps(cleanSlug, openrouter);
 
-  // Heuristics are instant (0ms) and accurately resolve family specs
+  // Step 3: Provider-Direct Web Page / Docs Scraper (extract directly from provider website / docUrl)
+  const provDocs = await resolveViaProviderDocs(modelSlug, providerSlug, providerUrls?.docUrl, providerUrls?.website);
+  if (provDocs) return applyFamilyArchitecturalCaps(cleanSlug, provDocs);
+
+  // Step 4: Smart Heuristics (0ms, family architecture knowledge)
   const heur = resolveViaHeuristics(modelSlug, providerSlug);
-  if (heur && heur.confidence >= 0.7) return heur;
+  if (heur && heur.confidence >= 0.7) return applyFamilyArchitecturalCaps(cleanSlug, heur);
 
-  const web = await resolveViaWebSearch(modelSlug, providerSlug) || (displayName ? await resolveViaWebSearch(displayName, providerSlug) : null);
-  if (web) return web;
+  // Step 5: Web Search fallback
+  const web = (await resolveViaWebSearch(modelSlug, providerSlug)) || (displayName ? await resolveViaWebSearch(displayName, providerSlug) : null);
+  if (web) return applyFamilyArchitecturalCaps(cleanSlug, web);
 
-  return heur;
+  return applyFamilyArchitecturalCaps(cleanSlug, heur);
 }

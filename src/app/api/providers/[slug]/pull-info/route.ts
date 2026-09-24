@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { resolveModelSpecs } from "@/lib/model-info";
+import { getProvider } from "@/lib/providers";
 
 // PULL INFO (Strictly updates existing models in database without fetching/inserting new models)
 export async function POST(_req: NextRequest, { params }: { params: { slug: string } }) {
@@ -27,11 +28,18 @@ export async function POST(_req: NextRequest, { params }: { params: { slug: stri
     });
   }
 
+  const provDef = getProvider(provider.slug);
+  const providerUrls = {
+    website: provDef?.website,
+    docUrl: provDef?.docUrl,
+    baseUrl: provider.baseUrl,
+  };
+
   let updatedCount = 0;
   const updates: { slug: string; contextWindow: string; inputPrice: number; outputPrice: number; modalities: string; source: string }[] = [];
 
   for (const m of existingModels) {
-    const specs = await resolveModelSpecs(m.slug, provider.slug, strategy);
+    const specs = await resolveModelSpecs(m.slug, provider.slug, strategy, m.displayName, providerUrls);
     await prisma.model.update({
       where: { id: m.id },
       data: {

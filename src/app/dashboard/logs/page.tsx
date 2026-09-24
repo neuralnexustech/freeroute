@@ -314,6 +314,15 @@ export default function LogsPage() {
           ? "No active, connected models available in the configured combo route."
           : "");
 
+      const isComboRoute = !!(
+        log.route &&
+        (log.route === "combo" ||
+          log.route.startsWith("combo:") ||
+          log.route.includes("failover") ||
+          log.route.includes("round-robin"))
+      );
+      const hasFailover = !!(errorMessage?.includes("Failover hops") || log.route?.includes("failover"));
+
       return {
         id: log.id,
         modelSlug: log.modelSlug,
@@ -330,7 +339,9 @@ export default function LogsPage() {
         status: log.status,
         errorMessage,
         createdAt: log.createdAt,
-        isRouted: log.route === "combo" || log.route.includes("failover"),
+        route: log.route || "direct",
+        isRouted: isComboRoute,
+        isFailover: hasFailover,
         raw: log,
       };
     });
@@ -546,9 +557,47 @@ export default function LogsPage() {
                   <td style={{ padding: "13px 18px", verticalAlign: "middle" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {row.isRouted && (
-                        <span style={{ color: "#a855f7", display: "inline-flex", alignItems: "center", gap: 4, marginRight: 2 }}>
-                          <span style={{ width: 14, height: 14, borderRadius: 3, background: "#9333ea", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 8 }}>⚑</span>
+                        <span
+                          title={row.errorMessage?.startsWith("Failover hops:") ? row.errorMessage : `Routed via ${row.route}`}
+                          style={{
+                            color: row.isFailover ? "#c084fc" : "#a855f7",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            marginRight: 2,
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 14,
+                              height: 14,
+                              borderRadius: 3,
+                              background: row.isFailover ? "#7e22ce" : "#9333ea",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "#fff",
+                              fontSize: 8,
+                            }}
+                          >
+                            ⚑
+                          </span>
                           <span style={{ fontSize: 11, opacity: 0.75 }}>➔</span>
+                          {row.isFailover && (
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                padding: "1px 5px",
+                                borderRadius: 3,
+                                background: "rgba(168, 85, 247, 0.2)",
+                                border: "1px solid rgba(168, 85, 247, 0.35)",
+                                color: "#d8b4fe",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Failover
+                            </span>
+                          )}
                         </span>
                       )}
                       <ModelIcon slug={row.modelSlug} name={row.displayName} />
@@ -764,8 +813,57 @@ export default function LogsPage() {
               </button>
             </div>
 
-            {/* Error Reason Banner when status >= 400 or errorMessage is present */}
-            {(selectedTrace.status >= 400 || selectedTrace.errorMessage) && (
+            {/* Failover Hop Trace Banner for successful failover responses */}
+            {selectedTrace.errorMessage?.startsWith("Failover hops:") ? (
+              <div
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: 8,
+                  background: "rgba(168, 85, 247, 0.08)",
+                  border: "1px solid rgba(168, 85, 247, 0.35)",
+                  marginBottom: 16,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 16 }}>⚑</span>
+                  <span style={{ fontWeight: 700, fontSize: 13.5, color: "#c084fc" }}>
+                    Automatic Failover Trace · {selectedTrace.route || "Combo"}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      borderRadius: 12,
+                      background: "rgba(34, 197, 94, 0.15)",
+                      color: "#4ade80",
+                      fontWeight: 600,
+                      marginLeft: "auto",
+                    }}
+                  >
+                    Resolved 200 OK
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    lineHeight: 1.6,
+                    color: "var(--text-primary)",
+                    fontFamily: "monospace",
+                    background: "rgba(0, 0, 0, 0.3)",
+                    padding: "10px 12px",
+                    borderRadius: 6,
+                    border: "1px solid rgba(255, 255, 255, 0.06)",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {selectedTrace.errorMessage.replace(/^Failover hops:\s*/, "")}
+                </div>
+                <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--text-secondary)" }}>
+                  💡 <strong>Why did this happen?</strong> Intermediate models hit rate limits (429), quota limits (403), or context limits (400), so Freeroute automatically fell back to a healthy upstream model.
+                </div>
+              </div>
+            ) : (selectedTrace.status >= 400 || selectedTrace.errorMessage) && (
               <div
                 style={{
                   padding: "14px 16px",
