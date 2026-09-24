@@ -8,6 +8,7 @@ import {
   setLkgpTarget,
   clearLkgpTarget,
   markTargetCooldown,
+  markTargetCooldownClassified,
   parseContextTokens,
   estimateBodyTokens,
   ComboCandidate,
@@ -289,13 +290,25 @@ function createSseResponse(opts: {
         closed = true;
         controller.close();
       } catch (e: any) {
-        const msg = e?.message ?? "stream interrupted";
+        const msg = (e?.message ?? "stream interrupted").toLowerCase();
+        // "unexpected EOF", "stream reading error", "terminated", "aborted" are all
+        // normal provider connection-close events — treat them as a clean stream end.
+        const isNormalClose =
+          msg.includes("unexpected eof") ||
+          msg.includes("stream reading error") ||
+          msg.includes("terminated") ||
+          msg.includes("aborted") ||
+          msg.includes("premature close") ||
+          msg.includes("network changed") ||
+          msg.includes("econnreset");
         if (!closed) {
-          sendFrame(
-            `data: ${JSON.stringify({
-              error: { message: msg, type: "gateway_stream_error" },
-            })}\n\n`,
-          );
+          if (!isNormalClose) {
+            sendFrame(
+              `data: ${JSON.stringify({
+                error: { message: e?.message ?? "stream interrupted", type: "gateway_stream_error" },
+              })}\n\n`,
+            );
+          }
           sendFrame("data: [DONE]\n\n");
           closed = true;
           try {
@@ -542,12 +555,14 @@ export async function POST(req: NextRequest) {
         // Check if status triggers fallback (e.g. 429 rate limit, 403 quota, 5xx error)
         if (!upstreamRes.ok) {
           const errText = await upstreamRes.text().catch(() => "");
-          if (upstreamRes.status === 429) {
-            markTargetCooldown(m.id, 60000);
-            markTargetCooldown(m.provider.slug, 60000);
+          const { shouldFallback } = checkFallbackError(upstreamRes.status, errText);
+          // Smart healing: classify error and set appropriate cooldown duration
+          if (shouldFallback) {
+            markTargetCooldownClassified(m.id, upstreamRes.status, errText);
+            markTargetCooldownClassified(m.provider.slug, upstreamRes.status, errText);
             clearLkgpTarget(combo.id);
           }
-          if (checkFallbackError(upstreamRes.status, errText) && i < orderedTargets.length - 1) {
+          if (shouldFallback && i < orderedTargets.length - 1) {
             lastError = `${m.slug} (${m.provider.name}) -> HTTP ${upstreamRes.status}: ${errText.slice(0, 100)}`;
             attemptedHops.push(lastError);
             continue; // Fallback to next target

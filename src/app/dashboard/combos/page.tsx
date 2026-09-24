@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/Toast";
 import { COMBO_STRATEGIES, VALID_COMBO_NAME_REGEX } from "@/lib/combo";
 
@@ -71,6 +71,28 @@ interface TestResult {
   responseSample?: any;
 }
 
+type CooldownReason = "rpm" | "quota" | "auth" | "server" | "context" | "unknown";
+
+interface CooldownEntry {
+  key: string;
+  until: number;
+  since: number;
+  reason: CooldownReason;
+  detail: string;
+  remainingMs: number;
+  displayName?: string;
+  providerName?: string;
+  providerIcon?: string;
+  isModel?: boolean;
+  isProvider?: boolean;
+}
+
+interface HealingState {
+  cooldowns: Record<string, CooldownEntry>;
+  count: number;
+  timestamp: number;
+}
+
 export default function CombosPage() {
   const [combos, setCombos] = useState<Combo[]>([]);
   const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
@@ -104,6 +126,68 @@ export default function CombosPage() {
 
   const toast = useToast();
   const [showAllProviders, setShowAllProviders] = useState(false);
+
+  // ─── Healing / Live Health State ───────────────────────────────────────────────
+  const [healingState, setHealingState] = useState<HealingState | null>(null);
+  const healingPollRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchHealingState = async () => {
+    try {
+      const res = await fetch("/api/combos/health");
+      if (res.ok) {
+        const data = await res.json();
+        setHealingState(data);
+      }
+    } catch {}
+  };
+
+  // Poll healing state every 5 seconds
+  useEffect(() => {
+    fetchHealingState();
+    healingPollRef.current = setInterval(fetchHealingState, 5000);
+    return () => {
+      if (healingPollRef.current) clearInterval(healingPollRef.current);
+    };
+  }, []);
+
+  const handleForceHeal = async (key: string, displayName: string) => {
+    try {
+      const res = await fetch(`/api/combos/health?key=${encodeURIComponent(key)}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.show(`⚡ Force-healed: ${displayName} is now active`);
+        fetchHealingState();
+      }
+    } catch {
+      toast.show("Failed to force-heal");
+    }
+  };
+
+  /** Format remaining healing time as human-readable string */
+  const formatRemaining = (ms: number): string => {
+    if (ms <= 0) return "Healed";
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ${s % 60}s`;
+    const h = Math.floor(m / 60);
+    return `${h}h ${m % 60}m`;
+  };
+
+  const reasonColors: Record<CooldownReason, { bg: string; color: string; label: string; icon: string }> = {
+    rpm:     { bg: "rgba(245,158,11,0.12)",  color: "#f59e0b", label: "Rate Limit",    icon: "⚡" },
+    quota:   { bg: "rgba(239,68,68,0.12)",   color: "#ef4444", label: "Daily Quota",   icon: "🚫" },
+    auth:    { bg: "rgba(139,92,246,0.12)",  color: "#8b5cf6", label: "Auth Error",    icon: "🔑" },
+    server:  { bg: "rgba(99,102,241,0.12)",  color: "#6366f1", label: "Server Error",  icon: "🔧" },
+    context: { bg: "rgba(20,184,166,0.12)",  color: "#14b8a6", label: "Ctx Overflow",  icon: "📏" },
+    unknown: { bg: "rgba(107,114,128,0.12)", color: "#6b7280", label: "Cooling Down",  icon: "⏳" },
+  };
+
+  /** Get healing entry for a model by its ID */
+  const getTargetHealth = (modelId: string, providerSlug?: string): CooldownEntry | null => {
+    if (!healingState) return null;
+    return healingState.cooldowns[modelId] || (providerSlug ? healingState.cooldowns[providerSlug] : null) || null;
+  };
+
 
   const connectedProviders = Array.from(
     new Map(
@@ -394,6 +478,75 @@ export default function CombosPage() {
         </button>
       </div>
 
+      {/* Healing / Health Overview Panel */}
+      {healingState && healingState.count > 0 && (
+        <div
+          style={{
+            marginBottom: 20,
+            padding: "14px 18px",
+            background: "rgba(245,158,11,0.06)",
+            border: "1px solid rgba(245,158,11,0.3)",
+            borderRadius: 10,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 13, color: "#f59e0b" }}>
+            <span style={{ animation: "pulse 2s infinite" }}>🔄</span>
+            Auto-Healing in Progress — {healingState.count} model{healingState.count > 1 ? "s" : ""} recovering
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {Object.values(healingState.cooldowns).map((entry) => {
+              const cfg = reasonColors[entry.reason];
+              const now = Date.now();
+              const remaining = entry.until - now;
+              return (
+                <div
+                  key={entry.key}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "6px 10px",
+                    background: cfg.bg,
+                    border: `1px solid ${cfg.color}44`,
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                >
+                  <span>{cfg.icon}</span>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontWeight: 600, color: cfg.color, fontSize: 11 }}>
+                      {entry.displayName || entry.key}
+                    </span>
+                    <span style={{ color: "var(--text-tertiary)", fontSize: 10 }}>
+                      {cfg.label} · Heals in {formatRemaining(remaining)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleForceHeal(entry.key, entry.displayName || entry.key)}
+                    title="Force-heal now (skip cooldown)"
+                    style={{
+                      background: "transparent",
+                      border: `1px solid ${cfg.color}66`,
+                      borderRadius: 4,
+                      color: cfg.color,
+                      cursor: "pointer",
+                      fontSize: 10,
+                      padding: "2px 6px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Heal Now
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Summary KPI Cards */}
       <div className="grid-4" style={{ marginBottom: 20 }}>
         <div className="card" style={{ padding: "14px 18px" }}>
@@ -416,11 +569,11 @@ export default function CombosPage() {
           <div className="kpi-sub">Tier 1 ➔ Tier 2 ➔ Tier 3</div>
         </div>
         <div className="card" style={{ padding: "14px 18px" }}>
-          <div className="card-label">Auto Recovery</div>
-          <div className="kpi-value" style={{ fontSize: 20, marginTop: 4, color: "#10b981" }}>
-            Active
+          <div className="card-label">Auto-Healing</div>
+          <div className="kpi-value" style={{ fontSize: 20, marginTop: 4, color: healingState && healingState.count > 0 ? "#f59e0b" : "#10b981" }}>
+            {healingState && healingState.count > 0 ? `${healingState.count} Recovering` : "All Active"}
           </div>
-          <div className="kpi-sub">429, 403, 5xx failover enabled</div>
+          <div className="kpi-sub">RPM, quota, 5xx healing</div>
         </div>
       </div>
 
@@ -554,6 +707,15 @@ export default function CombosPage() {
                         const isPrimary = idx === 0;
                         const tierLabel = isPrimary ? "Tier 1 (Primary)" : `Tier ${idx + 1} (Fallback)`;
                         const isConnected = m?.provider?.connected && m?.provider?.hasApiKey;
+                        const healEntry = getTargetHealth(target.modelId, m?.provider?.slug);
+                        const isHealing = !!healEntry;
+                        const remaining = healEntry ? healEntry.until - Date.now() : 0;
+                        const healCfg = healEntry ? reasonColors[healEntry.reason] : null;
+
+                        const dotColor = isHealing ? healCfg!.color : isConnected ? "#10b981" : "#f59e0b";
+                        const dotTitle = isHealing
+                          ? `${healCfg!.label} · Heals in ${formatRemaining(remaining)}`
+                          : isConnected ? "Connected & Ready" : "Provider not connected or key missing";
 
                         return (
                           <div key={target.id || idx} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -562,8 +724,14 @@ export default function CombosPage() {
                                 display: "flex",
                                 flexDirection: "column",
                                 gap: 3,
-                                background: isPrimary ? "rgba(16, 185, 129, 0.08)" : "var(--bg-surface)",
-                                border: isPrimary
+                                background: isHealing
+                                  ? healCfg!.bg
+                                  : isPrimary
+                                  ? "rgba(16, 185, 129, 0.08)"
+                                  : "var(--bg-surface)",
+                                border: isHealing
+                                  ? `1px solid ${healCfg!.color}55`
+                                  : isPrimary
                                   ? "1px solid rgba(16, 185, 129, 0.4)"
                                   : "1px solid var(--border-default)",
                                 borderRadius: 8,
@@ -576,7 +744,7 @@ export default function CombosPage() {
                                   style={{
                                     fontSize: 10,
                                     fontWeight: 700,
-                                    color: isPrimary ? "var(--primary)" : "var(--text-secondary)",
+                                    color: isHealing ? healCfg!.color : isPrimary ? "var(--primary)" : "var(--text-secondary)",
                                     textTransform: "uppercase",
                                     letterSpacing: "0.04em",
                                   }}
@@ -588,9 +756,10 @@ export default function CombosPage() {
                                     width: 7,
                                     height: 7,
                                     borderRadius: "50%",
-                                    background: isConnected ? "#10b981" : "#f59e0b",
+                                    background: dotColor,
+                                    boxShadow: isHealing ? `0 0 5px ${dotColor}` : undefined,
                                   }}
-                                  title={isConnected ? "Connected & Ready" : "Provider not connected or key missing"}
+                                  title={dotTitle}
                                 />
                               </div>
 
@@ -622,6 +791,43 @@ export default function CombosPage() {
                                 <span>{m?.provider?.icon || "⏣"} {m?.provider?.name || "Provider"}</span>
                                 {m?.contextWindow && <span>• {m.contextWindow}</span>}
                               </div>
+
+                              {/* Healing status row */}
+                              {isHealing && healEntry && (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    marginTop: 4,
+                                    paddingTop: 4,
+                                    borderTop: `1px solid ${healCfg!.color}33`,
+                                  }}
+                                >
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: healCfg!.color, display: "flex", alignItems: "center", gap: 3 }}>
+                                    {healCfg!.icon} {healCfg!.label}
+                                    <span style={{ fontWeight: 400, color: "var(--text-tertiary)", marginLeft: 2 }}>
+                                      · {formatRemaining(remaining)}
+                                    </span>
+                                  </span>
+                                  <button
+                                    onClick={() => handleForceHeal(healEntry.key, m?.displayName || healEntry.key)}
+                                    title="Skip cooldown and force-reactivate"
+                                    style={{
+                                      background: "transparent",
+                                      border: `1px solid ${healCfg!.color}55`,
+                                      borderRadius: 3,
+                                      color: healCfg!.color,
+                                      cursor: "pointer",
+                                      fontSize: 9,
+                                      padding: "1px 5px",
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    ⚡ Heal
+                                  </button>
+                                </div>
+                              )}
                             </div>
 
                             {/* Arrow divider */}
