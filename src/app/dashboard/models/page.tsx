@@ -6,6 +6,7 @@ import { inferModelParams, inferModelScore, resolveViaOfflineRegistry } from "@/
 
 interface ModelRow {
   id: string;
+  modelId?: string;
   slug: string;
   displayName: string;
   provider: { slug: string; name: string };
@@ -17,12 +18,14 @@ interface ModelRow {
   modalities: string;
   enabled: boolean;
   status: string;
+  lastError?: string;
   toksPerSec: number | null;
   latencyMs: number | null;
   ttftMs: number | null;
   spend?: number;
   requests?: number;
   tokens?: number;
+  isCombo?: boolean;
 }
 
 function fmtTtft(ms: number | null): string {
@@ -205,8 +208,12 @@ export default function ModelsPage() {
   const [paramFilter, setParamFilter] = useState("All");
   const [ctxFilter, setCtxFilter] = useState("All");
   const [priceFilter, setPriceFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [pulling, setPulling] = useState(false);
   const [phase, setPhase] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [syncPhase, setSyncPhase] = useState("");
+  const [testingModelId, setTestingModelId] = useState<string | null>(null);
   const toast = useToast();
 
   const [sortCol, setSortCol] = useState<"name" | "spend" | "inputPrice" | "outputPrice" | "toks" | "ttft" | "score" | "params">("name");
@@ -246,7 +253,15 @@ export default function ModelsPage() {
           ? m.inputPrice === 0 && m.outputPrice === 0
           : priceFilter === "Spent"
           ? (m.spend ?? 0) > 0
-          : m.inputPrice > 0 || m.outputPrice > 0)),
+          : m.inputPrice > 0 || m.outputPrice > 0)) &&
+      (statusFilter === "All" ||
+        (statusFilter === "OK"
+          ? m.status === "ok"
+          : statusFilter === "Fail"
+          ? m.status === "fail"
+          : statusFilter === "Pending"
+          ? m.status === "pending" || !m.status
+          : true)),
   );
 
   const sorted = [...filtered].sort((a, b) => {
@@ -261,6 +276,54 @@ export default function ModelsPage() {
     else if (sortCol === "params") diff = (paramSize(a.slug, a.params, a.displayName) ?? 0) - (paramSize(b.slug, b.params, b.displayName) ?? 0);
     return sortAsc ? diff : -diff;
   });
+
+  // Sync all connected providers, auto-pull models, and test live health
+  const syncAll = async () => {
+    setSyncing(true);
+    setSyncPhase("Pulling latest models & testing live connectivity…");
+    try {
+      const r = await fetch("/api/models/sync-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ testHealth: true, maxTestPerProvider: 3 }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        toast.show(
+          `Sync complete: ${d.totalModelsPulled ?? 0} models pulled, ${d.modelsTested ?? 0} tested (${d.passed ?? 0} ok, ${d.failed ?? 0} issues)!`
+        );
+        load();
+      } else {
+        toast.show(d.error ?? "Sync all failed");
+      }
+    } catch {
+      toast.show("Sync all failed — check connection");
+    } finally {
+      setSyncPhase("");
+      setSyncing(false);
+    }
+  };
+
+  // Quick test a single model on demand
+  const testModel = async (model: ModelRow) => {
+    const targetId = model.modelId || model.id;
+    setTestingModelId(targetId);
+    try {
+      const r = await fetch(`/api/models/${encodeURIComponent(targetId)}/test`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      if (d.ok) {
+        toast.show(`🟢 ${model.displayName || model.slug} is healthy! (${d.latencyMs}ms)`);
+        load();
+      } else {
+        toast.show(`🔴 ${model.displayName || model.slug} failed: ${d.error || "Unreachable"}`);
+        load();
+      }
+    } catch (e: any) {
+      toast.show(`Failed to test ${model.slug}: ${e?.message}`);
+    } finally {
+      setTestingModelId(null);
+    }
+  };
 
   // Pull info (Context, Input/Output pricing, Modalities) for all models already in database
   const pullInfo = async () => {
@@ -336,14 +399,19 @@ export default function ModelsPage() {
               ${totalSpend < 0.01 && totalSpend > 0 ? totalSpend.toFixed(5) : totalSpend.toFixed(4)}
             </span>
           </div>
-          <button className="btn primary" onClick={pullInfo} disabled={pulling}>{pulling ? "Updating Info…" : "⇩ Pull Info"}</button>
-          {pulling && phase ? (
+          <button className="btn primary" onClick={syncAll} disabled={syncing || pulling}>
+            {syncing ? "Syncing Providers…" : "⚡ Sync All & Test"}
+          </button>
+          <button className="btn" onClick={pullInfo} disabled={syncing || pulling}>
+            {pulling ? "Updating Info…" : "⇩ Pull Info"}
+          </button>
+          {(syncing || pulling) && (syncPhase || phase) ? (
             <span className="mono" style={{ fontSize: 12, color: "var(--primary)", display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span className="live-indicator" />{phase}
+              <span className="live-indicator" />{syncPhase || phase}
             </span>
           ) : (
-            <span style={{ fontSize: 11.5, color: "var(--text-tertiary)" }} title="Finds and sets Context window, Input/Output pricing, and Modalities for all models in the gateway without pulling new models.">
-              ⓘ Discovers and sets Context, Pricing, and Modalities for all existing models
+            <span style={{ fontSize: 11.5, color: "var(--text-tertiary)" }} title="Discovers all latest models from connected providers, enriches specs, and verifies live connectivity.">
+              ⓘ Auto-syncs models from all connected providers and verifies connectivity
             </span>
           )}
         </div>
@@ -360,6 +428,8 @@ export default function ModelsPage() {
       <div className="toolbar-row" style={{ gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
         <Dropdown label="Provider" value={provFilter} onPick={setProvFilter}
           options={[{ value: "All", label: "All providers" }, ...providers.map((p) => ({ value: p, label: p }))]} />
+        <Dropdown label="Status" value={statusFilter} onPick={setStatusFilter}
+          options={[{ value: "All", label: "All statuses" }, { value: "OK", label: "🟢 OK / Verified" }, { value: "Fail", label: "🔴 Fail / Error" }, { value: "Pending", label: "⚪ Untested" }]} />
         <Dropdown label="Modality" value={modFilter} onPick={setModFilter}
           options={[{ value: "All", label: "All modalities" }, ...modalities.map((x) => ({ value: x, label: x }))]} />
         <Dropdown label="Params" value={paramFilter} onPick={setParamFilter}
@@ -399,13 +469,14 @@ export default function ModelsPage() {
                   Spent {sortCol === "spend" ? (sortAsc ? "▲" : "▼") : ""}
                 </th>
                 <th>Modalities</th>
-                <th>Capabilities</th>
+                <th>Status</th>
                 <th className="num" onClick={() => toggleSort("toks")} style={{ cursor: "pointer", userSelect: "none" }}>
                   Tok/s {sortCol === "toks" ? (sortAsc ? "▲" : "▼") : ""}
                 </th>
                 <th className="num" onClick={() => toggleSort("ttft")} style={{ cursor: "pointer", userSelect: "none" }}>
                   TTFT {sortCol === "ttft" ? (sortAsc ? "▲" : "▼") : ""}
                 </th>
+                <th style={{ textAlign: "right", minWidth: 80 }}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -462,13 +533,90 @@ export default function ModelsPage() {
                     ${(m.spend ?? 0) < 0.0001 && (m.spend ?? 0) > 0 ? (m.spend ?? 0).toFixed(6) : (m.spend ?? 0).toFixed(4)}
                   </td>
                   <td><ModalityIcons mods={m.modalities} /></td>
-                  <td><span className="pill subtle">{m.status}</span></td>
+                  <td>
+                    {m.status === "ok" ? (
+                      <span
+                        className="pill"
+                        style={{
+                          background: "rgba(16, 185, 129, 0.12)",
+                          color: "#10b981",
+                          borderColor: "rgba(16, 185, 129, 0.3)",
+                          fontWeight: 600,
+                          fontSize: 11,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                        title={m.latencyMs ? `Healthy • Latency: ${m.latencyMs}ms` : "Verified healthy"}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981" }} />
+                        OK{m.latencyMs ? ` ${m.latencyMs}ms` : ""}
+                      </span>
+                    ) : m.status === "fail" ? (
+                      <span
+                        className="pill"
+                        style={{
+                          background: "rgba(239, 68, 68, 0.12)",
+                          color: "#ef4444",
+                          borderColor: "rgba(239, 68, 68, 0.3)",
+                          fontWeight: 600,
+                          fontSize: 11,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                        title={m.lastError || "Health check failed"}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444" }} />
+                        Fail
+                      </span>
+                    ) : (
+                      <span
+                        className="pill subtle"
+                        style={{ color: "var(--text-tertiary)", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 4 }}
+                      >
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--text-tertiary)" }} />
+                        Untested
+                      </span>
+                    )}
+                  </td>
                   <td className="num mono">{fmtTps(m.toksPerSec)}</td>
                   <td className="num mono">{fmtTtft(m.ttftMs)}</td>
+                  <td style={{ textAlign: "right" }}>
+                    {!m.isCombo && (m.modelId || m.id) ? (
+                      <button
+                        className="btn sm"
+                        onClick={() => testModel(m)}
+                        disabled={testingModelId === (m.modelId || m.id)}
+                        style={{
+                          padding: "2px 8px",
+                          fontSize: 11,
+                          borderRadius: 6,
+                          background: "var(--bg-surface-elevated)",
+                          border: "1px solid var(--border-subtle)",
+                          color: "var(--text-primary)",
+                          cursor: testingModelId === (m.modelId || m.id) ? "not-allowed" : "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                        title="Send test ping to measure live response"
+                      >
+                        {testingModelId === (m.modelId || m.id) ? (
+                          <span className="live-indicator" style={{ width: 6, height: 6 }} />
+                        ) : (
+                          <span>⚡</span>
+                        )}
+                        <span>{testingModelId === (m.modelId || m.id) ? "Testing…" : "Test"}</span>
+                      </button>
+                    ) : (
+                      <span style={{ color: "var(--text-tertiary)", fontSize: 11 }}>–</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={12}><div className="empty-state-box">No models yet — connect a provider and pull its live registry.</div></td></tr>
+                <tr><td colSpan={13}><div className="empty-state-box">No models yet — connect a provider and pull its live registry.</div></td></tr>
               )}
             </tbody>
           </table>

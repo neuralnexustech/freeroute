@@ -131,6 +131,7 @@ export async function GET() {
       modalities: m.modalities,
       enabled: m.enabled,
       status: m.status,
+      lastError: m.lastError || "",
       toksPerSec: m.toksPerSec,
       latencyMs: m.latencyMs,
       isCombo: false,
