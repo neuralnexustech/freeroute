@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { adminGuard } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const limit = Math.min(500, Number(new URL(req.url).searchParams.get("limit") ?? 100));
     const logs = await prisma.requestLog.findMany({

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { adminGuard } from "@/lib/auth";
 
 export async function PATCH(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const { id, enabled } = await req.json().catch(() => ({}));
   if (!id || typeof enabled !== "boolean") return NextResponse.json({ error: "id and enabled required" }, { status: 400 });
   const current = await prisma.model.findUnique({ where: { id } });

@@ -209,6 +209,10 @@ export default function ModelsPage() {
   const [ctxFilter, setCtxFilter] = useState("All");
   const [priceFilter, setPriceFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  // Hide models whose last health check failed, and ones never tested, so the
+  // table lists only what is actually usable. An explicit Status selection
+  // (Fail / Pending) overrides this, otherwise those rows would be unreachable.
+  const [hideFailing, setHideFailing] = useState(true);
   const [pulling, setPulling] = useState(false);
   const [phase, setPhase] = useState("");
   const [syncing, setSyncing] = useState(false);
@@ -241,6 +245,11 @@ export default function ModelsPage() {
 
   const providers = [...new Set(rows.map((m) => m.provider.name))].sort();
   const modalities = [...new Set(rows.flatMap((m) => m.modalities.split(",").map((s) => s.trim())))].sort();
+  // Models hidden purely because of their health status (fail / untested), used
+  // for the "N hidden" hint next to the result count.
+  const healthy = rows.filter((m) => m.status === "ok" || m.isCombo).length;
+  const hiddenByStatus = hideFailing ? Math.max(0, rows.length - healthy) : 0;
+
   const filtered = rows.filter(
     (m) =>
       (m.slug + m.displayName).toLowerCase().includes(q.toLowerCase()) &&
@@ -254,14 +263,17 @@ export default function ModelsPage() {
           : priceFilter === "Spent"
           ? (m.spend ?? 0) > 0
           : m.inputPrice > 0 || m.outputPrice > 0)) &&
-      (statusFilter === "All" ||
-        (statusFilter === "OK"
-          ? m.status === "ok"
-          : statusFilter === "Fail"
-          ? m.status === "fail"
-          : statusFilter === "Pending"
-          ? m.status === "pending" || !m.status
-          : true)),
+      // Status: only pass verified-healthy models unless the operator asks for a
+      // specific state. Combos are always routable, so they are never hidden.
+      (statusFilter === "All"
+        ? !hideFailing || m.status === "ok" || m.isCombo
+        : statusFilter === "OK"
+        ? m.status === "ok"
+        : statusFilter === "Fail"
+        ? m.status === "fail"
+        : statusFilter === "Pending"
+        ? m.status === "pending" || !m.status
+        : true),
   );
 
   const sorted = [...filtered].sort((a, b) => {
@@ -422,14 +434,34 @@ export default function ModelsPage() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
           <input type="text" className="input-field" placeholder="Search models, modalities, providers…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        <span style={{ color: "var(--text-tertiary)", fontSize: 12 }}>{filtered.length} of {rows.length} models available</span>
+        <span style={{ color: "var(--text-tertiary)", fontSize: 12 }}>
+          {filtered.length} of {rows.length} models available
+          {hiddenByStatus > 0 ? ` · ${hiddenByStatus} hidden (fail/untested)` : ""}
+        </span>
       </div>
 
       <div className="toolbar-row" style={{ gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
         <Dropdown label="Provider" value={provFilter} onPick={setProvFilter}
           options={[{ value: "All", label: "All providers" }, ...providers.map((p) => ({ value: p, label: p }))]} />
         <Dropdown label="Status" value={statusFilter} onPick={setStatusFilter}
-          options={[{ value: "All", label: "All statuses" }, { value: "OK", label: "🟢 OK / Verified" }, { value: "Fail", label: "🔴 Fail / Error" }, { value: "Pending", label: "⚪ Untested" }]} />
+          options={[
+            { value: "All", label: hideFailing ? "🟢 Working only" : "All statuses" },
+            { value: "OK", label: "🟢 OK / Verified" },
+            { value: "Fail", label: "🔴 Fail / Error" },
+            { value: "Pending", label: "⚪ Untested" },
+          ]} />
+        <button
+          className="btn sm"
+          onClick={() => setHideFailing((v) => !v)}
+          title={
+            hideFailing
+              ? "Failing and untested models are hidden. Click to show every model."
+              : "Showing every model. Click to hide failing and untested ones."
+          }
+          style={hideFailing ? { color: "var(--primary)", borderColor: "var(--primary)" } : undefined}
+        >
+          {hideFailing ? "◉ Healthy only" : "○ Show all"}
+        </button>
         <Dropdown label="Modality" value={modFilter} onPick={setModFilter}
           options={[{ value: "All", label: "All modalities" }, ...modalities.map((x) => ({ value: x, label: x }))]} />
         <Dropdown label="Params" value={paramFilter} onPick={setParamFilter}

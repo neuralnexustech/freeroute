@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { resolveModelSpecs } from "@/lib/model-info";
 import { getProvider } from "@/lib/providers";
+import { adminGuard } from "@/lib/auth";
 
 // PULL INFO (Strictly updates existing models in database without fetching/inserting new models)
 export async function POST(_req: NextRequest, { params }: { params: { slug: string } }) {
+  const denied = adminGuard(_req);
+  if (denied) return denied;
+
   const provider = await prisma.provider.findUnique({ where: { slug: params.slug } });
   if (!provider) {
     return NextResponse.json({ error: "Provider not found" }, { status: 404 });

@@ -1,10 +1,14 @@
 import { NextRequest } from "next/server";
 import { telemetryEmitter, TelemetryPayload } from "@/lib/telemetryEvents";
+import { adminGuard } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({

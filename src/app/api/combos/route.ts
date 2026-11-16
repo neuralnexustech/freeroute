@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { VALID_COMBO_NAME_REGEX } from "@/lib/combo";
+import { adminGuard } from "@/lib/auth";
 
 const CreateComboSchema = z.object({
   name: z
@@ -23,7 +24,10 @@ const CreateComboSchema = z.object({
     .default([]),
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const combos = await prisma.combo.findMany({
       include: {
@@ -103,6 +107,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const raw = await req.json().catch(() => null);
     const parsed = CreateComboSchema.safeParse(raw);

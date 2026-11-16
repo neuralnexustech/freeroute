@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { adminGuard } from "@/lib/auth";
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const url = new URL(req.url);
   const permanent = url.searchParams.get("permanent") === "true";
   const existing = await prisma.apiKey.findUnique({ where: { id: params.id } });

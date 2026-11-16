@@ -129,7 +129,9 @@ export default function ProviderDetailPage() {
     setConnected(d.provider.connected);
     setHasKey(Boolean(d.provider.hasKey));
     setMaskedKey(d.provider.maskedKey ?? "");
-    setRawApiKey(d.provider.apiKey ?? "");
+    // The API no longer returns the raw provider key; it is fetched on demand
+    // from the reveal endpoint when the user chooses Show or Copy.
+    setRawApiKey("");
     setName(d.provider.name);
     setIcon(d.provider.icon ?? "⏣");
     setLogoUrl(d.provider.logoUrl ?? "");
@@ -179,12 +181,45 @@ export default function ProviderDetailPage() {
     load();
   };
 
+  // Raw keys are no longer part of the provider payload; fetch on demand.
+  const revealKey = async (): Promise<string> => {
+    if (rawApiKey) return rawApiKey;
+    try {
+      const r = await fetch(`/api/providers/${slug}/reveal`);
+      if (!r.ok) {
+        toast.show("Could not read saved key — try re-saving it");
+        return "";
+      }
+      const d = await r.json().catch(() => ({}));
+      const revealed = typeof d.apiKey === "string" ? d.apiKey : "";
+      setRawApiKey(revealed);
+      return revealed;
+    } catch {
+      return "";
+    }
+  };
+
+  const toggleShowKey = async () => {
+    if (!showKey) {
+      const revealed = await revealKey();
+      if (!revealed) return;
+    }
+    setShowKey(!showKey);
+  };
+
+  const copyKey = async () => {
+    const toCopy = await revealKey();
+    if (!toCopy) return;
+    navigator.clipboard.writeText(toCopy);
+    toast.show("API key copied to clipboard");
+  };
+
   const saveKey = async () => {
     if (!key.trim()) return toast.show("Please enter an API key");
     const r = await fetch(`/api/providers/${slug}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: key.trim() }) });
     if (!r.ok) return toast.show("Failed to save key");
     const d = await r.json().catch(() => ({}));
-    setRawApiKey(d.apiKey || key.trim());
+    setRawApiKey(key.trim());
     setKey("");
     setSaved(true);
     setHasKey(true);
@@ -713,7 +748,7 @@ export default function ProviderDetailPage() {
                   />
                   <button
                     type="button"
-                    onClick={() => setShowKey(!showKey)}
+                    onClick={toggleShowKey}
                     title={showKey ? "Hide API key" : "Show API key"}
                     className="btn sm"
                     style={{
@@ -742,13 +777,7 @@ export default function ProviderDetailPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      const toCopy = rawApiKey || maskedKey;
-                      if (toCopy) {
-                        navigator.clipboard.writeText(toCopy);
-                        toast.show("API key copied to clipboard");
-                      }
-                    }}
+                    onClick={copyKey}
                     title="Copy API key"
                     className="btn sm"
                     style={{
@@ -770,9 +799,9 @@ export default function ProviderDetailPage() {
                 <button
                   type="button"
                   className="btn sm"
-                  onClick={() => {
+                  onClick={async () => {
                     setEditingKey(true);
-                    setKey(rawApiKey);
+                    setKey(await revealKey());
                   }}
                   title="Change API key"
                   style={{ whiteSpace: "nowrap" }}

@@ -1,7 +1,6 @@
 {
   "name": "freeroute",
   "version": "0.7.18",
-  "private": true,
   "description": "freeroute — Open AI Gateway & LLMOps Routing Platform",
   "author": "neuralnexustech (https://github.com/neuralnexustech)",
   "license": "MIT",
@@ -15,7 +14,8 @@
     "test:rtk": "tsx scripts/rtk.test.ts",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "freeroute": "node scripts/dev.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -43,7 +43,10 @@
     "tsx": "^4.16.2",
     "typescript": "^5.5.4"
   },
+  "bin": {
+    "freeroute": "scripts/dev.mjs"
+  },
   "engines": {
     "node": ">=18.18 <25"
   }
-}
+}

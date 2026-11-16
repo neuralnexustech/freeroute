@@ -98,11 +98,12 @@ async function saveLogWithApp(
 }
 
 export async function POST(req: NextRequest) {
-  // Validate API key from header or query
+  // Validate API key from headers only. A `?key=` query parameter used to be
+  // accepted, but query strings leak into access logs, proxies, browser
+  // history and Referer headers — it is not a credential channel.
   const rawKey =
     req.headers.get("x-api-key") ||
-    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
-    req.nextUrl.searchParams.get("key");
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
 
   if (!rawKey) {
     return NextResponse.json(
@@ -359,7 +360,10 @@ export async function POST(req: NextRequest) {
           const { shouldFallback } = checkFallbackError(upstreamRes.status, errText);
           if (shouldFallback) {
             markTargetCooldownClassified(m.id, upstreamRes.status, errText);
-            markTargetCooldownClassified(m.provider.slug, upstreamRes.status, errText);
+            // Only a bad credential justifies cooling the whole provider.
+            if (upstreamRes.status === 401 || upstreamRes.status === 403) {
+              markTargetCooldownClassified(m.provider.slug, upstreamRes.status, errText);
+            }
             clearLkgpTarget(combo.id);
           }
           if (shouldFallback && i < orderedTargets.length - 1) {
@@ -525,8 +529,8 @@ export async function POST(req: NextRequest) {
       } catch (e: any) {
         const isTimeout = e?.name === "AbortError" || e?.name === "TimeoutError" || e?.message?.includes("timeout");
         if (isTimeout) {
+          // Timeouts are model-shaped; do not blacklist the whole provider.
           markTargetCooldownClassified(m.id, 504, "upstream timeout");
-          markTargetCooldownClassified(m.provider.slug, 504, "upstream timeout");
         }
         lastError = `${m.slug} (${m.provider.name}) -> ${isTimeout ? "request timed out (30s)" : (e?.message ?? "network error")}`;
         attemptedHops.push(lastError);

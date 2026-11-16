@@ -261,6 +261,45 @@ export interface StreamPeekResult {
  * Resolves tricky upstream behaviors (e.g. initial keep-alive comments followed by 502 error,
  * HTML sign-in pages, immediate [DONE] with zero tokens).
  */
+/**
+ * Returns a human-readable message when the buffered SSE text contains a real
+ * upstream error event (a `data:` payload whose top-level object is an error
+ * envelope), or `null` when it does not.
+ *
+ * Deliberately strict: assistant content is free to contain the word `error`,
+ * a JSON snippet with an `error` key, or a whole error object nested inside a
+ * tool result. Only `{"type":"error"}` / `{"error": ...}` at the top level of
+ * an SSE event means the upstream actually failed.
+ */
+function findStreamErrorEvent(text: string): string | null {
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line.startsWith("data:")) continue;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === "[DONE]") continue;
+
+    try {
+      const obj = JSON.parse(payload);
+      if (!obj || typeof obj !== "object") continue;
+      if (obj.type === "error" || obj.error) {
+        const detail = obj.error;
+        if (typeof detail === "string") return detail;
+        if (detail && typeof detail === "object") {
+          return (detail as any).message || JSON.stringify(detail);
+        }
+        return "upstream error event";
+      }
+    } catch {
+      // Partial JSON: the next read may complete it. Fall back to a precise
+      // marker that cannot appear in assistant text by accident.
+      if (/"upstream_status"\s*:/.test(payload) || /"type"\s*:\s*"error"\s*[,}]/.test(payload)) {
+        return payload;
+      }
+    }
+  }
+  return null;
+}
+
 export async function peekStreamForFailover(
   reader: ReadableStreamDefaultReader<Uint8Array>,
 ): Promise<StreamPeekResult> {
@@ -312,13 +351,16 @@ export async function peekStreamForFailover(
       return { isFailed: true, chunks, reason: "upstream returned HTML error/auth page" };
     }
 
-    // 2. Detect explicit error payload in SSE or JSON → fail immediately
-    if (
-      accumulatedText.includes('"error":') ||
-      accumulatedText.includes('"upstream_status"') ||
-      accumulatedText.includes('"type":"error"')
-    ) {
-      return { isFailed: true, chunks, reason: `upstream error in stream: ${accumulatedText.slice(0, 100).trim()}` };
+    // 2. Detect an explicit error EVENT → fail immediately.
+    //
+    // This used to substring-match '"error":' anywhere in the buffer, so any
+    // model that explained an error, or streamed JSON containing an "error"
+    // field, was mistaken for a failed upstream and silently re-routed to the
+    // next provider mid-answer. Now only a parsed top-level error envelope
+    // counts.
+    const errorEvent = findStreamErrorEvent(accumulatedText);
+    if (errorEvent !== null) {
+      return { isFailed: true, chunks, reason: `upstream error in stream: ${errorEvent.slice(0, 100).trim()}` };
     }
 
     // 3. Detect immediate [DONE] with no tokens → fail
@@ -399,6 +441,10 @@ export function createAnthropicSseResponse(opts: {
       let completionTokens = 0;
       let sseBuffer = "";
       let closed = false;
+      // Native-Anthropic upstreams already emit their own message_stop. When we
+      // pass it through we must not append a second one at EOF — strict SDK
+      // clients treat the duplicate as a protocol violation.
+      let terminalSeen = false;
 
       const sendEvent = (event: string, data: any) => {
         if (closed) return;
@@ -491,6 +537,9 @@ export function createAnthropicSseResponse(opts: {
                   const ev = JSON.parse(jsonStr);
                   if (ev.type === "content_block_delta" && ev.delta?.text) {
                     text += ev.delta.text;
+                  }
+                  if (ev.type === "message_stop") {
+                    terminalSeen = true;
                   }
                   if (ev.message?.usage) {
                     promptTokens = ev.message.usage.input_tokens || promptTokens;
@@ -672,7 +721,10 @@ export function createAnthropicSseResponse(opts: {
         if (textBlockStarted) {
           sendEvent("content_block_stop", { type: "content_block_stop", index: textBlockIndex });
         }
-        sendEvent("message_stop", { type: "message_stop" });
+        // Skip the synthetic terminator when the upstream already sent one.
+        if (!terminalSeen) {
+          sendEvent("message_stop", { type: "message_stop" });
+        }
         await finishStream("eof");
       }
     },

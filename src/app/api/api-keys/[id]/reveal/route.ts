@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { decSecret } from "@/lib/secretbox";
+import { adminGuard } from "@/lib/auth";
 
 // GET — reveal the full secret for dashboard copy. Only works for keys
 // created/rotated after the vault shipped; older keys return 404 with reason.
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const denied = adminGuard(_req);
+  if (denied) return denied;
+
   const rows = (await prisma.$queryRaw<{ secretEnc: string | null }[]>`SELECT "secretEnc" FROM "ApiKey" WHERE "id" = ${params.id} LIMIT 1`.catch(() => [])) ?? [];
   const blob = rows[0]?.secretEnc;
   if (!blob) {

@@ -39,7 +39,10 @@ const readConfig = async () => {
   }
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const isInstalled = await checkOpenCodeInstalled();
     const config = await readConfig();
@@ -60,9 +63,12 @@ export async function GET() {
 }
 
 import { getGatewayBaseUrl } from "@/lib/config";
-import { resolveFullApiKey } from "@/lib/auth";
+import { adminGuard, resolveFullApiKey } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json().catch(() => ({}));
     const { baseUrl, apiKey, model, models, activeModel, subagentModel } = body;
@@ -129,7 +135,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const configPath = getConfigPath();
     let config: Record<string, any> = {};

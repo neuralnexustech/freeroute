@@ -1,4 +1,4 @@
-// Curated Provider Registry: Groq, Mistral AI, Together AI, Fireworks AI, DeepSeek, Cohere, Novita AI, BazaarLink, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, Kilo, HCNSec AI, Tokenin, Infron, UnoRouter, Z.AI/GLM, and Cloudflare Workers AI
+// Curated Provider Registry: Groq, Mistral AI, Together AI, Fireworks AI, DeepSeek, Cohere, Novita AI, BazaarLink, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, Kilo, HCNSec AI, Tokenin, Infron, UnoRouter, Z.AI/GLM, Cloudflare Workers AI, and 100milionseek
 
 export interface ProviderDef {
   slug: string;
@@ -407,6 +407,23 @@ export const RAW_PROVIDERS_DATA = [
         placeholder: "e.g. 0123456789abcdef0123456789abcdef",
       },
     ],
+  },
+  {
+    slug: "100milionseek",
+    name: "100milionseek",
+    category: "freeTier" as const,
+    icon: "savings",
+    logoUrl: "/providers/100milionseek.svg",
+    color: "#10B981",
+    baseUrl: "https://100milionseek.top/v1",
+    chatPath: "/chat/completions",
+    modelsPath: "/models",
+    apiKeyUrl: "https://100milionseek.top/dashboard",
+    website: "https://100milionseek.top",
+    docUrl: "https://100milionseek.top/docs",
+    authType: "bearer" as const,
+    serviceKinds: ["llm"],
+    thinkingConfig: null,
   },
 ];
 

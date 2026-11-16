@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getProvider } from "@/lib/providers";
 import { enrich, getCatalog } from "@/lib/openrouter-meta";
+import { adminGuard } from "@/lib/auth";
 
 function fmtContext(tokens: number): string {
   if (tokens >= 1000000) return `${Math.round(tokens / 1000000)}M`;
@@ -10,6 +11,9 @@ function fmtContext(tokens: number): string {
 }
 
 export async function POST(req: NextRequest, { params }: { params: { slug: string } }) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const provider = await prisma.provider.findUnique({ where: { slug: params.slug } });
   const def = getProvider(params.slug);
   if (!provider) {

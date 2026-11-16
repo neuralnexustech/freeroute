@@ -23,7 +23,15 @@ function masterKey(): Buffer {
       hex = randomBytes(32).toString("hex");
       try {
         if (!fs.existsSync(freerouteDir)) fs.mkdirSync(freerouteDir, { recursive: true });
-        fs.writeFileSync(keyPath, hex, "utf8");
+        // Owner-only. Skipped on Windows, where chmod is a no-op and the
+        // protection comes from %USERPROFILE% ACLs instead.
+        if (process.platform !== "win32") {
+          try { fs.chmodSync(freerouteDir, 0o700); } catch {}
+        }
+        fs.writeFileSync(keyPath, hex, { encoding: "utf8", mode: 0o600 });
+        if (process.platform !== "win32") {
+          try { fs.chmodSync(keyPath, 0o600); } catch {}
+        }
       } catch {}
     }
     process.env.FREEROUTE_MASTER_KEY = hex;

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getProvider, openAIToAnthropic } from "@/lib/providers";
+import { adminGuard } from "@/lib/auth";
 
 const RETRIES = 3;
 const TIMEOUT_MS = 30000;
@@ -123,6 +124,9 @@ async function probe(
 
 // POST { ids?: string[] } — SSE stream: pushes each model result as it completes.
 export async function POST(req: NextRequest, { params }: { params: { slug: string } }) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   let provider = await prisma.provider.findUnique({ where: { slug: params.slug } });
   const def = getProvider(params.slug);
   if (!def) return new Response(JSON.stringify({ error: "Unknown provider" }), { status: 404, headers: { "Content-Type": "application/json" } });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getProvider } from "@/lib/providers";
+import { adminGuard } from "@/lib/auth";
 
 function maskApiKey(key?: string | null): string {
   if (!key) return "";
@@ -15,6 +16,9 @@ function maskApiKey(key?: string | null): string {
 }
 
 export async function GET(_req: NextRequest, { params }: { params: { slug: string } }) {
+  const denied = adminGuard(_req);
+  if (denied) return denied;
+
   let provider = await prisma.provider.findUnique({ where: { slug: params.slug } });
   const def = getProvider(params.slug);
   
@@ -57,10 +61,13 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
     }
   }
 
+  // Never return the raw provider key. The dashboard only needs `maskedKey`
+  // to display it and `hasKey` to decide whether to show "replace".
+  const { apiKey: _secret, ...providerSafe } = provider;
+
   return NextResponse.json({
     provider: {
-      ...provider,
-      apiKey: provider.apiKey || "",
+      ...providerSafe,
       maskedKey,
       hasKey,
       accountId,
@@ -80,6 +87,9 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { slug: string } }) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const { apiKey, logoUrl, baseUrl, accountId } = await req.json().catch(() => ({}));
   if (typeof logoUrl === "string") {
     await prisma.$executeRaw`UPDATE "Provider" SET "logoUrl" = ${logoUrl.slice(0, 500)} WHERE "slug" = ${params.slug}`.catch(() => {});
@@ -112,13 +122,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { slug: stri
     ok: true,
     connected: provider.connected,
     hasKey: provider.connected,
-    apiKey: provider.apiKey || "",
     maskedKey: maskApiKey(provider.apiKey),
     baseUrl: provider.baseUrl,
   });
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { slug: string } }) {
+  const denied = adminGuard(_req);
+  if (denied) return denied;
+
   const provider = await prisma.provider.update({
     where: { slug: params.slug },
     data: { apiKey: "", connected: false },

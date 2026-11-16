@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getProvider, openAIToAnthropic } from "@/lib/providers";
+import { adminGuard } from "@/lib/auth";
 import {
   pickTargets,
   checkFallbackError,
@@ -12,6 +13,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     const combo = await prisma.combo.findUnique({

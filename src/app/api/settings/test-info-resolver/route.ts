@@ -7,8 +7,12 @@ import {
   resolveViaHeuristics,
 } from "@/lib/model-info";
 import { prisma } from "@/lib/db";
+import { adminGuard } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json().catch(() => ({}));
     const testModel = body.testModel?.trim() || "google/gemini-2.5-flash";

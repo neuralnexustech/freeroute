@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { VALID_COMBO_NAME_REGEX, resetComboRotation } from "@/lib/combo";
+import { adminGuard } from "@/lib/auth";
 
 const UpdateComboSchema = z.object({
   name: z
@@ -28,6 +29,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const denied = adminGuard(_req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     const combo = await prisma.combo.findUnique({
@@ -89,6 +93,9 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     const existing = await prisma.combo.findUnique({ where: { id } });
@@ -167,6 +174,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const denied = adminGuard(_req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     const existing = await prisma.combo.findUnique({ where: { id } });
