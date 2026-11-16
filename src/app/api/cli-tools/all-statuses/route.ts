@@ -5,11 +5,15 @@ import { GET as codexGet } from "../codex-settings/route";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
+import { adminGuard } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const [claudeRes, opencodeRes, codexRes] = await Promise.all([
     claudeGet(req).then((r) => r.json()).catch(() => ({ installed: false })),
-    opencodeGet().then((r) => r.json()).catch(() => ({ installed: false })),
+    opencodeGet(req).then((r) => r.json()).catch(() => ({ installed: false })),
     codexGet(req).then((r) => r.json()).catch(() => ({ installed: false })),
   ]);
 

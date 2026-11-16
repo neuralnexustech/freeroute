@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getProvider, openAIToAnthropic } from "@/lib/providers";
+import { adminGuard } from "@/lib/auth";
 
 // Default probe prompt — short enough to be fast, long enough to generate >1 token
 const DEFAULT_PROMPT = "Say hello in exactly 5 words.";
@@ -23,6 +24,9 @@ const TIMEOUT_MS = 30_000;
  * browser ↔ gateway round-trip jitter.
  */
 export async function POST(req: NextRequest, { params }: { params: { slug: string } }) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const slug = params.slug;
 
   // ── 1. Load provider + API key ───────────────────────────────────────────

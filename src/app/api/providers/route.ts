@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { PROVIDERS, getProvider } from "@/lib/providers";
+import { adminGuard } from "@/lib/auth";
 
 const ALLOWED_SLUGS = PROVIDERS.map((p) => p.slug);
 
@@ -54,7 +55,10 @@ async function ensureProviders() {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   await ensureProviders();
   const providers = await prisma.provider.findMany({
     where: {

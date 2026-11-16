@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { hashKey, newRawKey } from "@/lib/auth";
+import { adminGuard, hashKey, newRawKey } from "@/lib/auth";
 import { encSecret } from "@/lib/secretbox";
 
 function expiry(expire: string): Date | null {
@@ -11,6 +11,9 @@ function expiry(expire: string): Date | null {
 }
 
 export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const url = new URL(req.url);
   const includeRevoked = url.searchParams.get("revoked") === "true" || url.searchParams.get("all") === "true";
   const where = includeRevoked ? {} : { revoked: false };
@@ -21,6 +24,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const { name, expire } = await req.json().catch(() => ({}));
   if (!name || typeof name !== "string") return NextResponse.json({ error: "name required" }, { status: 400 });
   const secret = newRawKey("xpl_");

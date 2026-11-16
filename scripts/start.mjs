@@ -18,13 +18,39 @@ function getPort() {
   return port;
 }
 
-const port = getPort();
-console.log(`> Starting Freeroute production server on port ${port} (from .env)...`);
+function getHost() {
+  // Loopback by default: the dashboard and admin API have no login, so the
+  // security boundary is that the server is not reachable from the network.
+  // Set HOST=0.0.0.0 (or a LAN IP) only together with FREEROUTE_ADMIN_TOKEN.
+  const fromEnv = process.env.HOST;
+  if (fromEnv) return fromEnv;
+  if (fs.existsSync(".env")) {
+    try {
+      const match = fs.readFileSync(".env", "utf8").match(/^HOST\s*=\s*(\S+)/m);
+      if (match) return match[1];
+    } catch {}
+  }
+  return "127.0.0.1";
+}
 
-const child = spawn(`npx next start --port ${port}`, {
+const port = getPort();
+const host = getHost();
+// Next only auto-loads `.env` into the server process, but this wrapper reads
+// HOST itself, and lib/auth.ts re-reads it to decide whether a loopback
+// connection is a trustworthy boundary. Hand it down so both sides agree.
+process.env.HOST = host;
+if (host !== "127.0.0.1" && host !== "localhost" && !process.env.FREEROUTE_ADMIN_TOKEN) {
+  console.warn(
+    `\n⚠️  HOST=${host} exposes the dashboard to your network, but FREEROUTE_ADMIN_TOKEN is not set.\n` +
+      `    Admin API routes will reject non-loopback requests. Set FREEROUTE_ADMIN_TOKEN to allow access.\n`
+  );
+}
+console.log(`> Starting Freeroute production server on ${host}:${port} (from .env)...`);
+
+const child = spawn(`npx next start --hostname ${host} --port ${port}`, {
   stdio: "inherit",
   shell: true,
-  env: { ...process.env, PORT: String(port) },
+  env: { ...process.env, PORT: String(port), HOST: host },
 });
 
 child.on("exit", (code) => process.exit(code ?? 0));

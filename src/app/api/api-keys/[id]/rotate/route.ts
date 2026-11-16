@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { hashKey, newRawKey } from "@/lib/auth";
+import { adminGuard, hashKey, newRawKey } from "@/lib/auth";
 import { encSecret } from "@/lib/secretbox";
 
 // POST — rotate a key: issue a new secret, invalidate the old one.
 // The new secret is returned once; an encrypted copy is vaulted for reveal.
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+  const denied = adminGuard(_req);
+  if (denied) return denied;
+
   const existing = await prisma.apiKey.findUnique({ where: { id: params.id } });
   if (!existing || existing.revoked) {
     return NextResponse.json({ error: "Key not found or revoked" }, { status: 404 });

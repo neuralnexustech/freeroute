@@ -45,6 +45,9 @@ const readSettings = async () => {
 import { getGatewayBaseUrl } from "@/lib/config";
 
 export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const isInstalled = await checkClaudeInstalled();
     const settings = await readSettings();
@@ -67,7 +70,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST - Configure Claude CLI with portal endpoint & key
-import { resolveFullApiKey } from "@/lib/auth";
+import { adminGuard, resolveFullApiKey } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 function normalizeClaudeCliModel(m?: string): string {
@@ -92,6 +95,9 @@ function normalizeClaudeCliModel(m?: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json().catch(() => ({}));
     const { baseUrl, apiKey, defaultModel, model, opusModel, sonnetModel, haikuModel, maxContextTokens } = body;
@@ -175,7 +181,10 @@ export async function POST(req: NextRequest) {
 }
 
 // DELETE - Reset Claude CLI settings back to default
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const settingsPath = getClaudeSettingsPath();
     let currentSettings: Record<string, any> = {};

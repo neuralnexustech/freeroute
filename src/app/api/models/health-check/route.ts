@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getProvider } from "@/lib/providers";
 import { broadcastTelemetry } from "@/lib/telemetryEvents";
+import { adminGuard } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(_req: NextRequest) {
+  const denied = adminGuard(_req);
+  if (denied) return denied;
+
   const models = await prisma.model.findMany({
     where: { enabled: true },
     include: {

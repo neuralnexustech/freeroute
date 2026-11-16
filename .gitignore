@@ -39,3 +39,6 @@ scripts/audit_gateway.mjs
 .DS_Store
 Thumbs.db
 .backboard/
+
+# Tool-generated project markers (no source value)
+.freebuff/

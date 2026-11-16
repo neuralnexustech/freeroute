@@ -329,7 +329,10 @@ export function checkFallbackError(status: number, errorText: string = ""): {
     lower.includes("maximum context") ||
     lower.includes("prompt is too long") ||
     lower.includes("token limit") ||
-    lower.includes("max_tokens") ||
+    // NB: a bare "max_tokens" match used to live here, which classified any
+    // error message mentioning the parameter — including "max_tokens must be
+    // a positive integer" — as a context-length overflow and retried the whole
+    // chain. Context errors always say "context" or "tokens", not the param.
     lower.includes("too many tokens")
   ) {
     return { shouldFallback: true, reason: "Context length limit exceeded (Prompt too large for model)" };
@@ -373,7 +376,18 @@ export function checkFallbackError(status: number, errorText: string = ""): {
     return { shouldFallback: true, reason: "Provider capacity error (400)" };
   }
 
-  return { shouldFallback: status >= 400, reason: `Upstream error HTTP ${status}` };
+  // Default: only server-side failures are worth retrying on another provider.
+  //
+  // This used to be `status >= 400`, which meant a malformed request (400), an
+  // oversized body (413) or an unprocessable payload (422) walked the entire
+  // combo chain, took every target down for the cooling period, and then
+  // returned 502 — masking a client bug as a gateway outage. Anything the
+  // client must fix is reported as-is, once.
+  const retriable = status === 0 || status >= 500;
+  return {
+    shouldFallback: retriable,
+    reason: retriable ? `Upstream service error (${status || "network"})` : `Client error HTTP ${status} — not retryable`,
+  };
 }
 
 export function pickTargets(

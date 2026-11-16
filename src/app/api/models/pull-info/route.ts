@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { resolveModelSpecs } from "@/lib/model-info";
 import { getProvider } from "@/lib/providers";
+import { adminGuard } from "@/lib/auth";
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const setting = await prisma.setting.findUnique({ where: { key: "pull_info_strategy" } });
   const strategy = setting?.value || "cascade";
 

@@ -23,7 +23,10 @@ export function getGatewayPort(): number {
   if (p && !isNaN(Number(p))) return Number(p);
   const fromFile = readEnvPort();
   if (fromFile !== null) return fromFile;
-  return 3000;
+  // Match the documented default (README, .env.example, scripts/*.mjs and the
+  // .bat launchers). 3000 was a leftover from the pre-20129 era and silently
+  // produced wrong base URLs for the CLI-tool configurators.
+  return 20129;
 }
 
 export function getGatewayHost(): string {

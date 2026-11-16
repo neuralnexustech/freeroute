@@ -47,11 +47,18 @@ index 83a2184..9f3810c 100644
 
   console.log("\n=== 2. TESTING LIVE GATEWAY HTTP REQUEST ===");
   try {
+    // The magic "freeroute-designer" token was removed: it authenticated as
+    // whichever API key happened to exist. Use a real gateway key instead.
+    const apiKey = process.env.FREEROUTE_API_KEY || "";
+    if (!apiKey) {
+      console.log("Skipping live HTTP test: set FREEROUTE_API_KEY to a real xpl_ key.");
+      return;
+    }
     const res = await fetch("http://localhost:20129/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: "Bearer freeroute-designer",
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: "meta/llama-3.2-11b-vision-instruct",

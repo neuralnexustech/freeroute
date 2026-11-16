@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncAllProviders } from "@/lib/sync-engine";
+import { adminGuard } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json().catch(() => ({}));
     const testHealth = body.testHealth !== false;

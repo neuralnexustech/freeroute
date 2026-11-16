@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAllCooldownState, clearTargetCooldown } from "@/lib/combo";
 import { prisma } from "@/lib/db";
+import { adminGuard } from "@/lib/auth";
 
 /**
  * GET /api/combos/health
@@ -8,6 +9,9 @@ import { prisma } from "@/lib/db";
  * Each entry describes why a model is in cooldown and when it will recover.
  */
 export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const cooldowns = getAllCooldownState();
 
@@ -61,6 +65,9 @@ export async function GET(req: NextRequest) {
  * Force-clears a specific model/provider from cooldown (admin force-heal).
  */
 export async function DELETE(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const key = req.nextUrl.searchParams.get("key");
   if (!key) {
     return NextResponse.json({ error: "key parameter required" }, { status: 400 });

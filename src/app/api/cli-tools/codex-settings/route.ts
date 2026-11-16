@@ -32,6 +32,9 @@ const checkCodexInstalled = async () => {
 import { getGatewayBaseUrl } from "@/lib/config";
 
 export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const isInstalled = await checkCodexInstalled();
     let content = "";
@@ -54,9 +57,12 @@ export async function GET(req: NextRequest) {
   }
 }
 
-import { resolveFullApiKey } from "@/lib/auth";
+import { adminGuard, resolveFullApiKey } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json().catch(() => ({}));
     const { baseUrl, apiKey, model, subagentModel } = body;
@@ -91,7 +97,10 @@ api_key = "${keyToUse}"
   }
 }
 
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const configPath = getCodexConfigPath();
     try {

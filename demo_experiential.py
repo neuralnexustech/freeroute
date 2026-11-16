@@ -2,12 +2,16 @@
 Experiential Labs API & Free Models Demonstration Script
 Run: python demo_experiential.py
 """
+import os
 import urllib.request
 import urllib.error
 import json
 import ssl
 
-API_KEY = "xpl_ee8b805e5f57a1dc887ddd045d7f89a41ed43e1a"
+# Never hardcode credentials in a tracked file. Export the key instead:
+#   PowerShell:  $env:EXPERIENTIAL_API_KEY = "xpl_..."
+#   bash:        export EXPERIENTIAL_API_KEY="xpl_..."
+API_KEY = os.environ.get("EXPERIENTIAL_API_KEY", "")
 BASE_URL = "https://api.experientiallabs.ai/v1"
 ctx = ssl.create_default_context()
 

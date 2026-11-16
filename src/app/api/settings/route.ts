@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { adminGuard } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const rows = await prisma.setting.findMany();
   const settings: Record<string, string> = {};
   for (const r of rows) settings[r.key] = r.value;
@@ -12,6 +16,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const body = await req.json().catch(() => ({}));
   const { strategy } = body;
   if (typeof strategy === "string") {

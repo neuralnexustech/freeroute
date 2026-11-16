@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, getDatabasePath } from "@/lib/db";
+import { adminGuard } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const [providers, models, apiKeys, combos, settings, requestLogs] = await Promise.all([
       prisma.provider.findMany(),
@@ -14,11 +18,33 @@ export async function GET(req: NextRequest) {
       prisma.requestLog.findMany({ take: 1000, orderBy: { createdAt: "desc" } }),
     ]);
 
+    // Redact credentials from the export. A backup JSON gets copied around,
+    // mailed to support, and dropped in cloud folders — it must not carry
+    // provider keys or vaulted gateway secrets in a usable form.
+    const redactedProviders = providers.map((p) => ({
+      ...p,
+      apiKey: "",
+      hasApiKey: Boolean(p.apiKey && p.apiKey.trim().length > 0),
+    }));
+    const redactedApiKeys = apiKeys.map((k) => ({
+      id: k.id,
+      name: k.name,
+      prefix: k.prefix,
+      revoked: k.revoked,
+      createdAt: k.createdAt,
+      lastUsedAt: k.lastUsedAt,
+      expiresAt: k.expiresAt,
+      // keyHash is deliberately omitted: it is a credential-equivalent digest
+      // for anyone who can guess the raw key.
+      secretEnc: "",
+    }));
+
     const backup = {
       app: "freeroute",
       version: "0.1.0",
       exportedAt: new Date().toISOString(),
       dbLocation: getDatabasePath(),
+      credentialsRedacted: true,
       counts: {
         providers: providers.length,
         models: models.length,
@@ -28,9 +54,9 @@ export async function GET(req: NextRequest) {
         requestLogs: requestLogs.length,
       },
       data: {
-        providers,
+        providers: redactedProviders,
         models,
-        apiKeys,
+        apiKeys: redactedApiKeys,
         combos,
         settings,
         requestLogs,
@@ -56,6 +82,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const data = body.data || body;

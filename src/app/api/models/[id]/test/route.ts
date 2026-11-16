@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { testSingleModel } from "@/lib/sync-engine";
+import { adminGuard } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+  const denied = adminGuard(_req);
+  if (denied) return denied;
+
   try {
     const result = await testSingleModel(params.id);
     return NextResponse.json(result);

@@ -566,10 +566,18 @@ export async function POST(req: NextRequest) {
         if (!upstreamRes.ok) {
           const errText = await upstreamRes.text().catch(() => "");
           const { shouldFallback } = checkFallbackError(upstreamRes.status, errText);
-          // Smart healing: classify error and set appropriate cooldown duration
+          // Smart healing: classify error and set appropriate cooldown duration.
+          //
+          // Cooling the MODEL is always right — that model is misbehaving.
+          // Cooling the whole PROVIDER is only right when the credential itself
+          // is bad (401/403), because one broken model would otherwise take
+          // every other model on that provider out of rotation with it.
           if (shouldFallback) {
             markTargetCooldownClassified(m.id, upstreamRes.status, errText);
-            markTargetCooldownClassified(m.provider.slug, upstreamRes.status, errText);
+            const credentialFailure = upstreamRes.status === 401 || upstreamRes.status === 403;
+            if (credentialFailure) {
+              markTargetCooldownClassified(m.provider.slug, upstreamRes.status, errText);
+            }
             clearLkgpTarget(combo.id);
           }
           if (shouldFallback && i < orderedTargets.length - 1) {
@@ -765,9 +773,10 @@ export async function POST(req: NextRequest) {
       } catch (e: any) {
         const isTimeout = e?.name === "AbortError" || e?.name === "TimeoutError" || e?.message?.includes("timeout");
         if (isTimeout) {
-          // Mark provider/model in 30s cooldown so next request skips it immediately
+          // A timeout is model-shaped, not credential-shaped: cool the model
+          // only. Cooling the provider here meant one slow model blacklisted
+          // every other model behind the same API key.
           markTargetCooldownClassified(m.id, 504, "upstream timeout");
-          markTargetCooldownClassified(m.provider.slug, 504, "upstream timeout");
         }
         lastError = `${m.slug} (${m.provider.name}) -> ${isTimeout ? "request timed out (30s)" : (e?.message ?? "network error")}`;
         attemptedHops.push(lastError);
