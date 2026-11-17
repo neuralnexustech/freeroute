@@ -184,6 +184,17 @@ Full-screen, dual-mode AI workspace integrating conversational intelligence, liv
 
 ---
 
+## ☁️ Hosted Deployment
+
+Deploying to a PaaS? Freeroute stores its database and vault key on local disk, so the
+host must provide persistent storage — most free tiers do not.
+
+- **[Deploying on Render →](DEPLOY-RENDER.md)** — covers the free-tier limits honestly
+  (ephemeral disk, 15-minute spin-down), what still works, and the paid configuration
+  with a persistent disk.
+
+---
+
 ## 💻 Quick Usage Guide
 
 ### 1. Connect a Provider
