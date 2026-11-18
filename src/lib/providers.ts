@@ -1,4 +1,4 @@
-// Curated Provider Registry: Groq, Mistral AI, Together AI, Fireworks AI, DeepSeek, Cohere, Novita AI, BazaarLink, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, Kilo, HCNSec AI, Tokenin, Infron, UnoRouter, Z.AI/GLM, Cloudflare Workers AI, and 100milionseek
+// Curated Provider Registry: Groq, Mistral AI, Together AI, Fireworks AI, DeepSeek, Cohere, Novita AI, BazaarLink, Google Gemini, NVIDIA NIM, Ollama Cloud, OpenRouter, KiosAPI, OrcaRouter, Kilo, HCNSec AI, Tokenin, Infron, UnoRouter, Z.AI/GLM, Cloudflare Workers AI, 100milionseek, APInex, and IteraCompute
 
 export interface ProviderDef {
   slug: string;
@@ -421,6 +421,38 @@ export const RAW_PROVIDERS_DATA = [
     apiKeyUrl: "https://100milionseek.top/dashboard",
     website: "https://100milionseek.top",
     docUrl: "https://100milionseek.top/docs",
+    authType: "bearer" as const,
+    serviceKinds: ["llm"],
+    thinkingConfig: null,
+  },
+  {
+    slug: "apinex",
+    name: "APInex",
+    category: "freeTier" as const,
+    icon: "memory",
+    color: "#EC4899",
+    baseUrl: "https://api.apinex.bond/v1",
+    chatPath: "/chat/completions",
+    modelsPath: "/models",
+    apiKeyUrl: "https://apinex.bond",
+    website: "https://apinex.bond",
+    docUrl: "https://apinex.bond/docs",
+    authType: "bearer" as const,
+    serviceKinds: ["llm"],
+    thinkingConfig: null,
+  },
+  {
+    slug: "iteracompute",
+    name: "IteraCompute",
+    category: "freeTier" as const,
+    icon: "dns",
+    color: "#14B8A6",
+    baseUrl: "https://api.iteracompute.com/v1",
+    chatPath: "/chat/completions",
+    modelsPath: "/models",
+    apiKeyUrl: "https://iteracompute.com",
+    website: "https://iteracompute.com",
+    docUrl: "https://iteracompute.com/docs.html",
     authType: "bearer" as const,
     serviceKinds: ["llm"],
     thinkingConfig: null,
